@@ -1,0 +1,22 @@
+/* shared bits for the smaller pages (employer form, admin, market pulse) */
+.page{padding-block:18px 40px;display:flex;flex-direction:column;gap:14px}
+.box{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px;display:flex;flex-direction:column;gap:10px}
+.box h2{font-family:var(--font-display);font-size:1.2rem;margin:0}
+.box label{display:flex;flex-direction:column;gap:4px;font-size:.85rem;color:var(--muted)}
+.box input,.box textarea,.box select{font:inherit;color:var(--ink);background:var(--paper);border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+.box textarea{min-height:7rem}
+.cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,14rem),1fr));gap:10px}
+.hp{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);opacity:0}
+.ok{color:var(--accent);font-weight:600}
+.err{color:var(--exp-high)}
+.hbar{display:grid;grid-template-columns:minmax(7rem,12rem) 1fr 3rem;gap:10px;align-items:center;font-size:.88rem}
+.hbar .t{height:10px;background:var(--paper);border-radius:5px;overflow:hidden}
+.hbar .f{display:block;height:100%;background:linear-gradient(270deg,var(--accent),var(--mint));border-radius:5px}
+.hbar .n{text-align:left;color:var(--muted);font-variant-numeric:tabular-nums}
+.spark{display:flex;align-items:flex-end;gap:3px;height:34px}
+.spark i{display:block;width:12px;background:var(--mint);border-radius:2px 2px 0 0;min-height:2px}
+.trend{font-size:.8rem}.up{color:var(--exp-low)}.down{color:var(--exp-high)}
+table.tbl{width:100%;border-collapse:collapse;font-size:.88rem}
+.tbl th,.tbl td{padding:6px 8px;border-bottom:1px solid var(--line);text-align:right;vertical-align:top}
+.tbl th{color:var(--muted);font-weight:500}
+.navlinks{display:flex;flex-wrap:wrap;gap:6px 16px}

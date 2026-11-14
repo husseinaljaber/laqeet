@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>نبض السوق · لقيت</title><meta name="theme-color" content="#0D1F18"><link rel="icon" href="icons/icon.svg">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600&family=Reem+Kufi:wght@500;600;700&display=swap">
+<link rel="stylesheet" href="app.css"><link rel="stylesheet" href="page.css"></head>
+<body>
+<section class="hero slim"><div class="inner">
+  <div class="eyebrow"><a class="link" href="./">← رجوع للشغل</a></div>
+  <h1><span class="brand">نبض السوق</span> شو مطلوب هلأ؟</h1>
+  <p class="sub">من كل الإعلانات يلي جمعناها في سوريا بآخر 6 شهور. اختار المدينة والشهادة لتشوف شو بيطلبوا ناس متلك، وشو عم يزيد وشو عم ينقص.</p>
+  <div class="row"><select id="city"><option value="">كل المدن والمحافظات</option></select><select id="edu"><option value="">كل الشهادات</option></select></div>
+</div></section>
+<main class="inner page">
+  <div class="box" style="border-color:var(--mint)">
+    <h2>📊 ملخص نبض السوق في سوريا</h2>
+    <p style="margin:0;color:var(--muted);font-size:.9rem">اختار محافظتك وشهادتك فوق لتشوف فوراً قديش في فرص مفتوحة إلك هلأ وشو أكتر شي مطلوب بمدينتك.</p>
+    <div id="bridge" style="display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;font-weight:600"></div>
+  </div>
+  <div class="count" id="total"></div>
+  <div class="cols">
+    <div class="box"><h2>المجالات وكيف عم تتغيّر</h2><div id="fields"></div></div>
+    <div class="box"><h2>أكتر المسميات طلباً</h2><div id="titles"></div></div>
+  </div>
+  <div class="cols">
+    <div class="box"><h2>المدن</h2><div id="cities"></div></div>
+    <div class="box"><h2>الشهادة المطلوبة</h2><div id="edus"></div><h2>الخبرة المطلوبة</h2><div id="exp"></div></div>
+  </div>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const MONTHS = ['كانون 2','شباط','آذار','نيسان','أيار','حزيران','تموز','آب','أيلول','تشرين 1','تشرين 2','كانون 1'];
+const bars = (rows, label, n) => { const max = Math.max(1, ...rows.map(n)); return rows.map(r => `<div class="hbar"><span>${esc(label(r))}</span><span class="t"><span class="f" style="width:${n(r)/max*100}%"></span></span><span class="n">${n(r)}</span></div>`).join(''); };
+let META = null;
+function fillCities() {
+  const sel = $('city'), prev = sel.value;
+  const list = (META && META.cities) || [];
+  sel.replaceChildren(new Option('كل المدن والمحافظات', ''), ...list.map(x => new Option(x, x)));
+  if (list.includes(prev)) sel.value = prev;
+}
+async function load() {
+  const p = new URLSearchParams();
+  if ($('city').value) p.set('city', $('city').value);
+  if ($('edu').value) p.set('edu', $('edu').value);
+  const d = await (await fetch('/api/pulse?' + p)).json();
+  $('total').textContent = `${d.total} إعلان بآخر 6 شهور · الأشهر: ${d.months.map(m => MONTHS[+m.slice(5) - 1]).join('، ')}`;
+  const cName = $('city').value || 'سوريا';
+  const topTitle = d.titles[0] ? ` · أكتر مسمى مطلوب: «${esc(d.titles[0].title)}»` : '';
+  const browseUrl = './' + (p.toString() ? '?' + p.toString() : '');
+  $('bridge').innerHTML = `<span class="ok">${d.open_now} فرصة مفتوحة هلأ في ${esc(cName)}</span><span>· ${d.remote_open} فرصة عن بعد / أونلاين</span><span>${topTitle}</span><a class="btn primary" style="padding:6px 14px;font-size:.85rem;margin-inline-start:auto" href="${browseUrl}">تصفح الفرص هلأ</a>`;
+  const vsLabel = d.pace_day ? `عن أول ${d.pace_day} يوم بالشهر الماضي` : 'عن الشهر الماضي';
+  $('fields').innerHTML = d.fields.map(f => { const max = Math.max(1, ...f.series);
+    const ch = f.change == null ? '' : f.change > 0 ? `<span class="trend up">▲ ${f.change} ${vsLabel}</span>` : f.change < 0 ? `<span class="trend down">▼ ${-f.change} ${vsLabel}</span>` : `<span class="trend">نفس الشي ${vsLabel}</span>`;
+    return `<div class="hbar"><span>${esc(f.label)}</span><span class="spark" title="${f.series.join(' · ')}">${f.series.map(v => `<i style="height:${v/max*100}%"></i>`).join('')}</span><span class="n">${f.series.reduce((a,b)=>a+b,0)}</span></div>${ch ? `<div style="margin:-4px 0 6px">${ch}</div>` : ''}`; }).join('');
+  $('titles').innerHTML = bars(d.titles, r => r.title, r => r.count);
+  $('cities').innerHTML = bars(d.cities, r => r.city, r => r.count);
+  $('edus').innerHTML = bars(d.education, r => r.label, r => r.count);
+  const ex = {'0-2':'حتى سنتين','3-4':'3–4 سنين','5+':'5 وأكتر','unknown':'مو مذكورة'};
+  $('exp').innerHTML = bars(Object.entries(d.experience).map(([k, v]) => ({k, v})), r => ex[r.k], r => r.v);
+}
+fetch('/api/meta').then(r => r.json()).then(m => { META = m; fillCities(); m.education.forEach(e => $('edu').append(new Option(e.label, e.code))); });
+$('city').addEventListener('change', load); $('edu').addEventListener('change', load); load();
+</script>
+</body></html>

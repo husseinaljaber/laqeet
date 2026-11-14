@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>رادار النصب · هل هاد الإعلان حقيقي؟ · لقيت</title><meta name="theme-color" content="#0D1F18"><link rel="icon" href="icons/icon.svg">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600&family=Reem+Kufi:wght@500;600;700&display=swap">
+<link rel="stylesheet" href="app.css"><link rel="stylesheet" href="page.css">
+<style>
+.verdict{border-radius:var(--r);padding:14px;border:1px solid var(--line);display:flex;flex-direction:column;gap:6px}
+.verdict.safe{background:var(--exp-low-bg);border-color:var(--exp-low);color:var(--exp-low)}
+.verdict.caution{background:var(--exp-mid-bg);border-color:var(--exp-mid);color:var(--exp-mid)}
+.verdict.danger{background:var(--exp-high-bg);border-color:var(--exp-high);color:var(--exp-high)}
+.verdict h3{margin:0;font-family:var(--font-display);font-size:1.2rem}
+.verdict ul{margin:4px 0 0;padding-inline-start:20px;color:var(--ink)}
+</style></head>
+<body>
+<section class="hero slim"><div class="inner">
+  <div class="eyebrow"><a class="link" href="./">← رجوع للشغل</a></div>
+  <h1><span class="brand">رادار النصب</span> هل هاد الإعلان حقيقي؟</h1>
+  <p class="sub">انسخ نص أي إعلان شفته على واتساب أو فيسبوك أو تلغرام والصقه هون. منفحصلك إشارات الاحتيال وتكرار رقم التلفون عبر المدن فوراً.</p>
+</div></section>
+<main class="inner page">
+  <div class="box">
+    <label>نص الإعلان <textarea id="txt" rows="7" placeholder="مثال: مطلوب موظفين من البيت بربح يومي 50$ مع مكافأة تسجيل..."></textarea></label>
+    <div class="row">
+      <button class="btn primary" id="check">افحص الإعلان</button>
+      <button class="btn" style="border:1px solid var(--line)" id="sampleBad">جرّب مثال نصب</button>
+      <button class="btn" style="border:1px solid var(--line)" id="sampleOk">جرّب مثال عادي</button>
+    </div>
+    <div id="out" hidden></div>
+  </div>
+  <div class="box">
+    <h2>قواعد ذهبية تحميك من النصب</h2>
+    <ul>
+      <li><strong>ممنوع الدفع للتوظيف:</strong> أي جهة بتطلب رسوم تسجيل أو تأمين أو كرت شحن أو حوالة قبل ما تشتغل فهي نصب 100%.</li>
+      <li><strong>أرباح سريعة وتداول:</strong> عبارات «ربح يومي مضمون»، «من بيتك 100$ يومياً»، «بينانس/تداول» مو وظائف حقيقية.</li>
+      <li><strong>تشابه الأرقام:</strong> السماسرة الوهميين بينشروا نفس الرقم بعشرات الإعلانات وبمدن مختلفة بنفس الأسبوع.</li>
+    </ul>
+  </div>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const LABEL = {
+  safe: ['✅ الإعلان شكله طبيعي', 'ما لقينا علامات نصب واضحة، بس تأكد دايماً وما تدفع أي مبلغ قبل ما تبدأ شغل.'],
+  caution: ['⚠️ انتبه شوي وشيّك قبل ما تتواصل', 'في إشارات بتحتاج حذر وتأكد من اسم الجهة الحقيقي.'],
+  danger: ['🚨 احتمال نصب كبير — احذر!', 'الإعلان فيه علامات احتيال واضحة. لا تبعت أوراقك ولا تدفع أي مصاري.'],
+};
+async function run() {
+  const text = $('txt').value.trim();
+  const out = $('out');
+  if (text.length < 10) { out.hidden = false; out.className = 'verdict caution'; out.innerHTML = '<h3>الصق نص أطول شوي</h3>'; return; }
+  const r = await fetch('/api/scam-check', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({text})});
+  const d = await r.json();
+  const [title, sub] = LABEL[d.verdict] || LABEL.caution;
+  const reasons = d.reasons.length ? '<ul>' + d.reasons.map(x => `<li>${esc(x)}</li>`).join('') + '</ul>' : '';
+  const phones = (d.phones || []).map(p => `الرقم ${esc(p.phone)}: ظهر في ${p.ads} إعلان بـ ${p.cities} مدن`).join(' · ');
+  out.hidden = false;
+  out.className = 'verdict ' + d.verdict;
+  out.innerHTML = `<h3>${title}</h3><p style="margin:0;color:var(--ink)">${sub}</p>${reasons}${phones ? `<p style="margin:4px 0 0;font-size:.82rem;color:var(--muted)">${phones}</p>` : ''}`;
+}
+$('check').addEventListener('click', run);
+$('sampleBad').addEventListener('click', () => { $('txt').value = 'مطلوب شباب وصبايا للعمل من البيت بربح يومي 40$ على بينانس بدون خبرة! دفع رسوم تسجيل رمزية عبر شام كاش.'; run(); });
+$('sampleOk').addEventListener('click', () => { $('txt').value = 'تعلن شركة النور في دمشق عن حاجتها لمحاسب بخبرة سنتين بدوام كامل من 9 حتى 5. للتواصل واتساب 0933123456'; run(); });
+</script>
+</body></html>

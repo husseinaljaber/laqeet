@@ -1,0 +1,354 @@
+{
+  "SyMOAD": {
+    "source": "moad",
+    "label": "وزارة التنمية الإدارية",
+    "kind": "formal",
+    "official": true,
+    "country": "sy",
+    "sector": "gov"
+  },
+  "syrianmoi": {
+    "source": "moi",
+    "label": "وزارة الداخلية السورية",
+    "kind": "formal",
+    "official": true,
+    "country": "sy",
+    "sector": "gov"
+  },
+  "SyMOHEASR": {
+    "source": "mohe",
+    "label": "وزارة التعليم العالي والبحث العلمي",
+    "kind": "formal",
+    "official": true,
+    "country": "sy",
+    "sector": "gov"
+  },
+  "SyrMOEgov": {
+    "source": "moe",
+    "label": "وزارة التربية والتعليم السورية",
+    "kind": "formal",
+    "official": true,
+    "country": "sy",
+    "sector": "gov"
+  },
+  "SyrMOfH": {
+    "source": "moh",
+    "label": "وزارة الصحة السورية",
+    "kind": "formal",
+    "official": true,
+    "country": "sy",
+    "sector": "gov"
+  },
+  "SyMOEAI": {
+    "source": "moeai",
+    "label": "وزارة الاقتصاد والصناعة",
+    "kind": "formal",
+    "official": true,
+    "country": "sy",
+    "sector": "gov"
+  },
+  "SyrMOfF": {
+    "source": "mof",
+    "label": "وزارة المالية السورية",
+    "kind": "formal",
+    "official": true,
+    "country": "sy",
+    "sector": "gov"
+  },
+  "SyMOCAIT": {
+    "source": "mocait",
+    "label": "وزارة الاتصالات وتقانة المعلومات",
+    "kind": "formal",
+    "official": true,
+    "country": "sy",
+    "sector": "gov"
+  },
+  "SyrMOfE": {
+    "source": "moe_energy",
+    "label": "وزارة الطاقة السورية",
+    "kind": "formal",
+    "official": true,
+    "country": "sy",
+    "sector": "gov"
+  },
+  "SyrMOfA": {
+    "source": "moa",
+    "label": "وزارة الزراعة والإصلاح الزراعي",
+    "kind": "formal",
+    "official": true,
+    "country": "sy",
+    "sector": "gov"
+  },
+  "MOPWAH": {
+    "source": "mopwah",
+    "label": "وزارة الأشغال العامة والإسكان",
+    "kind": "formal",
+    "official": true,
+    "country": "sy",
+    "sector": "gov"
+  },
+  "damascusgovrnorat": {
+    "source": "damascus_gov",
+    "label": "محافظة دمشق",
+    "kind": "formal",
+    "official": true,
+    "country": "sy",
+    "sector": "gov"
+  },
+  "sana_gov": {
+    "source": "sana",
+    "label": "وكالة الأنباء السورية (سانا)",
+    "kind": "formal",
+    "official": true,
+    "country": "sy",
+    "sector": "gov"
+  },
+  "HIAST_Syria": {
+    "source": "hiast",
+    "label": "المعهد العالي للعلوم التطبيقية (HIAST)",
+    "kind": "formal",
+    "official": true,
+    "country": "sy",
+    "sector": "gov"
+  },
+  "syredcrescent": {
+    "source": "redcrescent",
+    "label": "الهلال الأحمر العربي السوري",
+    "kind": "formal",
+    "official": false,
+    "country": "sy",
+    "sector": "ngo"
+  },
+  "nwsjobs": {
+    "source": "nwsjobs",
+    "label": "منظمة بهار والعمل الإنساني",
+    "kind": "formal",
+    "official": false,
+    "country": "sy",
+    "sector": "ngo"
+  },
+  "org_vio": {
+    "source": "violet",
+    "label": "جمعية بنفسج للإغاثة والتنمية",
+    "kind": "formal",
+    "official": false,
+    "country": "sy",
+    "sector": "ngo"
+  },
+  "takafulalsham": {
+    "source": "takaful",
+    "label": "منظمة تكافل الشام الخيرية",
+    "kind": "formal",
+    "official": false,
+    "country": "sy",
+    "sector": "ngo"
+  },
+  "wazafne175": {
+    "source": "wazafne",
+    "label": "وظفني || SYR",
+    "kind": "formal",
+    "official": false,
+    "country": "sy",
+    "sector": "private"
+  },
+  "tawzeef_platform": {
+    "source": "tawzeef",
+    "label": "منصة التوظيف",
+    "kind": "formal",
+    "official": false,
+    "country": "sy",
+    "sector": "private"
+  },
+  "syrianjobs2": {
+    "source": "syrianjobs",
+    "label": "فرص عمل في سوريا",
+    "kind": "quick",
+    "official": false,
+    "country": "sy",
+    "sector": "private"
+  },
+  "syria110": {
+    "source": "syria110",
+    "label": "شواغر سوريا 110",
+    "kind": "formal",
+    "official": false,
+    "country": "sy",
+    "sector": "private"
+  },
+  "wazayf_Syria": {
+    "source": "wazayf_sy",
+    "label": "شواغر وظائف سوريا",
+    "kind": "formal",
+    "official": false,
+    "country": "sy",
+    "sector": "private"
+  },
+  "jopnahda": {
+    "source": "nahda",
+    "label": "سوق العمل وفرص سوريا",
+    "kind": "formal",
+    "official": false,
+    "country": "sy",
+    "sector": "private"
+  },
+  "syrian_jobb": {
+    "source": "sy_jobb",
+    "label": "وظائف وشواغر المحافظات",
+    "kind": "quick",
+    "official": false,
+    "country": "sy",
+    "sector": "private"
+  },
+  "KhotwaInsideSyria": {
+    "source": "khotwa",
+    "label": "خطوة للتوظيف والتدريب في سوريا",
+    "kind": "formal",
+    "official": false,
+    "country": "sy",
+    "sector": "private"
+  },
+  "higher_steps": {
+    "source": "higher_steps",
+    "label": "خطوات للوظائف والتدريب",
+    "kind": "formal",
+    "official": false,
+    "country": "sy",
+    "sector": "private"
+  },
+  "damasjob": {
+    "source": "damasjob",
+    "label": "شواغر دمشق وريفها",
+    "kind": "quick",
+    "official": false,
+    "country": "sy",
+    "sector": "private"
+  },
+  "jaleppo": {
+    "source": "jaleppo",
+    "label": "شواغر حلب وريفها",
+    "kind": "quick",
+    "official": false,
+    "country": "sy",
+    "sector": "private"
+  },
+  "jobs09876": {
+    "source": "jobs09876",
+    "label": "شواغر عمل سوريا",
+    "kind": "quick",
+    "official": false,
+    "country": "sy",
+    "sector": "private"
+  },
+  "freejopsinidlib": {
+    "source": "idlib_jobs",
+    "label": "شواغر إدلب والشمال",
+    "kind": "quick",
+    "official": false,
+    "country": "sy",
+    "sector": "private"
+  },
+  "syrdrugsJobs": {
+    "source": "syrdrugs",
+    "label": "شواغر الصيدلة والمشافي السورية",
+    "kind": "formal",
+    "official": false,
+    "country": "sy",
+    "sector": "private"
+  },
+  "JobsvacanciesinSyriaandTurkey": {
+    "source": "trsy_jobs",
+    "label": "شواغر سوريا",
+    "kind": "formal",
+    "official": false,
+    "country": "sy",
+    "sector": "private"
+  },
+  "jobtrainings": {
+    "source": "jobtrainings",
+    "label": "فرص عمل وتدريبات",
+    "kind": "formal",
+    "official": false,
+    "country": "sy",
+    "sector": "private"
+  },
+  "Jobs_Bank_Syr": {
+    "source": "jobs_bank",
+    "label": "بنك الوظائف في سوريا",
+    "kind": "formal",
+    "official": false,
+    "country": "sy",
+    "sector": "private"
+  },
+  "Syria344": {
+    "source": "syria344",
+    "label": "فرص عمل سوريا 344",
+    "kind": "formal",
+    "official": false,
+    "country": "sy",
+    "sector": "private"
+  },
+  "nsjobs": {
+    "source": "nsjobs",
+    "label": "وظائف شمال شرق سوريا",
+    "kind": "formal",
+    "official": false,
+    "country": "sy",
+    "sector": "private"
+  },
+  "jodfreelancer": {
+    "source": "jodfreelancer",
+    "label": "فريلانس سوريا (عن بعد)",
+    "kind": "quick",
+    "official": false,
+    "country": "sy",
+    "sector": "private"
+  },
+  "arabonlinework": {
+    "source": "arabonline",
+    "label": "العمل عن بعد",
+    "kind": "formal",
+    "official": false,
+    "country": "sy",
+    "sector": "private"
+  },
+  "Freejobs5": {
+    "source": "freejobs5",
+    "label": "وظائف عن بعد (Remote)",
+    "kind": "formal",
+    "official": false,
+    "country": "sy",
+    "sector": "private"
+  },
+  "damascus122021": {
+    "source": "damascus_univ",
+    "label": "جامعة دمشق",
+    "kind": "formal",
+    "official": true,
+    "country": "sy",
+    "sector": "gov"
+  },
+  "Syrianvirtualuniversity": {
+    "source": "svu",
+    "label": "الجامعة الافتراضية السورية",
+    "kind": "formal",
+    "official": true,
+    "country": "sy",
+    "sector": "gov"
+  },
+  "AndalusUni": {
+    "source": "andalus_uni",
+    "label": "جامعة الأندلس الخاصة (Andalus)",
+    "kind": "formal",
+    "official": false,
+    "country": "sy",
+    "sector": "private"
+  },
+  "httpOrganizationalExamTemplates": {
+    "source": "httpOrganizationalExamTemplates",
+    "label": "بنك نماذج امتحانات المنظمات والوظائف",
+    "kind": "formal",
+    "official": false,
+    "country": "sy",
+    "sector": "ngo"
+  }
+}

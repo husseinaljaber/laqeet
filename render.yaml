@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: laqeet
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.api:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: SITE_NAME
+        value: لقيت
+      - key: UPDATE_MINUTES
+        value: "20"
+      - key: AUTO_COLLECT
+        value: "1"

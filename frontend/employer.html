@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>انشر إعلان شغل · لقيت</title><meta name="theme-color" content="#0D1F18"><link rel="icon" href="icons/icon.svg">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600&family=Reem+Kufi:wght@500;600;700&display=swap">
+<link rel="stylesheet" href="app.css"><link rel="stylesheet" href="page.css"></head>
+<body>
+<section class="hero slim"><div class="inner">
+  <div class="eyebrow"><a class="link" href="./">← رجوع للشغل</a></div>
+  <h1>عندك شغل؟ <span class="brand">انشره ببلاش</span></h1>
+  <p class="sub">إعلانك بيوصل للناس يلي شهادتهم ومدينتهم بتناسبه، وبيوصلهم كمان على بوت التلغرام. منراجع كل إعلان قبل ما ينزل (عادة خلال يوم).</p>
+</div></section>
+<main class="inner page">
+<form class="box" id="f">
+  <h2>تفاصيل الشغل</h2>
+  <div class="cols">
+    <label>المسمى الوظيفي * <input name="title" required maxlength="120" placeholder="مثلاً: كاشير، محاسب، عامل حبكة"></label>
+    <label>اسم المحل أو الشركة * <input name="employer" required maxlength="120"></label>
+    <label>المدينة <select name="city" id="city"><option value="">اختار</option></select></label>
+    <label>الشهادة المطلوبة <select name="education"><option value="">مو مهمة</option><option value="none">بدون شهادة</option><option value="basic">تعليم أساسي</option><option value="secondary">بكالوريا</option><option value="institute">معهد</option><option value="bachelor">جامعة</option><option value="master">ماجستير</option></select></label>
+    <label>نوع الشغل <select name="kind"><option value="quick">سريع (اتصل أو واتساب)</option><option value="formal">رسمي (تقديم وسيرة ذاتية)</option></select></label>
+    <label>سنين الخبرة <input name="experience" inputmode="numeric" placeholder="0"></label>
+    <label>الجنس <select name="gender"><option value="">الجنسين</option><option value="male">شباب</option><option value="female">صبايا</option></select></label>
+    <label>الدوام <input name="shift" placeholder="مثلاً: صباحي 8–4"></label>
+    <label>الراتب <input name="salary" placeholder="اختياري، بس الإعلانات يلي فيها راتب بتجيب ناس أكتر"></label>
+    <label>آخر موعد للتقديم <input name="deadline" type="date"></label>
+  </div>
+  <label>شو المطلوب وشو الشغل (كل نقطة بسطر) <textarea name="details" maxlength="3000"></textarea></label>
+  <h2>كيف الناس بتتواصل معك</h2>
+  <div class="cols">
+    <label>رقم التلفون <input name="phone" inputmode="tel" placeholder="09xxxxxxxx"></label>
+    <label style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" name="whatsapp" checked> واتساب بس</label>
+    <label>أو رابط التقديم <input name="apply_url" type="url" placeholder="https://"></label>
+    <label>أو إيميل <input name="email" type="email"></label>
+  </div>
+  <input class="hp" name="website" tabindex="-1" autocomplete="off" aria-hidden="true">
+  <p class="note" style="color:var(--muted)">ممنوع تطلب مصاري من المتقدمين. أي إعلان بيطلب رسوم أو اشتراك بينرفض.</p>
+  <button class="btn primary" style="align-self:flex-start">ابعت للمراجعة</button>
+  <div id="msg" role="status"></div>
+</form>
+</main>
+<script>
+const f = document.getElementById('f'), msg = document.getElementById('msg');
+fetch('/api/meta').then(r => r.json()).then(m => {
+  const sel = document.getElementById('city');
+  (m.cities || []).forEach(c => sel.append(new Option(c, c)));
+});
+f.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const body = Object.fromEntries(new FormData(f)); body.whatsapp = f.whatsapp.checked;
+  const r = await fetch('/api/employer/jobs', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)});
+  const d = await r.json().catch(() => ({}));
+  if (r.ok) { msg.className = 'ok'; msg.textContent = 'وصل إعلانك ✅ منراجعه وبينزل خلال يوم. شكراً!'; f.reset(); }
+  else { msg.className = 'err'; msg.textContent = d.detail || 'ما زبط، جرّب كمان مرة'; }
+});
+</script>
+</body></html>

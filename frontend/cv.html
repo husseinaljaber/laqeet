@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>سيرتي الذاتية · لقيت</title>
+<meta name="theme-color" content="#0D1F18">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600&family=Reem+Kufi:wght@500;600;700&display=swap">
+<link rel="stylesheet" href="app.css">
+<style>
+.cvwrap{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);gap:18px;padding-block:18px 40px}
+@media (max-width:860px){.cvwrap{grid-template-columns:1fr}}
+.form{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px;display:flex;flex-direction:column;gap:10px}
+.form label{display:flex;flex-direction:column;gap:4px;font-size:.85rem;color:var(--muted);min-width:0}
+.form input,.form textarea,.form select{font:inherit;color:var(--ink);background:var(--paper);border:1px solid var(--line);border-radius:8px;padding:8px 10px;width:100%;min-width:0}
+.form textarea{min-height:5.5rem;resize:vertical}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media (max-width:560px){.two{grid-template-columns:1fr}.paper{padding:20px 18px;min-height:auto}}
+.need{background:var(--accent-soft);border-radius:var(--r);padding:12px 14px;font-size:.9rem}
+.need h3{margin:0 0 6px;font-size:1rem}
+.need li.hit{color:var(--accent);font-weight:600}
+.need li.hit::marker{content:"✓ "}
+.paper{background:#fff;color:#111;border-radius:6px;box-shadow:0 10px 30px -18px rgba(0,0,0,.4);padding:34px 36px;min-height:60rem;font-size:14px;line-height:1.7}
+.paper h1{font-family:var(--font-display);font-size:2rem;margin:0;color:#0D1F18}
+.paper .role{color:#0E7C5A;font-weight:600;margin:2px 0 8px}
+.paper .contact{display:flex;flex-wrap:wrap;gap:4px 16px;color:#444;font-size:.85rem;border-bottom:2px solid #3CC596;padding-bottom:10px}
+.paper h2{font-family:var(--font-display);font-size:1.05rem;color:#0D1F18;margin:16px 0 4px;border-inline-start:4px solid #3CC596;padding-inline-start:8px}
+.paper p,.paper ul{margin:0}
+.paper ul{padding-inline-start:20px}
+.paper mark{background:#DFF1E8;color:inherit;padding:0 2px;border-radius:3px}
+.bar2{display:flex;gap:10px;flex-wrap:wrap}
+.bar2 .btn{border:1px solid var(--line);color:var(--ink);background:var(--surface)}
+.bar2 .btn.primary{background:var(--mint);color:#06140F;border-color:var(--mint)}
+@media print{body{background:#fff}.hero,.form,.bar2,.need,footer{display:none!important}.cvwrap{display:block;padding:0}.paper{box-shadow:none;padding:0;min-height:0}@page{margin:14mm}}
+</style>
+</head>
+<body>
+<section class="hero slim"><div class="inner">
+  <div class="eyebrow"><a class="link" href="./">← رجوع للشغل</a></div>
+  <h1><span class="brand">لقيت</span> سيرتك الذاتية بدقيقتين</h1>
+  <p class="sub">عبّي المعلومات، وشوف السيرة جاهزة عاليمين. اطبعها أو احفظها PDF من زر «اطبع». كل شي بيضل على تلفونك، ما منبعت شي لحدا.</p>
+</div></section>
+
+<main class="inner cvwrap">
+  <div class="form" id="form">
+    <div class="need" id="need" hidden></div>
+    <label>الاسم الكامل <input name="name" autocomplete="name"></label>
+    <label>المسمى يلي بدك تقدّم عليه <input name="role" placeholder="مثلاً: محاسب، فني شبكات، كاشير"></label>
+    <div class="two">
+      <label>رقم التلفون <input name="phone" inputmode="tel" autocomplete="tel"></label>
+      <label>الإيميل <input name="email" type="email" autocomplete="email"></label>
+    </div>
+    <div class="two">
+      <label>المدينة <input name="city"></label>
+      <label>سنة الميلاد <input name="born" inputmode="numeric"></label>
+    </div>
+    <label>نبذة عنك (سطرين) <textarea name="about" placeholder="مثلاً: خريج معهد حاسوب، عندي خبرة سنتين بصيانة الشبكات، ملتزم وبحب الشغل الجماعي."></textarea></label>
+    <label>الشهادة والتعليم <textarea name="education" placeholder="كل شهادة بسطر: إجازة في الهندسة المعلوماتية، جامعة دمشق، 2022"></textarea></label>
+    <label>الخبرات <textarea name="experience" placeholder="كل خبرة بسطر: محاسب، شركة كذا، 2023–2025، شو كنت تعمل"></textarea></label>
+    <label>المهارات (افصل بينها بفاصلة) <textarea name="skills" placeholder="Excel، محاسبة، خدمة زبائن، صيانة حواسيب"></textarea></label>
+    <label>اللغات <input name="langs" placeholder="العربية (أم)، الإنكليزية (جيد)"></label>
+    <label>دورات وشهادات <textarea name="courses" placeholder="كل دورة بسطر"></textarea></label>
+    <div class="bar2"><button class="btn primary" id="print">اطبع أو احفظ PDF</button><button class="btn" id="clear">امسح كلشي</button></div>
+  </div>
+  <article class="paper" id="paper" aria-label="معاينة السيرة الذاتية"></article>
+</main>
+
+<script>
+(function () {
+  const KEY = 'laqeet.cv', form = document.getElementById('form'), paper = document.getElementById('paper');
+  let data = {}; try { data = JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) {}
+  let wanted = [];
+  const fold = (s) => String(s || '').toLowerCase().replace(/[ً-ْ]/g, '').replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي').replace(/ؤ/g, 'و').replace(/ئ/g, 'ي');
+  const esc = (s) => String(s || '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const lines = (s) => String(s || '').split('\n').map((x) => x.trim()).filter(Boolean);
+  const skills = () => String(data.skills || '').split(/[،,\n]/).map((x) => x.trim()).filter(Boolean);
+  // a skill "hits" a job requirement when they share a word of 3+ letters
+  const words = (s) => fold(s).split(/[^\p{L}\p{N}+#]+/u).map((w) => (w.length > 4 && w.startsWith('ال') ? w.slice(2) : w)).filter((w) => w.length >= 3);
+  const hits = (req) => { const r = new Set(words(req)); return skills().some((s) => words(s).some((w) => r.has(w))); };
+  const mark = (s) => wanted.length && wanted.some((req) => words(req).some((w) => words(s).includes(w))) ? `<mark>${esc(s)}</mark>` : esc(s);
+
+  function render() {
+    const sec = (t, html) => html ? `<h2>${t}</h2>${html}` : '';
+    const ul = (xs) => xs.length ? `<ul>${xs.map((x) => `<li>${mark(x)}</li>`).join('')}</ul>` : '';
+    paper.innerHTML = `<h1>${esc(data.name) || 'اسمك هون'}</h1><div class="role">${esc(data.role)}</div>
+      <div class="contact">${[data.phone, data.email, data.city, data.born && 'مواليد ' + data.born].filter(Boolean).map(esc).map((x) => `<span>${x}</span>`).join('')}</div>
+      ${sec('نبذة', data.about ? `<p>${esc(data.about)}</p>` : '')}
+      ${sec('التعليم', ul(lines(data.education)))}${sec('الخبرات', ul(lines(data.experience)))}
+      ${sec('المهارات', skills().length ? `<p>${skills().map(mark).join(' · ')}</p>` : '')}
+      ${sec('اللغات', data.langs ? `<p>${esc(data.langs)}</p>` : '')}${sec('دورات وشهادات', ul(lines(data.courses)))}`;
+    const need = document.getElementById('need');
+    if (wanted.length) need.querySelectorAll('li').forEach((li) => li.classList.toggle('hit', hits(li.dataset.req)));
+  }
+  form.querySelectorAll('[name]').forEach((f) => {
+    f.value = data[f.name] || '';
+    f.addEventListener('input', () => { data[f.name] = f.value; try { localStorage.setItem(KEY, JSON.stringify(data)); } catch (e) {} render(); });
+  });
+  document.getElementById('print').addEventListener('click', () => window.print());
+  document.getElementById('clear').addEventListener('click', () => { if (confirm('أكيد بدك تمسح كل المعلومات؟')) { data = {}; try { localStorage.removeItem(KEY); } catch (e) {} form.querySelectorAll('[name]').forEach((f) => { f.value = ''; }); render(); } });
+
+  const id = new URLSearchParams(location.search).get('job');
+  if (id) fetch('/api/jobs/' + encodeURIComponent(id)).then((r) => r.ok ? r.json() : null).then((j) => {
+    if (!j) return;
+    wanted = [...(j.skills || []), ...(j.tasks || []), j.specialty].filter(Boolean);
+    const need = document.getElementById('need');
+    need.hidden = false;
+    need.innerHTML = `<h3>عم تجهّز سيرتك لـ«${esc(j.title)}»</h3><p>هي شو بيطلبوا. يلي عليه ✓ موجود بمهاراتك، والباقي حاول تذكره إذا عندك ياه:</p>` +
+      (wanted.length ? `<ul>${wanted.slice(0, 10).map((w) => `<li data-req="${esc(w)}">${esc(w)}</li>`).join('')}</ul>` : '<p>الإعلان ما فيه تفاصيل مهارات.</p>');
+    if (!data.role) { data.role = j.title; form.querySelector('[name=role]').value = j.title; try { localStorage.setItem(KEY, JSON.stringify(data)); } catch (e) {} }
+    render();
+  }).catch(() => {});
+  render();
+})();
+</script>
+</body>
+</html>

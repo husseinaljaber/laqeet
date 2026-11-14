@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>لقيت · منصة فرص العمل في سوريا</title>
+<meta name="description" content="البوابة المركزية لفرص العمل في سوريا: قطاع حكومي، منظمات دولية ومحلية، وقطاع خاص. بشهادة وبدون شهادة، بدون تكرار وبدون إعلانات وهمية.">
+<meta name="theme-color" content="#0D1F18">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=Reem+Kufi:wght@500;600;700&display=swap">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<a class="skip" href="#board">انتقل للوظائف</a>
+
+<!-- Hero Section with Animation & Counters -->
+<header class="hero" id="mainHero">
+  <div class="inner">
+    <div class="eyebrow rise" style="--d:0">
+      <div class="eyebrow-start">
+        <span class="live"><i></i><span class="updated">محدّث لحظياً</span></span>
+        <span class="src-summary">تغطية مركزية: بوابات التوظيف الحكومي · المنظمات والهيئات · كبرى قنوات وشبكات العمل</span>
+      </div>
+      <div class="eyebrow-end">
+        <button class="link theme-btn" id="theme" aria-label="تبديل وضع الألوان">◐ المظهر</button>
+      </div>
+    </div>
+
+    <!-- Opening Animation: Exact phrase requested -->
+    <h1 id="wh" class="rise" style="--d:1">
+      <span class="brand">لقيت</span> شغل 
+      <span class="rot" id="rot">
+        <span class="on">بشهادتك</span>
+        <span>بالجامعة</span>
+        <span>بمعهد</span>
+        <span>بالبكالوريا</span>
+        <span>بالدولة</span>
+        <span>بشركة</span>
+        <span>بمنظمة</span>
+        <span>بدون شهادة</span>
+      </span>
+    </h1>
+
+    <p class="sub rise" style="--d:2">
+      فرص العمل الموثقة في سوريا بمكان واحد. شواغر الوزارات، المنظمات الدولية والمحلية، والشركات والمصانع. فلترة دقيقة حسب مؤهلك ومدينتك وطريقة التقديم، بدون إعلانات مكررة أو وهمية.
+    </p>
+
+    <!-- Live Counters -->
+    <div class="counters rise" style="--d:3">
+      <div class="counter hot"><b data-count="open">0</b><span>إعلان مفتوح حالياً</span></div>
+      <div class="counter"><b data-count="today">0</b><span>جديد اليوم</span></div>
+      <div class="counter"><b data-count="official">0</b><span>وظيفة حكومية ورسمية</span></div>
+      <div class="counter"><b data-count="ngo_count">0</b><span>شواغر منظمات وهيئات</span></div>
+      <div class="counter"><b data-count="employers">0</b><span>جهة وصاحب عمل</span></div>
+    </div>
+
+    <nav class="toplinks rise" style="--d:5">
+      <a href="pulse.html">📊 نبض السوق والأجور</a>
+      <a href="cv.html">📝 منشئ السيرة الذاتية</a>
+      <a href="scam.html">🛡️ رادار النصب وفحص الإعلانات</a>
+      <a href="employer.html">📢 عندك شغل؟ انشره مجاناً</a>
+      <button class="link profile-btn" id="openProfileDrawer">⚙️ تخصيص ملفي (لمطابقة المؤهلات)</button>
+    </nav>
+  </div>
+</header>
+
+<!-- Main Job Board -->
+<main class="inner" id="board">
+  <!-- 3 Main Sectors Tabs -->
+  <section class="sector-tabs-wrap" aria-label="أقسام القطاعات">
+    <div class="sector-tabs" role="tablist" id="sectorTabs">
+      <button role="tab" class="sector-card" data-sector="" aria-selected="true">
+        <span class="sec-icon">🌟</span>
+        <span class="sec-meta">
+          <b class="sec-title">كل القطاعات</b>
+          <small class="sec-desc" id="badgeAll">كل الشواغر المتاحة</small>
+        </span>
+      </button>
+      <button role="tab" class="sector-card" data-sector="gov" aria-selected="false">
+        <span class="sec-icon">🏛️</span>
+        <span class="sec-meta">
+          <b class="sec-title">قطاع حكومي</b>
+          <small class="sec-desc" id="badgeGov">وزارات، محافظات، مسابقات</small>
+        </span>
+      </button>
+      <button role="tab" class="sector-card" data-sector="ngo" aria-selected="false">
+        <span class="sec-icon">🤝</span>
+        <span class="sec-meta">
+          <b class="sec-title">منظمات وهيئات</b>
+          <small class="sec-desc" id="badgeNgo">أمم متحدة، إغاثة، جمعيات</small>
+        </span>
+      </button>
+      <button role="tab" class="sector-card" data-sector="private" aria-selected="false">
+        <span class="sec-icon">🏢</span>
+        <span class="sec-meta">
+          <b class="sec-title">قطاع خاص</b>
+          <small class="sec-desc" id="badgePrivate">شركات، معامل، مطاعم ومحلات</small>
+        </span>
+      </button>
+    </div>
+  </section>
+
+  <!-- Filter & Search Controls -->
+  <section class="filters" aria-label="البحث والفلترة">
+    <!-- Search Bar & Main Selects -->
+    <div class="row search-row">
+      <div class="search-wrap">
+        <input id="q" type="search" autocomplete="off" placeholder="ابحث بالمسمى أو الاختصاص أو الجهة: محاسب، كاشير، مهندس، تمريض، وزارة..." aria-label="بحث سريع" aria-autocomplete="list" aria-controls="suggestBox">
+        <button id="clearQ" class="clear-btn" aria-label="مسح البحث" hidden>×</button>
+        <div id="suggestBox" class="suggest-box" role="listbox" hidden></div>
+      </div>
+      <select id="city" aria-label="المدينة أو المحافظة" autocomplete="off">
+        <option value="" selected>كل المدن والمحافظات السورية</option>
+      </select>
+      <select id="eduFilter" aria-label="المؤهل العلمي والشهادة" autocomplete="off">
+        <option value="" selected>كل الشهادات والمؤهلات</option>
+      </select>
+      <select id="fieldFilter" aria-label="مجال العمل" autocomplete="off">
+        <option value="" selected>كل مجالات العمل</option>
+      </select>
+      <button type="button" id="searchBtn" class="btn primary search-btn">🔍 بحث</button>
+    </div>
+
+    <!-- Application Method Pills (طرق التقديم) -->
+    <div class="row filter-row">
+      <span class="filter-label">طريقة التقديم:</span>
+      <div class="chips" id="applyRow" aria-label="طريقة التقديم">
+        <button class="chip" data-apply="" aria-pressed="true">كل طرق التقديم</button>
+        <button class="chip" data-apply="whatsapp" aria-pressed="false">💬 واتساب</button>
+        <button class="chip" data-apply="form" aria-pressed="false">📝 فورم تقديم</button>
+        <button class="chip" data-apply="site" aria-pressed="false">🌐 موقع التوظيف</button>
+        <button class="chip" data-apply="email" aria-pressed="false">📧 إيميل</button>
+        <button class="chip" data-apply="call" aria-pressed="false">📞 اتصال هاتفي</button>
+      </div>
+    </div>
+
+    <!-- Subfields (Computer, Health, etc) -->
+    <div class="row" id="subrow" hidden></div>
+
+    <!-- Action Toggles -->
+    <div class="row options-row">
+      <button class="chip" id="newToday" aria-pressed="false">✦ جديد اليوم</button>
+      <button class="chip" id="savedOnly" aria-pressed="false">🔖 المحفوظة (<span id="savedCount">0</span>)</button>
+      <label class="toggle">
+        <input id="lower" type="checkbox" checked> ورجيني أيضاً شواغر تطلب مؤهل أقل أو بدون تحديد شهادة
+      </label>
+      <select id="sortOrder" class="sort-select" aria-label="ترتيب النتائج">
+        <option value="relevance">الترتيب: الأقرب لبحثك</option>
+        <option value="recent">الترتيب: الأحدث أولاً</option>
+      </select>
+      <button class="link reset-filters-btn" id="resetFiltersBtn">مسح الفلاتر</button>
+    </div>
+
+    <!-- Experience Legend -->
+    <div class="legend">
+      <span style="--c:var(--exp-low)">حتى سنتين خبرة</span>
+      <span style="--c:var(--exp-mid)">3–4 سنين</span>
+      <span style="--c:var(--exp-high)">5 سنين وأكثر</span>
+      <span style="--c:var(--exp-unk)">الخبرة غير مشروطة</span>
+    </div>
+  </section>
+
+  <!-- Market demand bars (top requested fields) -->
+  <section class="fields-summary" id="marketFieldsSection">
+    <div class="fields-head">
+      <h2>أكثر المجالات طلباً حالياً في سوريا (اضغط للفلترة السريعة):</h2>
+    </div>
+    <div class="bars" id="bars"></div>
+  </section>
+
+  <!-- Results Count -->
+  <div class="count-bar">
+    <div class="count" id="count" aria-live="polite">جاري جلب الوظائف...</div>
+    <div id="activeFilterPills" class="active-pills"></div>
+  </div>
+  <div id="typoBanner" class="typo-banner" hidden></div>
+
+  <!-- Job Cards Grid -->
+  <div class="grid" id="grid"></div>
+
+  <!-- Pagination -->
+  <button class="more" id="more" hidden>عرض المزيد من الشواغر</button>
+
+  <!-- Footer -->
+  <footer>
+    <div class="footer-card">
+      <h3>عن منصة «لقيت»</h3>
+      <p>«لقيت» منصة وطنية مستقلة تجمع وتوثق إعلانات التوظيف المفتوحة للعموم في سوريا من مصادرها الرسمية والموثوقة: البوابات الحكومية (وزارة التنمية الإدارية، وزارة الشؤون الاجتماعية، وزارة التعليم العالي)، المنظمات الدولية والمحلية، وشبكات التوظيف الخاصة. التقديم يتم مباشرة لدى الجهة المعلنة عبر الروابط والأرقام الرسمية.</p>
+      <p class="scam-warn">⚠️ تنبيه أمان: التوظيف مجاني دائماً. لا تدفع أي مبالغ مالية مقابل التقديم أو المقابلات. إذا اشتبهت بأي إعلان، استخدم زر «بلّغ» أو افحصه عبر <a href="scam.html">رادار النصب</a>.</p>
+      <div class="footer-links">
+        <a href="pulse.html">نبض السوق</a> ·
+        <a href="cv.html">سيرتي الذاتية</a> ·
+        <a href="scam.html">رادار النصب</a> ·
+        <a href="employer.html">انشر شاغر</a> ·
+        <a href="#wh">العودة للأعلى ↑</a>
+      </div>
+    </div>
+  </footer>
+</main>
+
+<!-- Job Detail Sheet -->
+<dialog id="sheet" aria-labelledby="sheetTitle">
+  <div id="sheetBody"></div>
+</dialog>
+
+<!-- Share & Copy Job Modal -->
+<dialog id="shareDialog" aria-labelledby="shareDialogTitle">
+  <div id="shareDialogBody"></div>
+</dialog>
+
+<!-- Profile Drawer for Qualifications Match («بتنطبق عليك؟») -->
+<dialog id="profileDrawer" aria-labelledby="profileTitle">
+  <div class="drawer-body">
+    <div class="drawer-header">
+      <h2 id="profileTitle">تخصيص ملفي الشخصي</h2>
+      <button class="close" id="closeProfileDrawer" aria-label="إغلاق">×</button>
+    </div>
+    <p class="drawer-desc">أدخل معلوماتك ليقوم الموقع بمطابقة كل وظيفة تلقائياً وعرض علامة «بتنطبق عليك» قبل ما تقدّم. هذه المعلومات تُحفظ على هاتفك فقط ولا تُرسل لأي جهة.</p>
+    <div class="drawer-fields">
+      <label>مؤهلك العلمي:
+        <select id="userEdu">
+          <option value="">بدون تحديد</option>
+          <option value="none">بدون شهادة</option>
+          <option value="basic">تعليم أساسي (إعدادي)</option>
+          <option value="secondary">بكالوريا (ثانوي)</option>
+          <option value="institute">معهد تقاني أو متوسط</option>
+          <option value="bachelor">إجازة جامعية (بكالوريوس)</option>
+          <option value="master">ماجستير / دراسات عليا</option>
+          <option value="phd">دكتوراه</option>
+        </select>
+      </label>
+      <label>سنوات الخبرة لديك:
+        <input type="number" id="userExp" min="0" max="40" placeholder="مثال: 3" inputmode="numeric">
+      </label>
+      <label>العمر:
+        <input type="number" id="userAge" min="15" max="75" placeholder="مثال: 26" inputmode="numeric">
+      </label>
+      <label>الجنس (للشواغر المخصصة لذكور أو إناث):
+        <select id="userGender">
+          <option value="">غير محدد</option>
+          <option value="male">شاب (ذكر)</option>
+          <option value="female">صبية (أنثى)</option>
+        </select>
+      </label>
+    </div>
+    <div class="drawer-actions">
+      <button class="btn primary" id="saveProfileBtn">حفظ وتفعيل المطابقة</button>
+      <button class="btn ghost" id="clearProfileBtn">مسح بياناتي</button>
+    </div>
+  </div>
+</dialog>
+
+<div class="toast" id="toast" role="status" hidden></div>
+
+<script src="app.js" defer></script>
+</body>
+</html>

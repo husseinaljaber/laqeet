@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>المراجعة · لقيت</title><meta name="robots" content="noindex"><link rel="icon" href="icons/icon.svg">
+<link rel="stylesheet" href="app.css"><link rel="stylesheet" href="page.css"></head>
+<body>
+<main class="inner page">
+  <div class="box"><h2>طابور المراجعة</h2>
+    <label>رمز الإدارة <input id="tok" type="password" autocomplete="off"></label>
+    <button class="btn primary" id="load" style="align-self:flex-start">حمّل</button>
+    <div id="out"></div></div>
+</main>
+<script>
+const tok = document.getElementById('tok'), out = document.getElementById('out');
+try { tok.value = sessionStorage.getItem('laqeet.admin') || ''; } catch (e) {}
+const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+async function load() {
+  try { sessionStorage.setItem('laqeet.admin', tok.value); } catch (e) {}
+  const r = await fetch('/api/admin/queue', {headers: {'X-Admin-Token': tok.value}});
+  if (!r.ok) { out.textContent = 'الرمز غلط أو الإدارة مو مفعّلة (ADMIN_TOKEN).'; return; }
+  const {jobs} = await r.json();
+  out.innerHTML = jobs.length ? `<table class="tbl"><tr><th>الإعلان</th><th>ليش هون</th><th></th></tr>${jobs.map(j => `<tr id="r${j.id}">
+    <td><b>${esc(j.title)}</b><br>${esc(j.employer)} · ${esc((j.cities||[]).join('، '))} · ${esc(j.phones?.join(' '))}<br><small>${esc(j.raw).slice(0, 400)}</small><br>${j.sources.map(s => `<a href="${esc(s.post_url)}" target="_blank">${esc(s.label)}</a>`).join(' · ')}</td>
+    <td>${j.source === 'employer' ? 'صاحب عمل' : j.reports ? j.reports + ' بلاغات' : 'ثقة قليلة'}</td>
+    <td><button class="chip" data-a="approve" data-id="${j.id}">انشر</button> <button class="chip" data-a="reject" data-id="${j.id}">ارفض</button></td></tr>`).join('')}</table>` : 'ما في شي للمراجعة 👌';
+}
+out.addEventListener('click', async (e) => {
+  const b = e.target.closest('[data-a]'); if (!b) return;
+  const r = await fetch('/api/admin/jobs/' + b.dataset.id, {method: 'POST', headers: {'X-Admin-Token': tok.value, 'Content-Type': 'application/json'}, body: JSON.stringify({action: b.dataset.a})});
+  if (r.ok) document.getElementById('r' + b.dataset.id).remove();
+});
+document.getElementById('load').addEventListener('click', load);
+</script>
+</body></html>

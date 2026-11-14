@@ -39,6 +39,8 @@
   try { savedMap = JSON.parse(localStorage.getItem(SAVED_KEY) || '{}') || {}; } catch (e) {}
 
   const state = {
+    view: 'landing',
+    country: 'sy',
     sector: '',
     edu_group: '',
     edu: '',
@@ -117,8 +119,14 @@
   const expText = (e) => e == null ? 'الخبرة غير مشروطة' : e === 0 ? 'بدون خبرة' : e === 1 ? 'سنة خبرة واحدة' : e === 2 ? 'سنتان خبرة' : e <= 10 ? e + ' سنوات خبرة' : e + ' سنة خبرة';
   const fieldLabel = (f) => (META && (META.fields.find((x) => x.code === f) || {}).label) || f;
   const subLabel = (f) => (META && (META.subfields.find((x) => x.code === f) || {}).label) || f;
-  const isMobile = (p) => /^09\d{8}$/.test(p);
-  const intlPhone = (p) => '963' + p.replace(/^0/, '');
+  const isMobile = (p) => /^09\d{8}$/.test(p) || /^\+?905\d{9}$/.test(p) || /^05\d{9}$/.test(p);
+  const intlPhone = (p) => {
+    const clean = String(p || '').replace(/[\s-]/g, '');
+    if (clean.startsWith('+90')) return clean.slice(1);
+    if (clean.startsWith('905')) return clean;
+    if (clean.startsWith('05') && clean.length === 11) return '9' + clean;
+    return '963' + clean.replace(/^0/, '');
+  };
 
   // ---------------------------------------------------------------- «بتنطبق عليك؟» (Match)
   function fit(j) {
@@ -657,6 +665,7 @@
   // ---------------------------------------------------------------- query params
   function buildParams() {
     const p = new URLSearchParams();
+    p.set('country', state.country || 'sy');
     if (state.sector) p.set('sector', state.sector);
     if (state.edu_group) p.set('edu_group', state.edu_group);
     if (state.edu) p.set('edu', state.edu);
@@ -677,6 +686,10 @@
   const SYRIAN_GOVERNORATES = [
     'دمشق', 'ريف دمشق', 'حلب', 'حمص', 'حماة', 'اللاذقية', 'طرطوس',
     'إدلب', 'درعا', 'السويداء', 'القنيطرة', 'دير الزور', 'الحسكة', 'الرقة'
+  ];
+  const TURKISH_PROVINCES = [
+    'إسطنبول', 'غازي عنتاب', 'مرسين', 'أنقرة', 'بورصة', 'هاتاي (أنطاكيا)',
+    'إزمير', 'قونيا', 'شانلي أورفا', 'أضنة', 'قيصري', 'كليس'
   ];
   const mselRegistry = {};
 
@@ -979,8 +992,16 @@
 
     const shown = Math.min(state.offset + PAGE, data.total);
     const selCities = splitCsv(state.city);
-    const whereLabel = selCities.length ? `في ${selCities.join(' و ')}` : 'في كل سوريا';
+    const countryDefaultLabel = state.country === 'tr' ? 'في كل تركيا 🇹🇷' : 'في كل سوريا 🇸🇾';
+    const whereLabel = selCities.length ? `في ${selCities.join(' و ')}` : countryDefaultLabel;
     $('count').textContent = `${data.total} فرصة عمل مفتوحة ${whereLabel}` + (data.total > shown ? ` · معروض ${shown}` : '');
+    if ($('boardOpenLabel')) {
+      $('boardOpenLabel').textContent = state.country === 'tr' ? 'فرصة مفتوحة في تركيا 🇹🇷' : 'إعلان مفتوح في سوريا 🇸🇾';
+    }
+    const boardOpenNode = document.querySelector('[data-count="board_open"]');
+    if (boardOpenNode && !state.city && !state.field && !state.edu && !state.q && !state.sector && !state.apply) {
+      boardOpenNode.textContent = data.total;
+    }
     $('more').hidden = data.total <= shown;
 
     if (!append) {
@@ -996,7 +1017,8 @@
     const total = (sectorFacets || []).reduce((a, b) => a + b.count, 0);
     const selCities = splitCsv(state.city);
     const selFields = splitCsv(state.field);
-    const scopeParts = [selCities.length ? selCities.slice(0, 2).join('، ') + (selCities.length > 2 ? ` (+${selCities.length - 2})` : '') : 'كل سوريا'];
+    const countryScope = state.country === 'tr' ? 'كل تركيا' : 'كل سوريا';
+    const scopeParts = [selCities.length ? selCities.slice(0, 2).join('، ') + (selCities.length > 2 ? ` (+${selCities.length - 2})` : '') : countryScope];
     if (selFields.length) {
       scopeParts.push(selFields.slice(0, 2).map(fieldLabel).join('، ') + (selFields.length > 2 ? ` (+${selFields.length - 2})` : ''));
     }
@@ -1337,23 +1359,134 @@
       toast('تم مسح البيانات الشخصية');
       refresh();
     });
+
+    // Landing Page Theme Toggle (synced with #theme)
+    if ($('lpThemeBtn')) {
+      $('lpThemeBtn').addEventListener('click', () => {
+        if ($('theme')) $('theme').click();
+      });
+    }
+
+    // Back to Landing Page buttons inside Board View
+    ['backToLandingBtn', 'navHomeLink', 'footerHomeLink'].forEach((id) => {
+      if ($(id)) {
+        $(id).addEventListener('click', () => showLanding(true));
+      }
+    });
+
+    // Board Country Switcher Tabs (🇸🇾 وظائف سوريا | 🇹🇷 وظائف تركيا)
+    document.querySelectorAll('[data-board-country]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const c = btn.dataset.boardCountry || 'sy';
+        if (state.country === c && state.view === 'board') return;
+        enterBoard({ country: c }, true);
+      });
+    });
+
+    // Landing Page Quick Finder Wizard (3-Step Search)
+    let wizCountry = 'sy';
+    const populateWizCities = (countryCode) => {
+      const sel = $('lpWizCity');
+      if (!sel) return;
+      const list = countryCode === 'tr'
+        ? TURKISH_PROVINCES
+        : ((META && META.cities && META.cities.length) ? META.cities : SYRIAN_GOVERNORATES);
+      sel.replaceChildren(
+        new Option(countryCode === 'tr' ? 'كل الولايات والمدن التركية' : 'كل المدن والمحافظات السورية (14 محافظة)', ''),
+        ...list.map((c) => new Option(c, c))
+      );
+      sel.value = '';
+    };
+    window._populateWizCities = populateWizCities;
+
+    document.querySelectorAll('[data-wiz-country]').forEach((tab) => {
+      tab.addEventListener('click', () => {
+        wizCountry = tab.dataset.wizCountry || 'sy';
+        document.querySelectorAll('[data-wiz-country]').forEach((t) => {
+          const active = t === tab;
+          t.classList.toggle('active', active);
+          t.setAttribute('aria-selected', String(active));
+        });
+        populateWizCities(wizCountry);
+      });
+    });
+
+    const submitWizard = () => {
+      const city = $('lpWizCity') ? $('lpWizCity').value : '';
+      const secVal = $('lpWizSector') ? $('lpWizSector').value : '';
+      const qVal = $('lpWizQ') ? $('lpWizQ').value.trim() : '';
+      const opts = { country: wizCountry, city, q: qVal };
+      if (secVal === 'nodegree') {
+        opts.edu = 'none';
+      } else if (secVal) {
+        opts.sector = secVal;
+      }
+      enterBoard(opts, true);
+    };
+
+    if ($('lpWizSubmit')) {
+      $('lpWizSubmit').addEventListener('click', submitWizard);
+    }
+    if ($('lpWizQ')) {
+      $('lpWizQ').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          submitWizard();
+        }
+      });
+    }
+
+    // Delegated click handler for all Landing Page portal/gateway/city/ticker buttons
+    document.addEventListener('click', (e) => {
+      const trigger = e.target.closest('[data-enter-country],[data-enter-sector],[data-enter-city],[data-enter-edu],[data-enter-field]');
+      if (!trigger) return;
+      e.preventDefault();
+      enterBoard({
+        country: trigger.dataset.enterCountry || 'sy',
+        sector: trigger.dataset.enterSector || '',
+        city: trigger.dataset.enterCity || '',
+        edu: trigger.dataset.enterEdu || '',
+        field: trigger.dataset.enterField || ''
+      }, true);
+    });
+
+    // Browser Back/Forward navigation between Landing Page and Jobs Board
+    window.addEventListener('popstate', () => {
+      const sp = new URLSearchParams(location.search);
+      if (sp.get('view') === 'jobs' || sp.get('country') || sp.get('city') || sp.get('q') || location.hash.startsWith('#job-')) {
+        enterBoard({
+          country: sp.get('country') || 'sy',
+          city: sp.get('city') || '',
+          sector: sp.get('sector') || '',
+          edu: sp.get('edu') || '',
+          field: sp.get('field') || '',
+          q: sp.get('q') || ''
+        }, false);
+      } else {
+        showLanding(false);
+      }
+    });
   }
 
-  // Rotating animation in headline:
-  // «لقيت شغل بشهادتك... بالجامعة... بمعهد... بالبكالوريا... بالدولة... بشركة... بمنظمة... بدون شهادة»
-  function setupHeadlineRotation() {
-    const rot = [...document.querySelectorAll('#rot span')];
-    if (!reduce && rot.length) {
+  function startRotator(selector, intervalMs) {
+    const spans = [...document.querySelectorAll(selector)];
+    if (!reduce && spans.length > 1) {
       let i = 0;
       setInterval(() => {
-        const prev = rot[i];
+        const prev = spans[i];
         prev.classList.remove('on');
         prev.classList.add('out');
         setTimeout(() => prev.classList.remove('out'), 450);
-        i = (i + 1) % rot.length;
-        rot[i].classList.add('on');
-      }, 2300);
+        i = (i + 1) % spans.length;
+        spans[i].classList.add('on');
+      }, intervalMs);
     }
+  }
+
+  function setupHeadlineRotation() {
+    startRotator('#rot span', 2300);
+    startRotator('#lpRoleRot span', 2400);
+    startRotator('#lpCountryRot span', 3200);
   }
 
   function countUp(node, to) {
@@ -1365,6 +1498,145 @@
       if (p < 1) requestAnimationFrame(step);
     };
     requestAnimationFrame(step);
+  }
+
+  function rebuildCityMultiSelect(countryCode) {
+    const isTr = countryCode === 'tr';
+    const govList = isTr
+      ? TURKISH_PROVINCES
+      : ((META && META.cities && META.cities.length) ? META.cities : SYRIAN_GOVERNORATES);
+    const citySel = $('city');
+    if (citySel) {
+      citySel.replaceChildren(
+        new Option(isTr ? 'كل الولايات والمدن التركية' : 'كل المدن والمحافظات السورية', ''),
+        ...govList.map((c) => new Option(c, c))
+      );
+      citySel.value = '';
+    }
+    createMultiSelect('city', {
+      icon: '📍',
+      placeholder: isTr ? 'كل الولايات والمدن التركية' : 'كل المدن والمحافظات السورية',
+      headerHint: isTr ? 'اختر ولاية تركية أو أكثر:' : 'اختر محافظة أو أكثر (14 محافظة):',
+      twoColumns: true,
+      options: govList.map((c) => [c, c]),
+      getValue: () => state.city,
+      setValue: (csv) => {
+        state.city = csv;
+        syncFilterUI();
+        refresh();
+      }
+    });
+
+    // Update Board Header & Country Switcher UI
+    document.querySelectorAll('[data-board-country]').forEach((b) => {
+      const active = b.dataset.boardCountry === (isTr ? 'tr' : 'sy');
+      b.classList.toggle('active', active);
+      b.setAttribute('aria-selected', String(active));
+    });
+    if ($('boardCountryTitle')) {
+      $('boardCountryTitle').textContent = isTr ? 'في تركيا 🇹🇷' : 'في سوريا 🇸🇾';
+    }
+    if ($('boardHeroSub')) {
+      $('boardHeroSub').textContent = isTr
+        ? 'فرص العمل الموثقة في تركيا للسوريين والعرب والكفاءات: المنظمات الدولية، الشركات التركية والعربية، المصانع والورش، والعمل عن بُعد مع وسيلة التقديم المباشرة.'
+        : 'فرص العمل الموثقة في سوريا بمكان واحد. شواغر الوزارات، المنظمات الدولية والمحلية، والشركات والمصانع. فلترة دقيقة حسب مؤهلك ومدينتك وطريقة التقديم، بدون إعلانات مكررة أو وهمية.';
+    }
+    if ($('marketDemandTitle')) {
+      $('marketDemandTitle').textContent = isTr
+        ? 'أكثر المجالات طلباً حالياً في تركيا 🇹🇷 (اضغط للفلترة السريعة):'
+        : 'أكثر المجالات طلباً حالياً في سوريا 🇸🇾 (اضغط للفلترة السريعة):';
+    }
+  }
+
+  function populateLandingPortals() {
+    const syList = (META && META.cities && META.cities.length) ? META.cities : SYRIAN_GOVERNORATES;
+    const syCounts = (STATS && STATS.city_counts) || {};
+    const trCounts = (STATS && STATS.city_counts_tr) || {};
+
+    const syGrid = $('lpSyCitiesGrid');
+    if (syGrid) {
+      syGrid.replaceChildren(...syList.map((city) =>
+        el('button', {
+          type: 'button',
+          class: 'lp-city-btn',
+          'data-enter-country': 'sy',
+          'data-enter-city': city
+        },
+          el('span', null, city),
+          syCounts[city] ? el('small', null, String(syCounts[city])) : null
+        )
+      ));
+    }
+
+    const trGrid = $('lpTrCitiesGrid');
+    if (trGrid) {
+      trGrid.replaceChildren(...TURKISH_PROVINCES.map((city) =>
+        el('button', {
+          type: 'button',
+          class: 'lp-city-btn tr',
+          'data-enter-country': 'tr',
+          'data-enter-city': city
+        },
+          el('span', null, city),
+          trCounts[city] ? el('small', null, String(trCounts[city])) : null
+        )
+      ));
+    }
+
+    if (window._populateWizCities) {
+      window._populateWizCities('sy');
+    }
+  }
+
+  function showLanding(pushHistory = true) {
+    state.view = 'landing';
+    if ($('landingView')) $('landingView').hidden = false;
+    if ($('boardView')) $('boardView').hidden = true;
+    if (pushHistory) {
+      try { history.pushState({ view: 'landing' }, '', location.pathname); } catch (e) {}
+    }
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function enterBoard(opts = {}, pushHistory = true) {
+    const nextCountry = opts.country === 'tr' ? 'tr' : 'sy';
+    state.view = 'board';
+    state.country = nextCountry;
+    state.sector = opts.sector || '';
+    state.edu_group = '';
+    state.edu = opts.edu || '';
+    state.apply = opts.apply || '';
+    state.field = opts.field || '';
+    state.sub = '';
+    state.city = opts.city || '';
+    state.source = '';
+    state.q = opts.q || '';
+    state.sort = 'relevance';
+    state.terms = [];
+    state.fresh = false;
+    state.saved = false;
+    state.offset = 0;
+
+    if ($('landingView')) $('landingView').hidden = true;
+    if ($('boardView')) $('boardView').hidden = false;
+
+    rebuildCityMultiSelect(state.country);
+    syncFilterUI();
+
+    if (pushHistory) {
+      const sp = new URLSearchParams();
+      sp.set('view', 'jobs');
+      sp.set('country', state.country);
+      if (state.city) sp.set('city', state.city);
+      if (state.sector) sp.set('sector', state.sector);
+      if (state.edu) sp.set('edu', state.edu);
+      if (state.field) sp.set('field', state.field);
+      if (state.q) sp.set('q', state.q);
+      try { history.pushState({ view: 'jobs', country: state.country }, '', `${location.pathname}?${sp.toString()}`); } catch (e) {}
+    }
+
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    refresh();
   }
 
   // ---------------------------------------------------------------- initialization
@@ -1391,42 +1663,43 @@
     };
     updateLiveLabel();
 
+    const getStatCounts = () => ({
+      open: STATS.open_sy || STATS.open || 0,
+      open_tr: STATS.open_tr || 0,
+      board_open: state.country === 'tr' ? (STATS.open_tr || 0) : (STATS.open_sy || STATS.open || 0),
+      today: STATS.today || 0,
+      official: STATS.official || 0,
+      ngo_count: STATS.ngo_count || (META.sectors && (META.sectors.find((s) => s.code === 'ngo') || {}).open) || 0,
+      employers: STATS.employers || 0
+    });
+
     setInterval(async () => {
       try {
         const freshStats = await get('/stats');
         if (freshStats && freshStats.updated_at && freshStats.updated_at !== (STATS && STATS.updated_at)) {
           STATS = freshStats;
           updateLiveLabel();
-          const newCounts = {
-            open: STATS.open || 0,
-            today: STATS.today || 0,
-            official: STATS.official || 0,
-            ngo_count: STATS.ngo_count || (META.sectors && (META.sectors.find((s) => s.code === 'ngo') || {}).open) || 0,
-            employers: STATS.employers || 0
-          };
+          const newCounts = getStatCounts();
           document.querySelectorAll('[data-count]').forEach((node) => {
             const k = node.dataset.count;
             if (newCounts[k] != null) node.textContent = newCounts[k];
           });
-          if (state.offset === 0 && !state.saved) refresh();
+          populateLandingPortals();
+          if (state.view === 'board' && state.offset === 0 && !state.saved) refresh();
         } else {
           updateLiveLabel();
         }
       } catch (_) {}
     }, 180000);
 
-    // Counters in Hero
-    const statCounts = {
-      open: STATS.open || 0,
-      today: STATS.today || 0,
-      official: STATS.official || 0,
-      ngo_count: STATS.ngo_count || (META.sectors && (META.sectors.find((s) => s.code === 'ngo') || {}).open) || 0,
-      employers: STATS.employers || 0
-    };
+    // Counters in Landing & Board Hero
+    const statCounts = getStatCounts();
     document.querySelectorAll('[data-count]').forEach((node) => {
       const k = node.dataset.count;
       countUp(node, statCounts[k] != null ? statCounts[k] : 0);
     });
+
+    populateLandingPortals();
 
     // Populate dropdowns & initialize interactive Multi-Select widgets
     const eduSel = $('eduFilter');
@@ -1447,29 +1720,7 @@
       fldSel.value = '';
     }
 
-    const govList = (META.cities && META.cities.length) ? META.cities : SYRIAN_GOVERNORATES;
-    const citySel = $('city');
-    if (citySel) {
-      citySel.replaceChildren(
-        new Option('كل المدن والمحافظات السورية', ''),
-        ...govList.map((c) => new Option(c, c))
-      );
-      citySel.value = '';
-    }
-
-    createMultiSelect('city', {
-      icon: '📍',
-      placeholder: 'كل المدن والمحافظات السورية',
-      headerHint: 'اختر محافظة أو أكثر (14 محافظة):',
-      twoColumns: true,
-      options: govList.map((c) => [c, c]),
-      getValue: () => state.city,
-      setValue: (csv) => {
-        state.city = csv;
-        syncFilterUI();
-        refresh();
-      }
-    });
+    rebuildCityMultiSelect('sy');
 
     createMultiSelect('eduFilter', {
       icon: '🎓',
@@ -1501,21 +1752,23 @@
       }
     });
 
-    // Ensure clean defaults on initial load (all cities, all qualifications, all fields)
-    state.city = '';
-    state.edu = '';
-    state.field = '';
-    if (location.search) {
-      try { history.replaceState(null, '', location.pathname + location.hash); } catch (e) {}
-    }
-    syncFilterUI();
-
-    refresh();
-
-    // Deep link #job-123
+    // Determine initial view: Standalone Landing Page by default, or Jobs Board if deep-linked
+    const sp = new URLSearchParams(location.search);
     const hashMatch = location.hash.match(/^#job-(\d+)$/);
-    if (hashMatch) {
-      get('/jobs/' + hashMatch[1]).then(openDetail).catch(() => {});
+    if (sp.get('view') === 'jobs' || sp.get('country') || sp.get('city') || sp.get('sector') || sp.get('q') || hashMatch) {
+      enterBoard({
+        country: sp.get('country') || 'sy',
+        city: sp.get('city') || '',
+        sector: sp.get('sector') || '',
+        edu: sp.get('edu') || '',
+        field: sp.get('field') || '',
+        q: sp.get('q') || ''
+      }, false);
+      if (hashMatch) {
+        get('/jobs/' + hashMatch[1]).then(openDetail).catch(() => {});
+      }
+    } else {
+      showLanding(false);
     }
   }
 

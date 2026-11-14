@@ -1,6 +1,6 @@
 /* Offline support: the app shell is cached; job lists come from the network, with the last copy as a fallback
    (useful on slow or cut connections). */
-const SHELL = 'laqeet-shell-v16', DATA = 'laqeet-data-v16';
+const SHELL = 'laqeet-shell-v17', DATA = 'laqeet-data-v17';
 const FILES = ['./', 'index.html', 'app.css', 'app.js', 'cv.html', 'page.css', 'pulse.html', 'employer.html', 'scam.html', 'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-192.png'];
 
 self.addEventListener('install', (e) => {

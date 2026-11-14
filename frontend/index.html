@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>لقيت · منصة فرص العمل في سوريا</title>
-<meta name="description" content="البوابة المركزية لفرص العمل في سوريا: قطاع حكومي، منظمات دولية ومحلية، وقطاع خاص. بشهادة وبدون شهادة، بدون تكرار وبدون إعلانات وهمية.">
+<title>لقيت · البوابة الإقليمية لفرص العمل في سوريا وتركيا</title>
+<meta name="description" content="البوابة المركزية الذكية لفرص العمل الموثقة في سوريا وتركيا: قطاع حكومي، منظمات دولية ومحلية، وشركات ومعامل. بشهادة وبدون شهادة، تحديث تلقائي كل 20 دقيقة.">
 <meta name="theme-color" content="#0D1F18">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
@@ -17,190 +17,643 @@
 <body>
 <a class="skip" href="#board">انتقل للوظائف</a>
 
-<!-- Hero Section with Animation & Counters -->
-<header class="hero" id="mainHero">
-  <div class="inner">
-    <div class="eyebrow rise" style="--d:0">
-      <div class="eyebrow-start">
-        <span class="live"><i></i><span class="updated">محدّث لحظياً</span></span>
-        <span class="src-summary">تغطية مركزية: بوابات التوظيف الحكومي · المنظمات والهيئات · كبرى قنوات وشبكات العمل</span>
-      </div>
-      <div class="eyebrow-end">
-        <button class="link theme-btn" id="theme" aria-label="تبديل وضع الألوان">◐ المظهر</button>
+<!-- =====================================================================
+     VIEW 1: STANDALONE ANIMATED LANDING PAGE (الصفحة الرئيسية الأولى)
+     ===================================================================== -->
+<div id="landingView" class="landing-view">
+  <!-- Top Hero & Interactive Radar Stage -->
+  <header class="lp-hero">
+    <div class="lp-glow lp-glow-1"></div>
+    <div class="lp-glow lp-glow-2"></div>
+    <div class="inner lp-inner">
+      <!-- Top Navigation Bar -->
+      <nav class="lp-topbar rise" style="--d:0" aria-label="التنقل الرئيسي">
+        <div class="lp-brand-wrap">
+          <span class="lp-logo-mark">لـ</span>
+          <div class="lp-brand-text">
+            <b>لقيت · Laqeet</b>
+            <small>بوابة التوظيف الذكية · سوريا 🇸🇾 وتركيا 🇹🇷</small>
+          </div>
+          <span class="live lp-live-pill"><i></i><span class="updated">محدّث تلقائياً كل 20 دقيقة</span></span>
+        </div>
+        <div class="lp-nav-actions">
+          <button type="button" class="lp-nav-btn" data-enter-country="sy">🇸🇾 وظائف سوريا</button>
+          <button type="button" class="lp-nav-btn" data-enter-country="tr">🇹🇷 وظائف تركيا</button>
+          <a href="pulse.html" class="lp-nav-link">📊 نبض السوق</a>
+          <a href="cv.html" class="lp-nav-link">📝 منشئ CV</a>
+          <a href="scam.html" class="lp-nav-link">🛡️ رادار النصب</a>
+          <a href="employer.html" class="lp-nav-cta">📢 انشر وظيفة مجاناً</a>
+          <button type="button" class="link theme-btn" id="lpThemeBtn" aria-label="تبديل وضع الألوان">◐ المظهر</button>
+        </div>
+      </nav>
+
+      <!-- Main Hero Split: Animated Copy + Interactive Radar Visual -->
+      <div class="lp-hero-grid">
+        <div class="lp-hero-copy">
+          <div class="lp-badge rise" style="--d:1">
+            <span class="lp-badge-dot"></span>
+            <span>تغطية إقليمية حية · بدون إعلانات وهمية أو مكررة · تقديم مباشر</span>
+          </div>
+
+          <h1 class="lp-title rise" style="--d:2">
+            <span class="brand">لقيت</span> شغلك في
+            <span class="lp-country-rot" id="lpCountryRot">
+              <span class="on">سوريا 🇸🇾</span>
+              <span>تركيا 🇹🇷</span>
+            </span>
+            <br>
+            <span class="lp-sub-rot-prefix">مفصّل</span>
+            <span class="rot" id="lpRoleRot">
+              <span class="on">بشهادتك الجامعية</span>
+              <span>بمنظمة دولية NGO</span>
+              <span>بشركة أو مؤسسة</span>
+              <span>بمعمل أو ورشة</span>
+              <span>بمسابقة حكومية</span>
+              <span>بدون شهادة أو خبرة</span>
+            </span>
+          </h1>
+
+          <p class="lp-lead rise" style="--d:3">
+            أول محرك توظيف ذكي يمسح البوابات الحكومية، المنظمات الدولية والأممية، والشركات الخاصة في <b>جميع المحافظات السورية الـ 14</b> و<b>الولايات التركية الكبرى</b> كل 20 دقيقة، ويستخرج لك رابط أو رقم التقديم الحقيقي مباشرة.
+          </p>
+
+          <!-- Interactive 3-Step Quick Finder Wizard -->
+          <div class="lp-wizard rise" style="--d:4" role="search" aria-label="المستكشف السريع للوظائف">
+            <div class="lp-wiz-tabs" role="tablist">
+              <button type="button" role="tab" class="lp-wiz-tab active" data-wiz-country="sy" aria-selected="true">
+                <span>🇸🇾 البحث في سوريا (14 محافظة)</span>
+              </button>
+              <button type="button" role="tab" class="lp-wiz-tab" data-wiz-country="tr" aria-selected="false">
+                <span>🇹🇷 البحث في تركيا (الولايات التركية)</span>
+              </button>
+            </div>
+            <div class="lp-wiz-controls">
+              <div class="lp-wiz-field">
+                <label for="lpWizCity">📍 المحافظة / الولاية</label>
+                <select id="lpWizCity">
+                  <option value="">كل المدن والمحافظات</option>
+                </select>
+              </div>
+              <div class="lp-wiz-field">
+                <label for="lpWizSector">🏢 القطاع أو المؤهل</label>
+                <select id="lpWizSector">
+                  <option value="">كل القطاعات والمؤهلات</option>
+                  <option value="ngo">🤝 منظمات دولية وإنسانية (NGOs)</option>
+                  <option value="private">🏢 شركات وقطاع خاص</option>
+                  <option value="gov">🏛️ قطاع حكومي ومسابقات</option>
+                  <option value="nodegree">🛠️ فرص سريعة وبدون شهادة</option>
+                </select>
+              </div>
+              <div class="lp-wiz-field lp-wiz-q-wrap">
+                <label for="lpWizQ">🔍 المسمى أو الاختصاص</label>
+                <input type="search" id="lpWizQ" placeholder="مثال: محاسب، مهندس، مبيعات، خياط، مترجم..." autocomplete="off">
+              </div>
+              <button type="button" id="lpWizSubmit" class="btn primary lp-wiz-submit">
+                🚀 استعرض الفرص الآن
+              </button>
+            </div>
+          </div>
+
+          <!-- Live Counters Strip -->
+          <div class="lp-counters rise" style="--d:5">
+            <button type="button" class="lp-counter-card hot" data-enter-country="sy">
+              <b data-count="open">0</b>
+              <span>شاغر مفتوح في سوريا 🇸🇾</span>
+            </button>
+            <button type="button" class="lp-counter-card tr-accent" data-enter-country="tr">
+              <b data-count="open_tr">0</b>
+              <span>فرصة في السوق التركي 🇹🇷</span>
+            </button>
+            <button type="button" class="lp-counter-card" data-enter-sector="ngo">
+              <b data-count="ngo_count">0</b>
+              <span>شواغر منظمات دولية NGOs</span>
+            </button>
+            <button type="button" class="lp-counter-card" data-enter-country="sy">
+              <b data-count="employers">0</b>
+              <span>جهة وشركة موثقة</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Left Visual: Animated Regional Radar + Floating Live Job Cards -->
+        <div class="lp-radar-wrap rise" style="--d:3" aria-hidden="true">
+          <div class="lp-radar-stage">
+            <!-- Radar Rings & Rotating Sweep Beam -->
+            <div class="lp-radar-ring r1"></div>
+            <div class="lp-radar-ring r2"></div>
+            <div class="lp-radar-ring r3"></div>
+            <div class="lp-radar-sweep"></div>
+
+            <!-- SVG Regional Network Map Connecting Syria & Turkey Hubs -->
+            <svg class="lp-radar-svg" viewBox="0 0 400 400" fill="none">
+              <!-- Animated Data Arcs between Turkish & Syrian Hubs -->
+              <path class="lp-net-line" d="M115 110 Q 190 95 255 155" />
+              <path class="lp-net-line l2" d="M255 155 Q 245 215 220 275" />
+              <path class="lp-net-line l3" d="M185 165 Q 225 190 255 155" />
+              <path class="lp-net-line l4" d="M255 155 Q 290 195 310 220" />
+              <path class="lp-net-line l5" d="M115 110 Q 150 140 185 165" />
+              <path class="lp-net-line l6" d="M195 225 Q 210 250 220 275" />
+
+              <!-- Turkey Hubs (Top / North-West) -->
+              <g class="lp-hub tr-hub" transform="translate(115, 110)">
+                <circle r="14" class="lp-hub-pulse" />
+                <circle r="5.5" class="lp-hub-dot" />
+                <text y="-12" text-anchor="middle" class="lp-hub-label">إسطنبول 🇹🇷</text>
+              </g>
+              <g class="lp-hub tr-hub" transform="translate(185, 165)">
+                <circle r="11" class="lp-hub-pulse" />
+                <circle r="4.5" class="lp-hub-dot" />
+                <text y="18" text-anchor="middle" class="lp-hub-label">مرسين / أنقرة</text>
+              </g>
+              <g class="lp-hub tr-hub" transform="translate(255, 155)">
+                <circle r="13" class="lp-hub-pulse" />
+                <circle r="5" class="lp-hub-dot" />
+                <text y="-12" text-anchor="middle" class="lp-hub-label">غازي عنتاب 🇹🇷</text>
+              </g>
+
+              <!-- Syria Hubs (Center / South) -->
+              <g class="lp-hub sy-hub" transform="translate(245, 200)">
+                <circle r="14" class="lp-hub-pulse" />
+                <circle r="5.5" class="lp-hub-dot" />
+                <text y="18" text-anchor="middle" class="lp-hub-label">حلب 🇸🇾</text>
+              </g>
+              <g class="lp-hub sy-hub" transform="translate(195, 225)">
+                <circle r="11" class="lp-hub-pulse" />
+                <circle r="4.5" class="lp-hub-dot" />
+                <text y="18" text-anchor="middle" class="lp-hub-label">اللاذقية / حمص</text>
+              </g>
+              <g class="lp-hub sy-hub" transform="translate(310, 220)">
+                <circle r="11" class="lp-hub-pulse" />
+                <circle r="4.5" class="lp-hub-dot" />
+                <text y="18" text-anchor="middle" class="lp-hub-label">الحسكة / الدير</text>
+              </g>
+              <g class="lp-hub sy-hub" transform="translate(220, 275)">
+                <circle r="16" class="lp-hub-pulse" />
+                <circle r="6.5" class="lp-hub-dot" />
+                <text y="21" text-anchor="middle" class="lp-hub-label">دمشق 🇸🇾</text>
+              </g>
+            </svg>
+
+            <!-- Center Radar Core Badge -->
+            <div class="lp-radar-core">
+              <span class="lp-core-icon">⚡</span>
+              <b>رادار لاقيت</b>
+              <small>رصد حي 24/7</small>
+            </div>
+
+            <!-- 4 Floating Animated Live Job Cards -->
+            <button type="button" class="lp-float-card fc-1" data-enter-country="sy" data-enter-sector="ngo">
+              <span class="fc-flag">🇸🇾 دمشق · منظمة دولية</span>
+              <b id="fcTitle1">مسؤول برامج ومشاريع (NGO)</b>
+              <small class="fc-tag">✓ تقديم مباشر عبر الرابط</small>
+            </button>
+
+            <button type="button" class="lp-float-card fc-2" data-enter-country="tr">
+              <span class="fc-flag tr">🇹🇷 إسطنبول · شركة خاصة</span>
+              <b id="fcTitle2">محاسب ومستشار مبيعات دولية</b>
+              <small class="fc-tag">✓ عربي + تركي · إذن عمل</small>
+            </button>
+
+            <button type="button" class="lp-float-card fc-3" data-enter-country="sy" data-enter-city="حلب">
+              <span class="fc-flag">🇸🇾 حلب · قطاع هندسي وتقني</span>
+              <b id="fcTitle3">مهندس مدني / مطور برمجيات</b>
+              <small class="fc-tag">✓ شاغر موثق ومحدّث اليوم</small>
+            </button>
+
+            <button type="button" class="lp-float-card fc-4" data-enter-country="tr" data-enter-city="غازي عنتاب">
+              <span class="fc-flag tr">🇹🇷 غازي عنتاب · UN & NGOs</span>
+              <b id="fcTitle4">منسق مالي وإداري — Olive Branch</b>
+              <small class="fc-tag">✓ عقد دولي · تقديم مباشر</small>
+            </button>
+          </div>
+        </div>
       </div>
     </div>
+  </header>
 
-    <!-- Opening Animation: Exact phrase requested -->
-    <h1 id="wh" class="rise" style="--d:1">
-      <span class="brand">لقيت</span> شغل 
-      <span class="rot" id="rot">
-        <span class="on">بشهادتك</span>
-        <span>بالجامعة</span>
-        <span>بمعهد</span>
-        <span>بالبكالوريا</span>
-        <span>بالدولة</span>
-        <span>بشركة</span>
-        <span>بمنظمة</span>
-        <span>بدون شهادة</span>
-      </span>
-    </h1>
-
-    <p class="sub rise" style="--d:2">
-      فرص العمل الموثقة في سوريا بمكان واحد. شواغر الوزارات، المنظمات الدولية والمحلية، والشركات والمصانع. فلترة دقيقة حسب مؤهلك ومدينتك وطريقة التقديم، بدون إعلانات مكررة أو وهمية.
-    </p>
-
-    <!-- Live Counters -->
-    <div class="counters rise" style="--d:3">
-      <div class="counter hot"><b data-count="open">0</b><span>إعلان مفتوح حالياً</span></div>
-      <div class="counter"><b data-count="today">0</b><span>جديد اليوم</span></div>
-      <div class="counter"><b data-count="official">0</b><span>وظيفة حكومية ورسمية</span></div>
-      <div class="counter"><b data-count="ngo_count">0</b><span>شواغر منظمات وهيئات</span></div>
-      <div class="counter"><b data-count="employers">0</b><span>جهة وصاحب عمل</span></div>
+  <!-- Animated Live City & Specialty Ticker -->
+  <div class="lp-ticker-bar" aria-label="شريط المدن والتخصصات النشطة">
+    <div class="lp-ticker-track" id="lpTickerTrack">
+      <button type="button" class="lp-tick-item" data-enter-country="sy" data-enter-city="دمشق">🇸🇾 دمشق · شواغر حكومية وخاصة</button>
+      <button type="button" class="lp-tick-item tr" data-enter-country="tr" data-enter-city="إسطنبول">🇹🇷 إسطنبول · شركات وتجارة وعقارات</button>
+      <button type="button" class="lp-tick-item" data-enter-country="sy" data-enter-city="حلب">🇸🇾 حلب · منظمات ومعامل وشركات</button>
+      <button type="button" class="lp-tick-item tr" data-enter-country="tr" data-enter-city="غازي عنتاب">🇹🇷 غازي عنتاب · منظمات دولية وصناعة</button>
+      <button type="button" class="lp-tick-item" data-enter-country="sy" data-enter-city="حمص">🇸🇾 حمص · تعليم وصحة وهندسة</button>
+      <button type="button" class="lp-tick-item tr" data-enter-country="tr" data-enter-city="مرسين">🇹🇷 مرسين · لوجستيات وشحن ومبيعات</button>
+      <button type="button" class="lp-tick-item" data-enter-country="sy" data-enter-city="اللاذقية">🇸🇾 اللاذقية وطرطوس · سياحة وخدمات</button>
+      <button type="button" class="lp-tick-item tr" data-enter-country="tr" data-enter-city="بورصة">🇹🇷 بورصة وأنقرة · معامل ألبسة وتقنية</button>
+      <button type="button" class="lp-tick-item" data-enter-country="sy" data-enter-city="إدلب">🇸🇾 إدلب والحسكة ودير الزور · شواغر NGOs</button>
     </div>
-
-    <nav class="toplinks rise" style="--d:5">
-      <a href="pulse.html">📊 نبض السوق والأجور</a>
-      <a href="cv.html">📝 منشئ السيرة الذاتية</a>
-      <a href="scam.html">🛡️ رادار النصب وفحص الإعلانات</a>
-      <a href="employer.html">📢 عندك شغل؟ انشره مجاناً</a>
-      <button class="link profile-btn" id="openProfileDrawer">⚙️ تخصيص ملفي (لمطابقة المؤهلات)</button>
-    </nav>
   </div>
-</header>
 
-<!-- Main Job Board -->
-<main class="inner" id="board">
-  <!-- 3 Main Sectors Tabs -->
-  <section class="sector-tabs-wrap" aria-label="أقسام القطاعات">
-    <div class="sector-tabs" role="tablist" id="sectorTabs">
-      <button role="tab" class="sector-card" data-sector="" aria-selected="true">
-        <span class="sec-icon">🌟</span>
-        <span class="sec-meta">
-          <b class="sec-title">كل القطاعات</b>
-          <small class="sec-desc" id="badgeAll">كل الشواغر المتاحة</small>
-        </span>
-      </button>
-      <button role="tab" class="sector-card" data-sector="gov" aria-selected="false">
-        <span class="sec-icon">🏛️</span>
-        <span class="sec-meta">
-          <b class="sec-title">قطاع حكومي</b>
-          <small class="sec-desc" id="badgeGov">وزارات، محافظات، مسابقات</small>
-        </span>
-      </button>
-      <button role="tab" class="sector-card" data-sector="ngo" aria-selected="false">
-        <span class="sec-icon">🤝</span>
-        <span class="sec-meta">
-          <b class="sec-title">منظمات وهيئات</b>
-          <small class="sec-desc" id="badgeNgo">أمم متحدة، إغاثة، جمعيات</small>
-        </span>
-      </button>
-      <button role="tab" class="sector-card" data-sector="private" aria-selected="false">
-        <span class="sec-icon">🏢</span>
-        <span class="sec-meta">
-          <b class="sec-title">قطاع خاص</b>
-          <small class="sec-desc" id="badgePrivate">شركات، معامل، مطاعم ومحلات</small>
-        </span>
-      </button>
-    </div>
-  </section>
-
-  <!-- Filter & Search Controls -->
-  <section class="filters" aria-label="البحث والفلترة">
-    <!-- Search Bar & Main Selects -->
-    <div class="row search-row">
-      <div class="search-wrap">
-        <input id="q" type="search" autocomplete="off" placeholder="ابحث بالمسمى أو الاختصاص أو الجهة: محاسب، كاشير، مهندس، تمريض، وزارة..." aria-label="بحث سريع" aria-autocomplete="list" aria-controls="suggestBox">
-        <button id="clearQ" class="clear-btn" aria-label="مسح البحث" hidden>×</button>
-        <div id="suggestBox" class="suggest-box" role="listbox" hidden></div>
+  <!-- Main Landing Content Sections -->
+  <main class="inner lp-main">
+    <!-- SECTION 1: THE TWO MAIN COUNTRY PORTALS (SYRIA 🇸🇾 & TURKEY 🇹🇷) -->
+    <section class="lp-section" id="lpPortalsSection" aria-labelledby="lpPortalsHeading">
+      <div class="lp-sec-head">
+        <span class="lp-sec-eyebrow">🌍 البوابات الإقليمية المباشرة</span>
+        <h2 id="lpPortalsHeading">اختر سوق العمل الذي تبحث فيه الآن</h2>
+        <p>اضغط على بوابة البلد أو اختر محافظتك/ولايتك مباشرة لفتح لوحة الوظائف الكاملة مع الفلترة الذكية.</p>
       </div>
-      <select id="city" aria-label="المدينة أو المحافظة" autocomplete="off">
-        <option value="" selected>كل المدن والمحافظات السورية</option>
-      </select>
-      <select id="eduFilter" aria-label="المؤهل العلمي والشهادة" autocomplete="off">
-        <option value="" selected>كل الشهادات والمؤهلات</option>
-      </select>
-      <select id="fieldFilter" aria-label="مجال العمل" autocomplete="off">
-        <option value="" selected>كل مجالات العمل</option>
-      </select>
-      <button type="button" id="searchBtn" class="btn primary search-btn">🔍 بحث</button>
-    </div>
 
-    <!-- Application Method Pills (طرق التقديم) -->
-    <div class="row filter-row">
-      <span class="filter-label">طريقة التقديم:</span>
-      <div class="chips" id="applyRow" aria-label="طريقة التقديم">
-        <button class="chip" data-apply="" aria-pressed="true">كل طرق التقديم</button>
-        <button class="chip" data-apply="whatsapp" aria-pressed="false">💬 واتساب</button>
-        <button class="chip" data-apply="form" aria-pressed="false">📝 فورم تقديم</button>
-        <button class="chip" data-apply="site" aria-pressed="false">🌐 موقع التوظيف</button>
-        <button class="chip" data-apply="email" aria-pressed="false">📧 إيميل</button>
-        <button class="chip" data-apply="call" aria-pressed="false">📞 اتصال هاتفي</button>
+      <div class="lp-portals-grid">
+        <!-- SYRIA PORTAL CARD -->
+        <article class="lp-portal-card sy-portal">
+          <div class="lp-portal-top">
+            <div class="lp-portal-title-wrap">
+              <span class="lp-portal-flag">🇸🇾</span>
+              <div>
+                <h3>بوابة فرص العمل في سوريا</h3>
+                <p>تغطية شاملة لجميع المحافظات السورية الـ 14</p>
+              </div>
+            </div>
+            <div class="lp-portal-count-badge">
+              <b data-count="open">0</b>
+              <small>شاغر مفتوح</small>
+            </div>
+          </div>
+
+          <p class="lp-portal-desc">
+            تجمع إعلانات المسابقات والوظائف الحكومية، شواغر الأمم المتحدة والمنظمات الدولية والمحلية (NGOs)، وشركات القطاع الخاص والمعامل والورش مع وسيلة التقديم المباشرة.
+          </p>
+
+          <div class="lp-portal-sectors">
+            <button type="button" class="lp-sec-pill" data-enter-country="sy" data-enter-sector="gov">🏛️ قطاع حكومي</button>
+            <button type="button" class="lp-sec-pill" data-enter-country="sy" data-enter-sector="ngo">🤝 منظمات دولية NGOs</button>
+            <button type="button" class="lp-sec-pill" data-enter-country="sy" data-enter-sector="private">🏢 شركات وقطاع خاص</button>
+            <button type="button" class="lp-sec-pill" data-enter-country="sy" data-enter-edu="none">🛠️ فرص بدون شهادة</button>
+          </div>
+
+          <div class="lp-portal-cities-wrap">
+            <span class="lp-cities-label">📍 اختر المحافظة للانتقال الفوري (14 محافظة):</span>
+            <div class="lp-cities-grid" id="lpSyCitiesGrid"></div>
+          </div>
+
+          <button type="button" class="btn primary lp-portal-cta" data-enter-country="sy">
+            <span>دخول لوحة وظائف سوريا الكاملة 🇸🇾</span>
+            <span class="lp-arrow">←</span>
+          </button>
+        </article>
+
+        <!-- TURKEY PORTAL CARD -->
+        <article class="lp-portal-card tr-portal">
+          <div class="lp-portal-top">
+            <div class="lp-portal-title-wrap">
+              <span class="lp-portal-flag">🇹🇷</span>
+              <div>
+                <h3>بوابة فرص العمل في تركيا</h3>
+                <p>للشركات والمنظمات والكفاءات العربية والسورية في تركيا</p>
+              </div>
+            </div>
+            <div class="lp-portal-count-badge tr-badge">
+              <b data-count="open_tr">0</b>
+              <small>فرصة نشطة</small>
+            </div>
+          </div>
+
+          <p class="lp-portal-desc">
+            تغطي الشواغر الموجهة للعرب والسوريين في الولايات التركية: المنظمات الإنسانية العابرة للحدود، الشركات التركية والعربية، المصانع، العقارات والسياحة، الترجمة، والعمل عن بُعد.
+          </p>
+
+          <div class="lp-portal-sectors">
+            <button type="button" class="lp-sec-pill tr" data-enter-country="tr" data-enter-sector="ngo">🤝 منظمات دولية في تركيا</button>
+            <button type="button" class="lp-sec-pill tr" data-enter-country="tr" data-enter-sector="private">🏢 شركات وتجارة وعقارات</button>
+            <button type="button" class="lp-sec-pill tr" data-enter-country="tr" data-enter-field="industry">🏭 معامل وورشات ألبسة</button>
+            <button type="button" class="lp-sec-pill tr" data-enter-country="tr" data-enter-edu="none">⚡ حرف ومطاعم وبدون شهادة</button>
+          </div>
+
+          <div class="lp-portal-cities-wrap">
+            <span class="lp-cities-label">📍 اختر الولاية التركية للانتقال الفوري:</span>
+            <div class="lp-cities-grid" id="lpTrCitiesGrid"></div>
+          </div>
+
+          <button type="button" class="btn primary lp-portal-cta tr-cta" data-enter-country="tr">
+            <span>دخول لوحة وظائف تركيا الكاملة 🇹🇷</span>
+            <span class="lp-arrow">←</span>
+          </button>
+        </article>
       </div>
-    </div>
+    </section>
 
-    <!-- Subfields (Computer, Health, etc) -->
-    <div class="row" id="subrow" hidden></div>
+    <!-- SECTION 2: QUICK SECTOR & QUALIFICATION GATEWAYS -->
+    <section class="lp-section" aria-labelledby="lpSectorsHeading">
+      <div class="lp-sec-head">
+        <span class="lp-sec-eyebrow">⚡ بوابات الفرز الذكي</span>
+        <h2 id="lpSectorsHeading">تصفح الوظائف حسب القطاع والمؤهل العلمي</h2>
+      </div>
 
-    <!-- Action Toggles -->
-    <div class="row options-row">
-      <button class="chip" id="newToday" aria-pressed="false">✦ جديد اليوم</button>
-      <button class="chip" id="savedOnly" aria-pressed="false">🔖 المحفوظة (<span id="savedCount">0</span>)</button>
-      <label class="toggle">
-        <input id="lower" type="checkbox" checked> ورجيني أيضاً شواغر تطلب مؤهل أقل أو بدون تحديد شهادة
-      </label>
-      <select id="sortOrder" class="sort-select" aria-label="ترتيب النتائج">
-        <option value="relevance">الترتيب: الأقرب لبحثك</option>
-        <option value="recent">الترتيب: الأحدث أولاً</option>
-      </select>
-      <button class="link reset-filters-btn" id="resetFiltersBtn">مسح الفلاتر</button>
-    </div>
+      <div class="lp-gateway-grid">
+        <button type="button" class="lp-gateway-card" data-enter-country="sy" data-enter-sector="ngo">
+          <span class="gw-icon">🤝</span>
+          <h3>المنظمات الدولية والأممية (NGOs)</h3>
+          <p>شواغر الأمم المتحدة والمنظمات الإنسانية في سوريا وجنوب تركيا برواتب دولية وعقود مشاريع.</p>
+          <span class="gw-link">تصفح شواغر المنظمات ←</span>
+        </button>
 
-    <!-- Experience Legend -->
-    <div class="legend">
-      <span style="--c:var(--exp-low)">حتى سنتين خبرة</span>
-      <span style="--c:var(--exp-mid)">3–4 سنين</span>
-      <span style="--c:var(--exp-high)">5 سنين وأكثر</span>
-      <span style="--c:var(--exp-unk)">الخبرة غير مشروطة</span>
-    </div>
-  </section>
+        <button type="button" class="lp-gateway-card" data-enter-country="sy" data-enter-sector="gov">
+          <span class="gw-icon">🏛️</span>
+          <h3>القطاع الحكومي والمسابقات</h3>
+          <p>إعلانات الوزارات، المحافظات، الجامعات، والمؤسسات العامة الرسمية مع بطاقات الوصف الوظيفي.</p>
+          <span class="gw-link">تصفح الوظائف الحكومية ←</span>
+        </button>
 
-  <!-- Market demand bars (top requested fields) -->
-  <section class="fields-summary" id="marketFieldsSection">
-    <div class="fields-head">
-      <h2>أكثر المجالات طلباً حالياً في سوريا (اضغط للفلترة السريعة):</h2>
-    </div>
-    <div class="bars" id="bars"></div>
-  </section>
+        <button type="button" class="lp-gateway-card" data-enter-country="sy" data-enter-sector="private">
+          <span class="gw-icon">🏢</span>
+          <h3>الشركات والتخصصات الجامعية</h3>
+          <p>هندسة، برمجة وتقنية، محاسبة وإدارة، طب وصيدلة، تعليم، إعلام، مبيعات وتسويق في سوريا وتركيا.</p>
+          <span class="gw-link">تصفح وظائف الشركات ←</span>
+        </button>
 
-  <!-- Results Count -->
-  <div class="count-bar">
-    <div class="count" id="count" aria-live="polite">جاري جلب الوظائف...</div>
-    <div id="activeFilterPills" class="active-pills"></div>
-  </div>
-  <div id="typoBanner" class="typo-banner" hidden></div>
+        <button type="button" class="lp-gateway-card" data-enter-country="sy" data-enter-edu="none">
+          <span class="gw-icon">🛠️</span>
+          <h3>مهن حرة وفرص بدون شهادة</h3>
+          <p>معامل، ورش خياطة وصناعة، مطاعم وكافيهات، سائقين، حراسة، ومبيعات بتواصل مباشر عبر واتساب أو الهاتف.</p>
+          <span class="gw-link">تصفح الفرص السريعة ←</span>
+        </button>
+      </div>
+    </section>
 
-  <!-- Job Cards Grid -->
-  <div class="grid" id="grid"></div>
+    <!-- SECTION 3: LAQEET SMART CAREER ECOSYSTEM TOOLS -->
+    <section class="lp-section" aria-labelledby="lpToolsHeading">
+      <div class="lp-sec-head">
+        <span class="lp-sec-eyebrow">🛠️ أدوات مجانية متكاملة</span>
+        <h2 id="lpToolsHeading">منظومة أدوات «لقيت» لمساعدتك في الحصول على الوظيفة</h2>
+      </div>
 
-  <!-- Pagination -->
-  <button class="more" id="more" hidden>عرض المزيد من الشواغر</button>
+      <div class="lp-tools-grid">
+        <a href="cv.html" class="lp-tool-card">
+          <span class="tl-icon">📝</span>
+          <div>
+            <h3>منشئ السيرة الذاتية الاحترافي (CV)</h3>
+            <p>صمّم سيرتك الذاتية بالعربية أو الإنجليزية جاهزة للطباعة والإرسال كـ PDF خلال دقيقتين ومفصلة حسب الشاغر.</p>
+          </div>
+        </a>
 
-  <!-- Footer -->
-  <footer>
+        <a href="scam.html" class="lp-tool-card">
+          <span class="tl-icon">🛡️</span>
+          <div>
+            <h3>رادار كشف الإعلانات الوهمية والنصب</h3>
+            <p>انسخ أي إعلان وظيفي مشبوه في سوريا أو تركيا ليفحصه الذكاء الاصطناعي ويكشف طلبات الرسوم أو السماسرة.</p>
+          </div>
+        </a>
+
+        <a href="pulse.html" class="lp-tool-card">
+          <span class="tl-icon">📊</span>
+          <div>
+            <h3>نبض السوق والرواتب والمهن المطلوبة</h3>
+            <p>إحصائيات حية لأكثر الاختصاصات والمدن طلباً ومؤشرات الأجور والخبرة في سوق العمل.</p>
+          </div>
+        </a>
+
+        <a href="employer.html" class="lp-tool-card">
+          <span class="tl-icon">📢</span>
+          <div>
+            <h3>عندك شاغر في سوريا أو تركيا؟ انشره مجاناً</h3>
+            <p>أضف إعلان شركتك أو معملك أو منظمتك مجاناً ليصل فوراً لآلاف الباحثين عن عمل بعد توثيقه.</p>
+          </div>
+        </a>
+      </div>
+    </section>
+
+    <!-- SECTION 4: HOW LAQEET WORKS (3 ANIMATED STEPS) -->
+    <section class="lp-section lp-how-section" aria-labelledby="lpHowHeading">
+      <div class="lp-sec-head">
+        <span class="lp-sec-eyebrow">⚙️ تقنية المنصة</span>
+        <h2 id="lpHowHeading">كيف يعمل محرك «لقيت» الذكي؟</h2>
+      </div>
+
+      <div class="lp-steps-grid">
+        <div class="lp-step-card">
+          <span class="st-num">01</span>
+          <h3>رصد آلي كل 20 دقيقة</h3>
+          <p>يمسح النظام عشرات القنوات والمواقع الرسمية وبوابات المنظمات في سوريا وتركيا على مدار الساعة دون توقف.</p>
+        </div>
+        <div class="lp-step-card">
+          <span class="st-num">02</span>
+          <h3>تنقية وحذف المكرر والوهمي</h3>
+          <p>يدمج الإعلان المكرر من عدة مصادر في بطاقة واحدة نظيفة، ويستبعد الوسطاء والإعلانات المنتهية أو المشبوهة.</p>
+        </div>
+        <div class="lp-step-card">
+          <span class="st-num">03</span>
+          <h3>تقديم مباشر بضغطة زر</h3>
+          <p>يستخرج لك وسيلة التقديم الأصلية (واتساب مباشر، إيميل مع عنوان الموضوع، فورم رسمي، أو موقع المنظمة).</p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Landing Footer -->
+  <footer class="inner lp-footer">
     <div class="footer-card">
-      <h3>عن منصة «لقيت»</h3>
-      <p>«لقيت» منصة وطنية مستقلة تجمع وتوثق إعلانات التوظيف المفتوحة للعموم في سوريا من مصادرها الرسمية والموثوقة: البوابات الحكومية (وزارة التنمية الإدارية، وزارة الشؤون الاجتماعية، وزارة التعليم العالي)، المنظمات الدولية والمحلية، وشبكات التوظيف الخاصة. التقديم يتم مباشرة لدى الجهة المعلنة عبر الروابط والأرقام الرسمية.</p>
-      <p class="scam-warn">⚠️ تنبيه أمان: التوظيف مجاني دائماً. لا تدفع أي مبالغ مالية مقابل التقديم أو المقابلات. إذا اشتبهت بأي إعلان، استخدم زر «بلّغ» أو افحصه عبر <a href="scam.html">رادار النصب</a>.</p>
+      <h3>عن منصة «لقيت · Laqeet»</h3>
+      <p>«لقيت» بوابة توظيف إقليمية مستقلة تجمع وتوثق فرص العمل المفتوحة في <b>سوريا 🇸🇾</b> و<b>تركيا 🇹🇷</b> من مصادرها الرسمية والموثوقة. جميع خدمات البحث والتقديم وإنشاء السيرة الذاتية مجانية بالكامل 100%.</p>
       <div class="footer-links">
+        <button type="button" class="link" data-enter-country="sy">🇸🇾 لوحة وظائف سوريا</button> ·
+        <button type="button" class="link" data-enter-country="tr">🇹🇷 لوحة وظائف تركيا</button> ·
         <a href="pulse.html">نبض السوق</a> ·
-        <a href="cv.html">سيرتي الذاتية</a> ·
+        <a href="cv.html">منشئ السيرة الذاتية</a> ·
         <a href="scam.html">رادار النصب</a> ·
-        <a href="employer.html">انشر شاغر</a> ·
-        <a href="#wh">العودة للأعلى ↑</a>
+        <a href="employer.html">انشر شاغر مجاناً</a>
       </div>
     </div>
   </footer>
-</main>
+</div>
+
+<!-- =====================================================================
+     VIEW 2: FULL JOBS BOARD (لوحة الوظائف الكاملة - تفتح عند الاختيار أو البحث)
+     ===================================================================== -->
+<div id="boardView" hidden>
+  <!-- Hero Section with Animation & Counters -->
+  <header class="hero" id="mainHero">
+    <div class="inner">
+      <div class="eyebrow rise" style="--d:0">
+        <div class="eyebrow-start">
+          <button type="button" class="board-home-btn" id="backToLandingBtn">🏠 الواجهة الرئيسية</button>
+          <div class="board-country-switch" role="tablist" aria-label="اختيار سوق البلد">
+            <button type="button" class="board-country-btn active" data-board-country="sy" aria-selected="true">🇸🇾 وظائف سوريا</button>
+            <button type="button" class="board-country-btn" data-board-country="tr" aria-selected="false">🇹🇷 وظائف تركيا</button>
+          </div>
+          <span class="live"><i></i><span class="updated">محدّث لحظياً</span></span>
+        </div>
+        <div class="eyebrow-end">
+          <button class="link theme-btn" id="theme" aria-label="تبديل وضع الألوان">◐ المظهر</button>
+        </div>
+      </div>
+
+      <!-- Opening Animation: Exact phrase requested -->
+      <h1 id="wh" class="rise" style="--d:1">
+        <span class="brand">لقيت</span> شغل <span id="boardCountryTitle">في سوريا 🇸🇾</span>
+        <span class="rot" id="rot">
+          <span class="on">بشهادتك</span>
+          <span>بالجامعة</span>
+          <span>بمعهد</span>
+          <span>بالبكالوريا</span>
+          <span>بالدولة</span>
+          <span>بشركة</span>
+          <span>بمنظمة</span>
+          <span>بدون شهادة</span>
+        </span>
+      </h1>
+
+      <p class="sub rise" style="--d:2" id="boardHeroSub">
+        فرص العمل الموثقة في سوريا بمكان واحد. شواغر الوزارات، المنظمات الدولية والمحلية، والشركات والمصانع. فلترة دقيقة حسب مؤهلك ومدينتك وطريقة التقديم، بدون إعلانات مكررة أو وهمية.
+      </p>
+
+      <!-- Live Counters -->
+      <div class="counters rise" style="--d:3">
+        <div class="counter hot"><b data-count="board_open">0</b><span id="boardOpenLabel">إعلان مفتوح حالياً</span></div>
+        <div class="counter"><b data-count="today">0</b><span>جديد اليوم</span></div>
+        <div class="counter"><b data-count="official">0</b><span>وظيفة حكومية ورسمية</span></div>
+        <div class="counter"><b data-count="ngo_count">0</b><span>شواغر منظمات وهيئات</span></div>
+        <div class="counter"><b data-count="employers">0</b><span>جهة وصاحب عمل</span></div>
+      </div>
+
+      <nav class="toplinks rise" style="--d:5">
+        <button type="button" class="link" id="navHomeLink">🏠 الصفحة الأولى (بوابات سوريا وتركيا)</button>
+        <a href="pulse.html">📊 نبض السوق والأجور</a>
+        <a href="cv.html">📝 منشئ السيرة الذاتية</a>
+        <a href="scam.html">🛡️ رادار النصب وفحص الإعلانات</a>
+        <a href="employer.html">📢 عندك شغل؟ انشره مجاناً</a>
+        <button class="link profile-btn" id="openProfileDrawer">⚙️ تخصيص ملفي (لمطابقة المؤهلات)</button>
+      </nav>
+    </div>
+  </header>
+
+  <!-- Main Job Board -->
+  <main class="inner" id="board">
+    <!-- 3 Main Sectors Tabs -->
+    <section class="sector-tabs-wrap" aria-label="أقسام القطاعات">
+      <div class="sector-tabs" role="tablist" id="sectorTabs">
+        <button role="tab" class="sector-card" data-sector="" aria-selected="true">
+          <span class="sec-icon">🌟</span>
+          <span class="sec-meta">
+            <b class="sec-title">كل القطاعات</b>
+            <small class="sec-desc" id="badgeAll">كل الشواغر المتاحة</small>
+          </span>
+        </button>
+        <button role="tab" class="sector-card" data-sector="gov" aria-selected="false">
+          <span class="sec-icon">🏛️</span>
+          <span class="sec-meta">
+            <b class="sec-title">قطاع حكومي</b>
+            <small class="sec-desc" id="badgeGov">وزارات، محافظات، مسابقات</small>
+          </span>
+        </button>
+        <button role="tab" class="sector-card" data-sector="ngo" aria-selected="false">
+          <span class="sec-icon">🤝</span>
+          <span class="sec-meta">
+            <b class="sec-title">منظمات وهيئات</b>
+            <small class="sec-desc" id="badgeNgo">أمم متحدة، إغاثة، جمعيات</small>
+          </span>
+        </button>
+        <button role="tab" class="sector-card" data-sector="private" aria-selected="false">
+          <span class="sec-icon">🏢</span>
+          <span class="sec-meta">
+            <b class="sec-title">قطاع خاص</b>
+            <small class="sec-desc" id="badgePrivate">شركات، معامل، مطاعم ومحلات</small>
+          </span>
+        </button>
+      </div>
+    </section>
+
+    <!-- Filter & Search Controls -->
+    <section class="filters" aria-label="البحث والفلترة">
+      <!-- Search Bar & Main Selects -->
+      <div class="row search-row">
+        <div class="search-wrap">
+          <input id="q" type="search" autocomplete="off" placeholder="ابحث بالمسمى أو الاختصاص أو الجهة: محاسب، كاشير، مهندس، تمريض، وزارة..." aria-label="بحث سريع" aria-autocomplete="list" aria-controls="suggestBox">
+          <button id="clearQ" class="clear-btn" aria-label="مسح البحث" hidden>×</button>
+          <div id="suggestBox" class="suggest-box" role="listbox" hidden></div>
+        </div>
+        <select id="city" aria-label="المدينة أو المحافظة" autocomplete="off">
+          <option value="" selected>كل المدن والمحافظات السورية</option>
+        </select>
+        <select id="eduFilter" aria-label="المؤهل العلمي والشهادة" autocomplete="off">
+          <option value="" selected>كل الشهادات والمؤهلات</option>
+        </select>
+        <select id="fieldFilter" aria-label="مجال العمل" autocomplete="off">
+          <option value="" selected>كل مجالات العمل</option>
+        </select>
+        <button type="button" id="searchBtn" class="btn primary search-btn">🔍 بحث</button>
+      </div>
+
+      <!-- Application Method Pills (طرق التقديم) -->
+      <div class="row filter-row">
+        <span class="filter-label">طريقة التقديم:</span>
+        <div class="chips" id="applyRow" aria-label="طريقة التقديم">
+          <button class="chip" data-apply="" aria-pressed="true">كل طرق التقديم</button>
+          <button class="chip" data-apply="whatsapp" aria-pressed="false">💬 واتساب</button>
+          <button class="chip" data-apply="form" aria-pressed="false">📝 فورم تقديم</button>
+          <button class="chip" data-apply="site" aria-pressed="false">🌐 موقع التوظيف</button>
+          <button class="chip" data-apply="email" aria-pressed="false">📧 إيميل</button>
+          <button class="chip" data-apply="call" aria-pressed="false">📞 اتصال هاتفي</button>
+        </div>
+      </div>
+
+      <!-- Subfields (Computer, Health, etc) -->
+      <div class="row" id="subrow" hidden></div>
+
+      <!-- Action Toggles -->
+      <div class="row options-row">
+        <button class="chip" id="newToday" aria-pressed="false">✦ جديد اليوم</button>
+        <button class="chip" id="savedOnly" aria-pressed="false">🔖 المحفوظة (<span id="savedCount">0</span>)</button>
+        <label class="toggle">
+          <input id="lower" type="checkbox" checked> ورجيني أيضاً شواغر تطلب مؤهل أقل أو بدون تحديد شهادة
+        </label>
+        <select id="sortOrder" class="sort-select" aria-label="ترتيب النتائج">
+          <option value="relevance">الترتيب: الأقرب لبحثك</option>
+          <option value="recent">الترتيب: الأحدث أولاً</option>
+        </select>
+        <button class="link reset-filters-btn" id="resetFiltersBtn">مسح الفلاتر</button>
+      </div>
+
+      <!-- Experience Legend -->
+      <div class="legend">
+        <span style="--c:var(--exp-low)">حتى سنتين خبرة</span>
+        <span style="--c:var(--exp-mid)">3–4 سنين</span>
+        <span style="--c:var(--exp-high)">5 سنين وأكثر</span>
+        <span style="--c:var(--exp-unk)">الخبرة غير مشروطة</span>
+      </div>
+    </section>
+
+    <!-- Market demand bars (top requested fields) -->
+    <section class="fields-summary" id="marketFieldsSection">
+      <div class="fields-head">
+        <h2 id="marketDemandTitle">أكثر المجالات طلباً حالياً (اضغط للفلترة السريعة):</h2>
+      </div>
+      <div class="bars" id="bars"></div>
+    </section>
+
+    <!-- Results Count -->
+    <div class="count-bar">
+      <div class="count" id="count" aria-live="polite">جاري جلب الوظائف...</div>
+      <div id="activeFilterPills" class="active-pills"></div>
+    </div>
+    <div id="typoBanner" class="typo-banner" hidden></div>
+
+    <!-- Job Cards Grid -->
+    <div class="grid" id="grid"></div>
+
+    <!-- Pagination -->
+    <button class="more" id="more" hidden>عرض المزيد من الشواغر</button>
+
+    <!-- Footer -->
+    <footer>
+      <div class="footer-card">
+        <h3>عن منصة «لقيت»</h3>
+        <p>«لقيت» منصة إقليمية مستقلة تجمع وتوثق إعلانات التوظيف المفتوحة للعموم في سوريا وتركيا من مصادرها الرسمية والموثوقة: البوابات الحكومية، المنظمات الدولية والمحلية، وشبكات التوظيف والشركات الخاصة. التقديم يتم مباشرة لدى الجهة المعلنة عبر الروابط والأرقام الرسمية.</p>
+        <p class="scam-warn">⚠️ تنبيه أمان: التوظيف مجاني دائماً. لا تدفع أي مبالغ مالية مقابل التقديم أو المقابلات. إذا اشتبهت بأي إعلان، استخدم زر «بلّغ» أو افحصه عبر <a href="scam.html">رادار النصب</a>.</p>
+        <div class="footer-links">
+          <button type="button" class="link" id="footerHomeLink">🏠 الواجهة الرئيسية</button> ·
+          <a href="pulse.html">نبض السوق</a> ·
+          <a href="cv.html">سيرتي الذاتية</a> ·
+          <a href="scam.html">رادار النصب</a> ·
+          <a href="employer.html">انشر شاغر</a> ·
+          <a href="#wh">العودة للأعلى ↑</a>
+        </div>
+      </div>
+    </footer>
+  </main>
+</div>
 
 <!-- Job Detail Sheet -->
 <dialog id="sheet" aria-labelledby="sheetTitle">

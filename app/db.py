@@ -284,7 +284,7 @@ def upsert(con: sqlite3.Connection, job: Job, status: str | None = None) -> tupl
         job.apply_types = tx.infer_apply_types(job.apply_url, job.phones, job.whatsapp, job.email)
     if not job.sector or job.sector == "private":
         job.sector = tx.infer_sector(job.official, job.field, job.employer, job.raw, hint=job.sector if job.sector in ("gov", "ngo") else None)
-    job.country = "sy"
+    job.country = "tr" if job.country == "tr" else "sy"
     if job.raw:
         job.raw = job.raw.replace("\ufffd", "").replace("<PRIVATE_PERSON>", "")
     if "\ufffd" in (job.title or "") or not re.search(r"[\u0621-\u064Aa-zA-Z]{3,}", job.title or ""):
@@ -322,14 +322,15 @@ def upsert(con: sqlite3.Connection, job: Job, status: str | None = None) -> tupl
                 merged["tags"] = sorted(set(merged.get("tags") or []) | set(jd["tags"]))
         if merged.get("apply_url") and da.is_disallowed_offline_url(merged["apply_url"]):
             merged["apply_url"] = None
-        merged["country"] = "sy"
+        merged["country"] = job.country
         new_exp = max(row["expires_on"] or "", expires_on(job))
         new_status = status if status is not None else (
             "live" if row["status"] == "expired" and new_exp >= date.today().isoformat() else row["status"]
         )
         con.execute(
-            "UPDATE jobs SET data=?, country='sy', sector=?, apply_types=?, expires_on=?, status=?, updated_at=? WHERE id=?",
+            "UPDATE jobs SET data=?, country=?, sector=?, apply_types=?, expires_on=?, status=?, updated_at=? WHERE id=?",
             (json.dumps(merged, ensure_ascii=False),
+             job.country,
              merged.get("sector", job.sector),
              "|" + "|".join(merged.get("apply_types") or []) + "|" if merged.get("apply_types") else "",
              new_exp, new_status, t, jid),

@@ -315,11 +315,22 @@ def stats(country: str | None = None):
         return hit[1]
     open_rows = _query(country=country)
     all_rows = _query(expired=True, country=country)
+    sy_rows = open_rows if (country or "sy") != "tr" else _query(country="sy")
+    tr_rows = open_rows if country == "tr" else _query(country="tr")
     demand = Counter()
+    city_counts = Counter()
     for r in open_rows:
         demand[r["field"]] += 1
+        for c in filter(None, (r["cities"] or "").split("|")):
+            city_counts[c] += 1
+    city_counts_tr = Counter()
+    for r in tr_rows:
+        for c in filter(None, (r["cities"] or "").split("|")):
+            city_counts_tr[c] += 1
     out = {
         "open": len(open_rows),
+        "open_sy": len(sy_rows),
+        "open_tr": len(tr_rows),
         "six_months": len(all_rows),
         "junior": sum(1 for r in open_rows if r["experience"] is not None and r["experience"] <= 2),
         "employers": len({json.loads(r["data"]).get("employer") for r in all_rows} - {None}),
@@ -328,6 +339,8 @@ def stats(country: str | None = None):
         "gov_count": sum(1 for r in open_rows if r["sector"] == "gov"),
         "ngo_count": sum(1 for r in open_rows if r["sector"] == "ngo"),
         "private_count": sum(1 for r in open_rows if r["sector"] == "private"),
+        "city_counts": dict(city_counts),
+        "city_counts_tr": dict(city_counts_tr),
         "demand": [{"field": f, "label": tx.FIELD_LABEL.get(f, f), "count": n}
                    for f, n in ([x for x in demand.most_common() if x[0] != "other"][:8] or demand.most_common(8))],
         "updated_at": db.get_meta(con, "updated_at"),

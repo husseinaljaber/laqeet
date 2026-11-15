@@ -1573,25 +1573,33 @@
     });
   }
 
-  function startRotator(selector, intervalMs) {
+  function startRotator(selector, intervalMs, onStep) {
     const spans = [...document.querySelectorAll(selector)];
-    if (!reduce && spans.length > 1) {
-      let i = 0;
-      setInterval(() => {
-        const prev = spans[i];
-        prev.classList.remove('on');
+    if (spans.length < 2) return;
+    let i = 0;
+    if (typeof onStep === 'function') onStep(spans[0], 0);
+    setInterval(() => {
+      const prev = spans[i];
+      prev.classList.remove('on');
+      if (!reduce) {
         prev.classList.add('out');
         setTimeout(() => prev.classList.remove('out'), 450);
-        i = (i + 1) % spans.length;
-        spans[i].classList.add('on');
-      }, intervalMs);
-    }
+      }
+      i = (i + 1) % spans.length;
+      spans[i].classList.add('on');
+      if (typeof onStep === 'function') onStep(spans[i], i);
+    }, intervalMs);
   }
 
   function setupHeadlineRotation() {
+    const countryBox = $('lpCountryRot');
     startRotator('#rot span', 2300);
-    startRotator('#lpRoleRot span', 2400);
-    startRotator('#lpCountryRot span', 3200);
+    startRotator('#lpRoleRot span', 2000);
+    startRotator('#lpCountryRot span', 2200, (activeSpan) => {
+      if (countryBox) {
+        countryBox.classList.toggle('is-tr', activeSpan.dataset.rotCountry === 'tr');
+      }
+    });
   }
 
   function countUp(node, to) {

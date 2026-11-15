@@ -286,8 +286,9 @@ dialog::backdrop{background:rgba(4,12,9,.65);backdrop-filter:blur(2px)}
 .lp-badge{display:inline-flex;align-items:center;gap:8px;align-self:flex-start;padding:5px 14px;border-radius:999px;background:rgba(60,197,150,.12);border:1px solid rgba(60,197,150,.28);color:var(--mint);font-size:.83rem;font-weight:600}
 .lp-badge-dot{width:8px;height:8px;border-radius:50%;background:var(--mint);box-shadow:0 0 10px var(--mint)}
 .lp-title{font-family:var(--font-display);font-size:clamp(2rem,4.4vw,3.25rem);line-height:1.3;margin:0;color:#fff}
-.lp-country-rot{display:inline-grid;vertical-align:bottom;padding:0 12px;border-radius:12px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.16);color:#FFD166}
-.lp-country-rot span{grid-area:1/1;opacity:0;transform:translateY(.35em);white-space:nowrap;transition:opacity .25s,transform .35s var(--ease)}
+.lp-country-rot{display:inline-grid;vertical-align:bottom;text-align:center;padding:2px 14px;border-radius:12px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.16);color:#FFD166;transition:background .35s,border-color .35s,color .35s}
+.lp-country-rot.is-tr{background:rgba(239,68,68,.16);border-color:rgba(252,165,165,.38);color:#FCA5A5}
+.lp-country-rot span{grid-area:1/1;opacity:0;transform:translateY(.4em);white-space:nowrap}
 .lp-country-rot span.on{opacity:1;transform:none}
 .lp-sub-rot-prefix{font-size:.85em;color:var(--hero-muted);margin-inline-end:6px}
 .lp-lead{margin:0;color:var(--hero-muted);font-size:1.02rem;line-height:1.7;max-width:64ch}
@@ -448,9 +449,9 @@ dialog::backdrop{background:rgba(4,12,9,.65);backdrop-filter:blur(2px)}
 @media (prefers-reduced-motion: no-preference){
   .live i{animation:pulse 2s infinite}
   @keyframes pulse{70%{box-shadow:0 0 0 8px rgba(60,197,150,0)}100%{box-shadow:0 0 0 0 rgba(60,197,150,0)}}
-  .rot span{transition:opacity .22s ease-in,transform .22s ease-in}
-  .rot span.on{transition:opacity .4s var(--ease) .18s,transform .4s var(--ease) .18s}
-  .rot span.out{transform:translateY(-.35em)}
+  .rot span,.lp-country-rot span{transition:opacity .22s ease-in,transform .22s ease-in}
+  .rot span.on,.lp-country-rot span.on{transition:opacity .4s var(--ease) .18s,transform .4s var(--ease) .18s}
+  .rot span.out,.lp-country-rot span.out{transform:translateY(-.35em)}
   .hero::before{animation:drift 24s linear infinite}
   @keyframes drift{to{transform:translate(22px,22px)}}
   .rise{animation:rise .7s var(--ease) both;animation-delay:calc(var(--d,0) * 80ms)}
@@ -471,7 +472,11 @@ dialog::backdrop{background:rgba(4,12,9,.65);backdrop-filter:blur(2px)}
   .lp-wiz-submit{grid-column:1/-1}
   .lp-counters{grid-template-columns:repeat(2,1fr)}
 }
+@media (prefers-reduced-motion: reduce){
+  .rot span,.lp-country-rot span{transform:none}
+}
 @media (max-width:640px){
+  .lp-title{font-size:clamp(1.65rem,6.8vw,2.15rem)}
   .sector-tabs{grid-template-columns:1fr 1fr}
   .search-wrap{flex:1 1 100%}
   .filter-label{min-width:auto;width:100%}

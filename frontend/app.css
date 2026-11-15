@@ -362,18 +362,6 @@ dialog::backdrop{background:rgba(4,12,9,.65);backdrop-filter:blur(2px)}
 .lp-radar-core b{font-size:.76rem;color:#fff;margin-top:2px}
 .lp-radar-core small{font-size:.64rem;color:var(--mint)}
 
-/* Floating Live Cards around Radar */
-.lp-float-card{all:unset;cursor:pointer;position:absolute;z-index:4;background:rgba(13,31,24,.92);border:1px solid rgba(60,197,150,.38);border-radius:12px;padding:8px 11px;display:flex;flex-direction:column;gap:2px;width:11.8rem;box-shadow:0 12px 28px rgba(0,0,0,.4);backdrop-filter:blur(8px);transition:transform .2s,border-color .2s}
-.lp-float-card:hover{border-color:#fff;transform:scale(1.04)!important;z-index:6}
-.lp-float-card.fc-1{top:2%;right:-2%}
-.lp-float-card.fc-2{top:6%;left:-3%;border-color:rgba(248,113,113,.45)}
-.lp-float-card.fc-3{bottom:7%;right:-2%}
-.lp-float-card.fc-4{bottom:3%;left:-3%;border-color:rgba(248,113,113,.45)}
-.fc-flag{font-size:.68rem;font-weight:700;color:var(--mint)}
-.fc-flag.tr{color:#FCA5A5}
-.lp-float-card b{font-size:.78rem;color:#fff;line-height:1.3;display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden}
-.fc-tag{font-size:.67rem;color:var(--hero-muted)}
-
 /* Live City & Specialty Ticker */
 .lp-ticker-bar{background:#091712;border-bottom:1px solid var(--line);padding:10px 0;overflow:hidden}
 .lp-ticker-track{display:flex;gap:12px;width:max-content;padding-inline:16px}
@@ -491,11 +479,6 @@ dialog::backdrop{background:rgba(4,12,9,.65);backdrop-filter:blur(2px)}
   @keyframes lpDash{to{stroke-dashoffset:-120}}
   .lp-hub-pulse{animation:lpHubPulse 2.6s ease-in-out infinite}
   @keyframes lpHubPulse{0%,100%{transform:scale(1);opacity:.75}50%{transform:scale(1.65);opacity:.15}}
-  .lp-float-card.fc-1{animation:lpFloat 4.8s ease-in-out infinite}
-  .lp-float-card.fc-2{animation:lpFloat 5.4s ease-in-out 1.1s infinite}
-  .lp-float-card.fc-3{animation:lpFloat 5.1s ease-in-out .6s infinite}
-  .lp-float-card.fc-4{animation:lpFloat 5.7s ease-in-out 1.7s infinite}
-  @keyframes lpFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
 }
 @media (max-width:960px){
   .lp-hero-grid{grid-template-columns:1fr}
@@ -510,6 +493,5 @@ dialog::backdrop{background:rgba(4,12,9,.65);backdrop-filter:blur(2px)}
   .filter-label{min-width:auto;width:100%}
   .bar{grid-template-columns:7rem 1fr 2rem}
   .lp-wiz-controls{grid-template-columns:1fr}
-  .lp-float-card{width:9.8rem;padding:6px 8px}
 }
 @media print{.hero,.filters,footer,.links,.landing-view{display:none}}

@@ -148,47 +148,48 @@
             <!-- SVG Regional Network Map Connecting Syria & Turkey Hubs -->
             <svg class="lp-radar-svg" viewBox="0 0 400 400" fill="none">
               <!-- Animated Data Arcs between Turkish & Syrian Hubs -->
-              <path class="lp-net-line" d="M115 110 Q 190 95 255 155" />
-              <path class="lp-net-line l2" d="M255 155 Q 245 215 220 275" />
-              <path class="lp-net-line l3" d="M185 165 Q 225 190 255 155" />
-              <path class="lp-net-line l4" d="M255 155 Q 290 195 310 220" />
-              <path class="lp-net-line l5" d="M115 110 Q 150 140 185 165" />
-              <path class="lp-net-line l6" d="M195 225 Q 210 250 220 275" />
+              <path class="lp-net-line" d="M104 102 Q 152 72 205 86" />
+              <path class="lp-net-line l2" d="M205 86 Q 258 92 298 128" />
+              <path class="lp-net-line l3" d="M298 128 Q 312 166 298 205" />
+              <path class="lp-net-line l4" d="M298 205 Q 318 242 310 282" />
+              <path class="lp-net-line l5" d="M104 102 Q 82 168 100 232" />
+              <path class="lp-net-line l6" d="M100 232 Q 140 292 202 318" />
+              <path class="lp-net-line l7" d="M298 205 Q 262 272 202 318" />
 
-              <!-- Turkey Hubs (Top / North-West) -->
-              <g class="lp-hub tr-hub" transform="translate(115, 110)">
+              <!-- Turkey Hubs (Top) -->
+              <g class="lp-hub tr-hub" transform="translate(104, 102)">
                 <circle r="14" class="lp-hub-pulse" />
                 <circle r="5.5" class="lp-hub-dot" />
-                <text y="-12" text-anchor="middle" class="lp-hub-label">إسطنبول 🇹🇷</text>
+                <text y="-13" text-anchor="middle" class="lp-hub-label">إسطنبول 🇹🇷</text>
               </g>
-              <g class="lp-hub tr-hub" transform="translate(185, 165)">
+              <g class="lp-hub tr-hub" transform="translate(205, 86)">
                 <circle r="11" class="lp-hub-pulse" />
                 <circle r="4.5" class="lp-hub-dot" />
-                <text y="18" text-anchor="middle" class="lp-hub-label">مرسين / أنقرة</text>
+                <text y="-13" text-anchor="middle" class="lp-hub-label">مرسين / أنقرة</text>
               </g>
-              <g class="lp-hub tr-hub" transform="translate(255, 155)">
+              <g class="lp-hub tr-hub" transform="translate(298, 128)">
                 <circle r="13" class="lp-hub-pulse" />
                 <circle r="5" class="lp-hub-dot" />
-                <text y="-12" text-anchor="middle" class="lp-hub-label">غازي عنتاب 🇹🇷</text>
+                <text y="-13" text-anchor="middle" class="lp-hub-label">غازي عنتاب 🇹🇷</text>
               </g>
 
               <!-- Syria Hubs (Center / South) -->
-              <g class="lp-hub sy-hub" transform="translate(245, 200)">
+              <g class="lp-hub sy-hub" transform="translate(298, 205)">
                 <circle r="14" class="lp-hub-pulse" />
                 <circle r="5.5" class="lp-hub-dot" />
-                <text y="18" text-anchor="middle" class="lp-hub-label">حلب 🇸🇾</text>
+                <text y="20" text-anchor="middle" class="lp-hub-label">حلب 🇸🇾</text>
               </g>
-              <g class="lp-hub sy-hub" transform="translate(195, 225)">
+              <g class="lp-hub sy-hub" transform="translate(100, 232)">
                 <circle r="11" class="lp-hub-pulse" />
                 <circle r="4.5" class="lp-hub-dot" />
-                <text y="18" text-anchor="middle" class="lp-hub-label">اللاذقية / حمص</text>
+                <text y="20" text-anchor="middle" class="lp-hub-label">اللاذقية / حمص</text>
               </g>
-              <g class="lp-hub sy-hub" transform="translate(310, 220)">
+              <g class="lp-hub sy-hub" transform="translate(310, 282)">
                 <circle r="11" class="lp-hub-pulse" />
                 <circle r="4.5" class="lp-hub-dot" />
-                <text y="18" text-anchor="middle" class="lp-hub-label">الحسكة / الدير</text>
+                <text y="20" text-anchor="middle" class="lp-hub-label">الحسكة / الدير</text>
               </g>
-              <g class="lp-hub sy-hub" transform="translate(220, 275)">
+              <g class="lp-hub sy-hub" transform="translate(202, 318)">
                 <circle r="16" class="lp-hub-pulse" />
                 <circle r="6.5" class="lp-hub-dot" />
                 <text y="21" text-anchor="middle" class="lp-hub-label">دمشق 🇸🇾</text>
@@ -201,31 +202,6 @@
               <b>رادار لاقيت</b>
               <small>رصد حي 24/7</small>
             </div>
-
-            <!-- 4 Floating Animated Live Job Cards -->
-            <button type="button" class="lp-float-card fc-1" data-enter-country="sy" data-enter-sector="ngo">
-              <span class="fc-flag">🇸🇾 دمشق · منظمة دولية</span>
-              <b id="fcTitle1">مسؤول برامج ومشاريع (NGO)</b>
-              <small class="fc-tag">✓ تقديم مباشر عبر الرابط</small>
-            </button>
-
-            <button type="button" class="lp-float-card fc-2" data-enter-country="tr">
-              <span class="fc-flag tr">🇹🇷 إسطنبول · شركة خاصة</span>
-              <b id="fcTitle2">محاسب ومستشار مبيعات دولية</b>
-              <small class="fc-tag">✓ عربي + تركي · إذن عمل</small>
-            </button>
-
-            <button type="button" class="lp-float-card fc-3" data-enter-country="sy" data-enter-city="حلب">
-              <span class="fc-flag">🇸🇾 حلب · قطاع هندسي وتقني</span>
-              <b id="fcTitle3">مهندس مدني / مطور برمجيات</b>
-              <small class="fc-tag">✓ شاغر موثق ومحدّث اليوم</small>
-            </button>
-
-            <button type="button" class="lp-float-card fc-4" data-enter-country="tr" data-enter-city="غازي عنتاب">
-              <span class="fc-flag tr">🇹🇷 غازي عنتاب · UN & NGOs</span>
-              <b id="fcTitle4">منسق مالي وإداري — Olive Branch</b>
-              <small class="fc-tag">✓ عقد دولي · تقديم مباشر</small>
-            </button>
           </div>
         </div>
       </div>

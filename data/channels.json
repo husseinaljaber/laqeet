@@ -140,7 +140,7 @@
     "label": "منظمة تكافل الشام الخيرية",
     "kind": "formal",
     "official": false,
-    "country": "sy",
+    "country": "mixed",
     "sector": "ngo"
   },
   "wazafne175": {
@@ -257,11 +257,11 @@
   },
   "JobsvacanciesinSyriaandTurkey": {
     "source": "trsy_jobs",
-    "label": "شواغر سوريا",
+    "label": "وظائف في سوريا ودول الجوار (تركيا)",
     "kind": "formal",
     "official": false,
-    "country": "sy",
-    "sector": "private"
+    "country": "mixed",
+    "sector": "ngo"
   },
   "jobtrainings": {
     "source": "jobtrainings",
@@ -350,5 +350,45 @@
     "official": false,
     "country": "sy",
     "sector": "ngo"
+  },
+  "jobsintr": {
+    "source": "jobsintr",
+    "label": "فرص عمل في تركيا الرسمية",
+    "kind": "formal",
+    "official": false,
+    "country": "tr",
+    "sector": "private"
+  },
+  "adwhit_jobs": {
+    "source": "adwhit_jobs",
+    "label": "فرص عمل في تركيا - موقع أدويت",
+    "kind": "formal",
+    "official": false,
+    "country": "tr",
+    "sector": "private"
+  },
+  "gaziantepis": {
+    "source": "gaziantepis",
+    "label": "توليب غازي عنتاب لفرص العمل",
+    "kind": "quick",
+    "official": false,
+    "country": "tr",
+    "sector": "private"
+  },
+  "gelbaslacom": {
+    "source": "gelbaslacom",
+    "label": "وظائف المنظمات في تركيا (Gelbaşla)",
+    "kind": "formal",
+    "official": false,
+    "country": "tr",
+    "sector": "ngo"
+  },
+  "jobsintrsy": {
+    "source": "jobsintrsy",
+    "label": "فرص عمل في تركيا وسوريا",
+    "kind": "formal",
+    "official": false,
+    "country": "mixed",
+    "sector": "private"
   }
 }

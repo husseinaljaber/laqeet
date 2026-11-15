@@ -143,6 +143,81 @@ def city_label(cities: list[str]) -> str:
     return cities[0] if len(cities) == 1 else "عدة محافظات"
 
 
+TR_CITIES = [
+    "إسطنبول", "غازي عنتاب", "مرسين", "أنقرة", "بورصة", "هاتاي (أنطاكيا)",
+    "إزمير", "قونيا", "شانلي أورفا", "أضنة", "قيصري", "كليس",
+    "طرابزون", "أنطاليا", "قوجه إيلي", "ساكاريا", "سامسون",
+]
+_TR_FOLD = str.maketrans({
+    "İ": "i", "I": "i", "ı": "i", "ğ": "g", "Ğ": "g",
+    "ş": "s", "Ş": "s", "ü": "u", "Ü": "u",
+    "ö": "o", "Ö": "o", "ç": "c", "Ç": "c",
+})
+
+
+def _fold_tr(s: str) -> str:
+    return fold((s or "").translate(_TR_FOLD)).lower()
+
+
+_TR_CITY_ALIASES = {
+    "إسطنبول": [
+        "اسطنبول", "إسطنبول", "اسطنبول الاوروبية", "اسطنبول الاسيوية", "istanbul",
+        "basaksehir", "باشاك شهير", "باشاكشهير", "esenyurt", "اسنيورت", "إسنيورت",
+        "sisli", "شيشلي", "fatih", "الفاتح", "zeytinburnu", "زيتون بورنو",
+        "beylikduzu", "بيليك دوزو", "بيلك دوزو", "merter", "مرتر", "مارتر",
+        "avcilar", "أفجلار", "افجلار", "bagcilar", "باغجلار", "yenibosna", "ينيبوسنا",
+        "sirinevler", "شيرين إيفلر", "شيرين ايفلر", "kayasehir", "كيا شهير", "كاياشهير", "كايا شهير",
+        "taksim", "تقسيم", "aksaray", "أكسراي", "اكسراي", "uskudar", "أوسكودار", "اسكودار",
+        "kadikoy", "كاديكوي", "umraniye", "عمرانية", "pendik", "بنديك", "istoc", "إستوش", "استوش",
+        "arnavutkoy", "ارناؤوط كوي", "kucukcekmece", "كوتشوك تشكمجه", "bahcelievler", "بهجلي ايفلر",
+        "sultangazi", "سلطان غازي", "bayrampasa", "بايرام باشا", "kagithane", "كاغت هانه",
+        "sariyer", "ساريير", "beykoz", "بيكوز", "tuzla", "توزلا", "kartal", "كارتال",
+        "gungoren", "غونغورين", "esenler", "إسنلر", "اتاشهير", "atasehir", "bakirkoy", "بكركوي",
+    ],
+    "غازي عنتاب": [
+        "غازي عنتاب", "عنتاب", "gaziantep", "antep", "baspinar", "باشبينار",
+        "sahinbey", "شاهين بيه", "sehitkamil", "شهيد كامل", "nizip", "نزيب",
+    ],
+    "مرسين": ["مرسين", "mersin", "mezitli", "مزيتلي", "tarsus", "طرسوس", "yenisehir mersin"],
+    "أنقرة": ["أنقرة", "انقرة", "ankara", "cankaya", "جانكايا", "kizilay", "كزلاي", "yenimahalle"],
+    "بورصة": ["بورصة", "بورصه", "bursa", "nilufer", "نيلوفر", "osmangazi", "عثمان غازي", "inegol"],
+    "هاتاي (أنطاكيا)": [
+        "هاتاي", "أنطاكيا", "انطاكيا", "الريحانية", "ريحانية", "اسكندرون", "إسكندرون",
+        "كركخان", "hatay", "antakya", "reyhanli", "iskenderun", "kirikhan",
+    ],
+    "إزمير": ["إزمير", "ازمير", "izmir", "bornova", "konak"],
+    "قونيا": ["قونيا", "konya", "selcuklu"],
+    "شانلي أورفا": ["شانلي أورفا", "شانلي اورفا", "أورفا", "اورفا", "sanliurfa", "urfa"],
+    "أضنة": ["أضنة", "اضنة", "أضنه", "اضنه", "adana", "seyhan"],
+    "قيصري": ["قيصري", "kayseri"],
+    "كليس": ["كليس", "كيليس", "kilis"],
+    "طرابزون": ["طرابزون", "trabzon"],
+    "أنطاليا": ["أنطاليا", "انطاليا", "antalya", "alanya", "ألانيا"],
+    "قوجه إيلي": ["قوجه إيلي", "قوجالي", "كوجالي", "كوجه ايلي", "إزميت", "ازميت", "kocaeli", "izmit", "gebze", "غبزة"],
+    "ساكاريا": ["ساكاريا", "سكاريا", "صقاريا", "آدابازاري", "sakarya", "adapazari"],
+    "سامسون": ["سامسون", "samsun"],
+}
+_TR_CITY_RE = [
+    (city, re.compile(r"(?<![\w])#?(" + "|".join(re.escape(_fold_tr(a)).replace(r"\ ", r"[\s_-]*") for a in aliases) + r")(?![\w])", re.I))
+    for city, aliases in _TR_CITY_ALIASES.items()
+]
+_ALL_TR_CITIES = re.compile(fold(r"جميع الولايات|كافه الولايات|كل الولايات|عده ولايات|عدة مدن تركية|farkli sehirler"), re.I)
+
+
+def tr_cities_from_text(text: str) -> list[str]:
+    """Detect canonical Turkish provinces from Arabic, English, or Turkish text/districts."""
+    raw_t = text or ""
+    stripped = _HASHTAG_SPAM_LINE.sub(" ", raw_t)
+    t = _fold_tr(stripped if stripped.strip() else raw_t)
+    if _ALL_TR_CITIES.search(t):
+        return ["عدة ولايات في تركيا"]
+    found: list[str] = []
+    for city, rx in _TR_CITY_RE:
+        if rx.search(t):
+            found.append(city)
+    return found
+
+
 # ---------------------------------------------------------------- fields of work
 FIELDS = [
     ("computer", "هندسة حاسوب ومعلوماتية"),
@@ -203,12 +278,31 @@ def field_from_text(title: str, context: str = "") -> str:
 
 # ---------------------------------------------------------------- other details
 _PHONE = re.compile(r"(?<!\d)(?:\+?963\s?|0)?(9\d{2})[\s-]?(\d{3})[\s-]?(\d{3})(?!\d)")
+_TR_PHONE = re.compile(
+    r"(?<!\d)(?:\+?90|0090|0)\s*[-./(]*?(5\d{2})[\s.\-)/]*?(\d{3})[\s.\-]*?(\d{2})[\s.\-]*?(\d{2})(?!\d)"
+    r"|(?:wa\.me/|phone=(?:%2B|\+)?)(?:90|0090)(5\d{2})(\d{3})(\d{2})(\d{2})(?!\d)",
+    re.I,
+)
+_TR_BAD_PHONES = {"05551234567", "05321234567", "05000000000", "05559999999"}
 _URL = re.compile(r"https?://[^\s<>\"'\]]+")
 _EMAIL = re.compile(r"[\w.+-]+@[\w-]+\.[\w.]+")
 _WHATSAPP = re.compile(fold(r"واتس|whatsapp|وتس"), re.I)
 _AGE = re.compile(r"(?:عمر|العمر|السن|بعمر|اعمار)[^\d]{0,15}(\d{2})\s*(?:-|الى|حتى|و|لـ|ل)\s*(\d{2})|(?:تحت|اقل من|دون)\s*(\d{2})")
 _EXPERIENCE = re.compile(r"خبر[ةه][^\d]{0,15}(\d{1,2})\s*(?:سن|سنوات|عام|أعوام)|(\d{1,2})\s*(?:سنوات|سنه|سنة|عام)\s*خبر")
-_SALARY = re.compile(r"(?:راتب|الراتب|اجر|الأجر|الاجر)[^\n]{0,40}?(\d[\d,.]*\s*(?:الف|ألف|مليون|\$|دولار|ل\.س|ليرة)?[^\n]{0,15})")
+_SALARY = re.compile(
+    r"(?:راتب|الراتب|الاجر|الأجر|أجر|salary)[^\n]{0,45}?"
+    r"((?:\d[\d,.]*(?:\s*[-–إلىو]\s*\d[\d,.]*)?\s*(?:الف|ألف|مليون|TL|TRY|₺|\$|USD|دولار|يورو|€|ل\.س|ليرة(?:\s+(?:تركية|سورية))?)"
+    r"|(?:\d{1,3}(?:[.,]\d{3})+|\d{4,6})(?:\s*[-–إلىو]\s*(?:\d{1,3}(?:[.,]\d{3})+|\d{4,6}))?)"
+    r"(?!\s*(?:يوم|ايام|أيام|ساعة|ساعات|عام|عمر|سنة|سنوات))[^\n]{0,18})",
+    re.I,
+)
+_TR_SALARY_INLINE = re.compile(
+    r"(?<!\d)(\d{1,3}(?:[.,]\d{3})+(?:\.\d{2})?(?:\s*[-–إلى]\s*\d{1,3}(?:[.,]\d{3})+(?:\.\d{2})?)?)\s*(TL|TRY|₺|ليرة(?:\s+تركية)?|دولار|USD|\$)(?![A-Za-z0-9_])"
+    r"|(?<!\d)(\d{1,3}\s*(?:الف|ألف)\s*(?:ليرة(?:\s+تركية)?|ليرة))"
+    r"|(?<!\d)(\d{4,6}(?:\s*[-–إلى]\s*\d{4,6})?)\s*(?:TL|TRY|₺|ليرة(?:\s+تركية)?)(?![A-Za-z0-9_])"
+    r"|(?<!\d)(\d{3,5}(?:\s*[-–إلى]\s*\d{3,5})?)\s*(?:\$|USD|دولار)(?![A-Za-z0-9_])",
+    re.I,
+)
 _FEMALE = re.compile(fold(r"\bاناث\b|\b(صبيه|صبايا|فتاه|فتيات|بنت|بنات|بنتين|انسه|انسات|سيده|سيدات|امراه|نساء|موظفه|موظفات|عامله|عاملات|سكرتيره|"
                           r"مندوبه|مروجه|مدخله|ممرضه|مساعده|معلمه|مدرسه|مدرسات|معلمات|محاسبه|صيدلانيه|مربيه|اخصائيه|مستخدمه|"
                           r"قابله|كوميكيه|مضيفه|بائعه|كاشيره)\b|\(اناث\)|اناث فقط|للاناث|للسيدات|الاخوات"))
@@ -224,6 +318,19 @@ _ARABIC_DIGITS = str.maketrans("٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹", "0123
 def phones(text: str) -> list[str]:
     norm = (text or "").translate(_ARABIC_DIGITS)
     return sorted({"0" + "".join(m.groups()) for m in _PHONE.finditer(norm)})
+
+
+def phones_tr(text: str) -> list[str]:
+    """Extract normalized Turkish 05XXXXXXXXX mobile numbers, filtering placeholders."""
+    norm = (text or "").translate(_ARABIC_DIGITS)
+    out: set[str] = set()
+    for m in _TR_PHONE.finditer(norm):
+        digits = "".join(g for g in m.groups() if g)
+        if len(digits) == 10 and digits.startswith("5"):
+            p = "0" + digits
+            if p not in _TR_BAD_PHONES and len(set(p[2:])) > 2:
+                out.add(p)
+    return sorted(out)
 
 
 def urls(text: str) -> list[str]:
@@ -267,8 +374,20 @@ def experience_years(text: str) -> int | None:
 
 
 def salary(text: str) -> str | None:
-    m = _SALARY.search(text)
-    return m.group(1).strip(" :") if m else None
+    norm = (text or "").translate(_ARABIC_DIGITS)
+    if m := _SALARY.search(norm):
+        val = re.sub(r"(\d)\.00\b", r"\1", m.group(1).strip(" :.-،"))
+        if val.endswith(")") and "(" not in val:
+            val = val[:-1].strip()
+        if re.search(r"\d", val):
+            return val[:60]
+    if m2 := _TR_SALARY_INLINE.search(norm):
+        val = re.sub(r"\s+", " ", m2.group(0)).strip(" :.-،")
+        if val.endswith(")") and "(" not in val:
+            val = val[:-1].strip()
+        val = re.sub(r"(\d)\.00\b", r"\1", val)
+        return val[:60]
+    return None
 
 
 def gender(text: str) -> str | None:

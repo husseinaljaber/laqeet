@@ -571,6 +571,8 @@ def job_page(job_id: int, request: Request):
     for p in (j.get("phones") or [])[:1]:
         if p.startswith("09"):
             btns.append(f'<a class="wa" target="_blank" rel="noopener" href="https://wa.me/963{p[1:]}">راسل واتساب ({e(p)})</a>')
+        elif j.get("country") == "tr" and p.startswith("05"):
+            btns.append(f'<a class="wa" target="_blank" rel="noopener" href="https://wa.me/90{p[1:]}">راسل واتساب ({e(p)})</a>')
         btns.append(f'<a class="call" href="tel:{e(p)}">اتصل {e(p)}</a>')
     if j.get("email"):
         btns.append(f'<a class="btn primary" href="mailto:{e(j["email"])}">إرسال CV بالإيميل ({e(j["email"])})</a>')

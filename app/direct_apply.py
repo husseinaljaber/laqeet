@@ -33,11 +33,13 @@ _SOCIAL_HOSTS = {
 
 _AGGREGATOR_HOSTS = {
     "tawzeefportal.com", "job.sy", "hanwazafak.com", "baaeed.com", "indeed.com",
-    "eg.indeed.com", "jooble.org", "bayt.com", "wuzzuf.net", "forasna.com",
+    "eg.indeed.com", "tr.indeed.com", "jooble.org", "bayt.com", "wuzzuf.net", "forasna.com",
     "akhtaboot.com", "tanqeeb.com", "unjobnet.org", "gulftalent.com",
     "naukrigulf.com", "linkedin.com", "glassdoor.com", "remotive.com",
     "freelancer.com", "upwork.com", "mostaql.com", "khamsat.com",
     "syrianjobs.net", "jobs.sy", "phoenijobs.sy", "lmo.sy",
+    "mahereen.com", "wazifturk.com", "kariyer.net", "eleman.net", "yenibiris.com",
+    "isinolsun.com", "opensooq.com", "tr.opensooq.com", "impactpool.org", "ureed.com",
 }
 
 _SHORTENER_HOSTS = {
@@ -54,6 +56,7 @@ _WRAPPER_HOSTS = {
     "salam-sy.org", "medica.sy", "lgsprefabsy.com", "almaqala.blog", "arabicline.com",
     "sqrjobs.net", "jobsyria.org", "nsjobs.net", "jobinsyria.com", "ngossyria.com",
     "syria.un.org", "au.edu.sy", "jude.edu.sy",
+    "jobsintr.net", "salamjobs.com", "adwhit.com", "ab-ilan.com",
 }
 
 _DIRECT_FORM_OR_ATS_RE = re.compile(
@@ -68,6 +71,7 @@ _DIRECT_FORM_OR_ATS_RE = re.compile(
     r"recruitee\.com|taleo\.net|successfactors\.(?:com|eu)|oraclecloud\.com|ultipro\.com|csod\.com|"
     r"zohorecruit\.com|odoo\.com/jobs|webcruiter\.no|employ\.acf-e\.org|careers-page\.com|"
     r"sams-hr\.com|talkpu\.sh|erp\.bonyan-ngo\.org|sssd-ngo\.net|alignerr\.com|mercor\.com|creativetaskflow\.com|"
+    r"sened\.org\.tr/job_ad/|jobsintr\.net/jobs/[^/?#]+$|"
     r"ee\.moi-sy\.com|au\.edu\.sy/job/)",
     re.I,
 )
@@ -77,6 +81,8 @@ _IGNORE_EMAIL_SUBSTRS = (
     "contact@jobinsyria.com", "info@phoenitech.", "info@jobsyria.org", "info@ngossyria.com", "info@lmo.sy",
     "info@sarc-sy.org", "info@shafak.org", "info@srd.org.tr", "info@ataarelief.org",
     "info@sema-sy.org", "info@bahar.ngo", "info@sened.ngo",
+    "info@jobsintr.net", "info@salamjobs.com", "info@mahereen.com", "info@wazifturk.com",
+    "info@ab-ilan.com", "info@adwhit.com", "employee@gmail.com", "kvkk@",
     "noreply@", "no-reply@", "donotreply@", "webmaster@", "wordpress@", "wixpress",
     "sentry.io", "example.com", "domain.com", ".png", ".jpg", ".svg",
 )
@@ -91,7 +97,8 @@ _BROWSER_HEADERS = {
 
 _CLOSED_PAGE_RE = re.compile(
     r"no longer accepting applications|this job has expired|expired job|position has been filled|"
-    r"انتهى موعد التقديم|تم إغلاق الشاغر|تمت تعبئة الشاغر|الشاغر لم يعد متاح",
+    r"انتهى موعد التقديم|تم إغلاق الشاغر|تمت تعبئة الشاغر|الشاغر لم يعد متاح|"
+    r"başvuru süresi dolmuştur|ilan yayından kaldırılmıştır|ilan süresi doldu",
     re.I,
 )
 
@@ -126,6 +133,8 @@ def is_social_or_channel(url: str) -> bool:
     if _matches_domain_set(h, _SOCIAL_HOSTS):
         return True
     if "whatsapp.com/channel" in u or "chat.whatsapp.com/" in u or "wa.me/message/" in u:
+        return True
+    if "whatsapp.com/send" in u and "phone=" not in u:
         return True
     # Pure wa.me/?text=... share buttons without phone recipient
     if h == "wa.me" and urlparse(u).path.strip("/") == "":
@@ -169,8 +178,14 @@ def is_disallowed_offline_url(url: str) -> bool:
     return is_social_or_channel(url) or is_aggregator_or_wall(url) or is_file_folder_or_viewer(url)
 
 
-def extract_phone_from_wa(url: str) -> list[str]:
-    m = re.search(r"wa\.me/(?:963|00963|\+963)?(9\d{8})\b", url, re.I)
+def extract_phone_from_wa(url: str, country: str = "sy") -> list[str]:
+    if country == "tr":
+        m = re.search(r"(?:wa\.me/|phone=(?:%2B|\+)?)(?:90|0090|\+90)?(5\d{9})\b", url, re.I)
+        if m:
+            p = "0" + m.group(1)
+            return [] if p in tx._TR_BAD_PHONES else [p]
+        return []
+    m = re.search(r"(?:wa\.me/|phone=(?:%2B|\+)?)(?:963|00963|\+963)?(9\d{8})\b", url, re.I)
     return ["0" + m.group(1)] if m else []
 
 
@@ -213,7 +228,7 @@ def _score_candidate_link(href: str, text: str, page_url: str) -> int:
     """Rank external/anchor candidates found on a job page; higher is better, <=0 ignored."""
     low_href = href.lower()
     low_txt = text.lower()
-    if low_href.startswith(("#", "javascript:", "tel:", "mailto:")):
+    if low_href.startswith(("#", "javascript:", "tel:", "mailto:")) or "wa.me/" in low_href or "whatsapp.com/" in low_href:
         return 0
     full = urljoin(page_url, href)
     if not full.startswith(("http://", "https://")):
@@ -223,22 +238,25 @@ def _score_candidate_link(href: str, text: str, page_url: str) -> int:
     # Avoid self links, pagination, language switchers, category pages
     if urlparse(full).path.rstrip("/") == urlparse(page_url).path.rstrip("/"):
         return 0
-    if re.search(r"[?&](?:lang|replytocom|share)=|/category/|/tag/|/jobs/?$|/vacancies/?$|/wp-login", low_href):
+    if re.search(r"[?&](?:lang|replytocom|share)=|/category/|/tag/|/jobs/?$|/vacancies/?$|/wp-login|/login|/account/|/register|/signin", low_href):
         return 0
     if is_direct_form_or_ats(full):
         return 100
     if is_shortener(full):
         return 75
-    if re.search(r"apply|تقديم|قد[ّ]?م|استمارة|التسجيل|application|recruit", low_txt + " " + low_href):
+    if re.search(r"apply|تقديم|قد[ّ]?م|استمارة|التسجيل|توظيف|application|recruit|başvuru|basvuru|career|job_ad|vacanc|tıklay", low_txt + " " + low_href):
         return 60
     return 0
 
 
-def extract_apply_from_html(html_text: str, page_url: str) -> dict:
-    """Pull direct form/ATS URLs, career emails, Syrian phones, and internal form signal from HTML."""
+def extract_apply_from_html(html_text: str, page_url: str, country: str = "sy") -> dict:
+    """Pull direct form/ATS URLs, career emails, phones, and internal form signal from HTML."""
     soup = BeautifulSoup(html_text, "html.parser")
+    for noise in soup.select(".sj-card, .similar-jobs, .related-jobs"):
+        noise.decompose()
     text = soup.get_text(" ", strip=True)
     closed = bool(_CLOSED_PAGE_RE.search(text))
+    phone_fn = tx.phones_tr if country == "tr" else tx.phones
 
     best_url = None
     best_score = 0
@@ -273,11 +291,11 @@ def extract_apply_from_html(html_text: str, page_url: str) -> dict:
             if _good_email(cand) and cand not in emails:
                 emails.append(cand)
         else:
-            for wp in extract_phone_from_wa(href):
+            for wp in extract_phone_from_wa(href, country=country):
                 if wp not in wa_phones:
                     wa_phones.append(wp)
             if low.startswith("tel:"):
-                for tp in tx.phones(unquote(href[4:])):
+                for tp in phone_fn(unquote(href[4:])):
                     if tp not in wa_phones:
                         wa_phones.append(tp)
 
@@ -296,7 +314,7 @@ def extract_apply_from_html(html_text: str, page_url: str) -> dict:
 
     # Prefer career/hr/job emails first
     emails.sort(key=lambda e: 0 if re.search(r"career|hr|job|recruit|apply|cv|talent|وظ|توظيف", e, re.I) else 1)
-    phones = sorted(set(tx.phones(main_text) + wa_phones))
+    phones = sorted(set(phone_fn(main_text) + wa_phones))
 
     # Also catch raw form URLs pasted as plain text without <a>
     if not best_url:
@@ -314,10 +332,11 @@ def extract_apply_from_html(html_text: str, page_url: str) -> dict:
     }
 
 
-def _resolve_url_live(url: str, client: httpx.Client, cache: dict, depth: int = 0) -> dict:
+def _resolve_url_live(url: str, client: httpx.Client, cache: dict, depth: int = 0, country: str = "sy") -> dict:
     """Resolve shorteners & wrapper portals with an in-memory per-run cache."""
-    if url in cache:
-        return cache[url]
+    cache_key = (url, country)
+    if cache_key in cache:
+        return cache[cache_key]
     res = {"status": 0, "final_url": url, "apply_url": None, "email": None, "phones": [], "has_internal_form": False, "closed": False, "dead": False}
     try:
         r = client.get(url, headers=_BROWSER_HEADERS, timeout=12, follow_redirects=True)
@@ -326,36 +345,38 @@ def _resolve_url_live(url: str, client: httpx.Client, cache: dict, depth: int = 
         res["final_url"] = final
         if r.status_code in (404, 410):
             res["dead"] = True
-            cache[url] = res
+            cache[cache_key] = res
             return res
         if is_disallowed_offline_url(final):
             res["dead"] = True
-            cache[url] = res
+            cache[cache_key] = res
             return res
         if is_direct_form_or_ats(final):
             res["apply_url"] = final
-            cache[url] = res
+            cache[cache_key] = res
             return res
         if r.status_code == 200 and "html" in r.headers.get("content-type", "").lower():
-            info = extract_apply_from_html(r.text, final)
+            page_html = r.content.decode("utf-8", "replace") if (r.encoding or "").lower() in ("", "iso-8859-1", "latin-1") else r.text
+            info = extract_apply_from_html(page_html, final, country=country)
             res.update(info)
             if res["apply_url"] and is_shortener(res["apply_url"]) and depth < 1:
-                sub = _resolve_url_live(res["apply_url"], client, cache, depth + 1)
+                sub = _resolve_url_live(res["apply_url"], client, cache, depth + 1, country=country)
                 if sub.get("apply_url"):
                     res["apply_url"] = sub["apply_url"]
                 elif sub.get("dead"):
                     res["apply_url"] = None
     except Exception as e:
         log.debug("resolve %s failed: %s", url, e)
-    cache[url] = res
+    cache[cache_key] = res
     return res
 
 
 def resolve_job_apply(job: Job, client: httpx.Client | None = None, cache: dict | None = None) -> bool:
     """Normalize/unwrap a job's apply link and return True iff it has a real way to apply."""
     cache = cache if cache is not None else {}
+    country = "tr" if getattr(job, "country", "sy") == "tr" else "sy"
 
-    # 1. Clean URLs, rescue email mistyped as URL, & extract embedded wa.me Syrian phones
+    # 1. Clean URLs, rescue email mistyped as URL, & extract embedded wa.me phones
     if job.email:
         em = job.email.strip()
         job.email = em if _good_email(em) else None
@@ -370,7 +391,7 @@ def resolve_job_apply(job: Job, client: httpx.Client | None = None, cache: dict 
     if job.details_url:
         job.details_url = strip_tracking(job.details_url) or None
     if job.apply_url:
-        for p in extract_phone_from_wa(job.apply_url):
+        for p in extract_phone_from_wa(job.apply_url, country=country):
             if p not in job.phones:
                 job.phones.append(p)
         job.phones = sorted(set(job.phones))
@@ -390,7 +411,7 @@ def resolve_job_apply(job: Job, client: httpx.Client | None = None, cache: dict 
     )
     if should_resolve:
         orig = job.apply_url
-        res = _resolve_url_live(orig, client, cache)
+        res = _resolve_url_live(orig, client, cache, country=country)
         if res["closed"]:
             job.apply_url = None
             job.email = None

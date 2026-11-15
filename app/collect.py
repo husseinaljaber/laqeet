@@ -24,6 +24,7 @@ from .models import Job
 from .sources import moad_announcement
 from .sources.moad_pdf import Card, fix_lost_tails, parse_pdf
 from .sources.reliefweb import fetch_reliefweb_jobs
+from .sources.turkey_portals import fetch_all_tr_portal_jobs
 from .sources.web_portals import fetch_all_web_portal_jobs
 from .sources.telegram import USER_AGENT, Post, parse_page
 
@@ -199,30 +200,23 @@ def collect(offline: bool = False) -> dict:
             stats[channel] = {"posts": posts, "new_jobs": new}
             log.info("%s: %d posts, %d new jobs", channel, posts, new)
         if not offline:
-            try:
-                rw_jobs = fetch_reliefweb_jobs(resolve_client, cache=resolve_cache)
-                rw_new = 0
-                today = date.today().isoformat()
-                for j in rw_jobs:
-                    if db.expires_on(j) >= today and da.resolve_job_apply(j, client=resolve_client, cache=resolve_cache):
-                        _, is_new = db.upsert(con, j)
-                        rw_new += is_new
-                stats["reliefweb"] = {"posts": len(rw_jobs), "new_jobs": rw_new}
-                log.info("reliefweb: %d jobs, %d new jobs", len(rw_jobs), rw_new)
-            except Exception as e:
-                log.warning("reliefweb collect failed: %s", e)
-            try:
-                portal_jobs = fetch_all_web_portal_jobs(resolve_client, cache=resolve_cache)
-                portal_new = 0
-                today = date.today().isoformat()
-                for j in portal_jobs:
-                    if db.expires_on(j) >= today and da.resolve_job_apply(j, client=resolve_client, cache=resolve_cache):
-                        _, is_new = db.upsert(con, j)
-                        portal_new += is_new
-                stats["web_portals"] = {"posts": len(portal_jobs), "new_jobs": portal_new}
-                log.info("web portals: %d jobs, %d new jobs", len(portal_jobs), portal_new)
-            except Exception as e:
-                log.warning("web portals collect failed: %s", e)
+            today = date.today().isoformat()
+            for key, fn in (
+                ("reliefweb", fetch_reliefweb_jobs),
+                ("web_portals", fetch_all_web_portal_jobs),
+                ("turkey_portals", fetch_all_tr_portal_jobs),
+            ):
+                try:
+                    batch = fn(resolve_client, cache=resolve_cache)
+                    new_count = 0
+                    for j in batch:
+                        if db.expires_on(j) >= today and da.resolve_job_apply(j, client=resolve_client, cache=resolve_cache):
+                            _, is_new = db.upsert(con, j)
+                            new_count += is_new
+                    stats[key] = {"posts": len(batch), "new_jobs": new_count}
+                    log.info("%s: %d jobs, %d new jobs", key, len(batch), new_count)
+                except Exception as e:
+                    log.warning("%s collect failed: %s", key, e)
         pruned = db.prune_old(con, config.HISTORY_DAYS)
         if pruned:
             log.info("pruned %d jobs older than %d days", pruned, config.HISTORY_DAYS)

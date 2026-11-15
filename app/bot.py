@@ -151,10 +151,14 @@ def message(job: dict) -> str:
     links = []
     if job.get("apply_url"):
         links.append(f'<a href="{_h(job["apply_url"])}">قدّم</a>')
-    phones = [p for p in job.get("phones") or [] if p.startswith("09")]
-    if phones:
-        p = phones[0]
-        links.append(f'<a href="https://wa.me/963{p[1:]}">واتساب</a>')
+    if job.get("country") == "tr":
+        phones = [p for p in job.get("phones") or [] if p.startswith("05")]
+        if phones:
+            links.append(f'<a href="https://wa.me/90{phones[0][1:]}">واتساب</a>')
+    else:
+        phones = [p for p in job.get("phones") or [] if p.startswith("09")]
+        if phones:
+            links.append(f'<a href="https://wa.me/963{phones[0][1:]}">واتساب</a>')
     if job.get("email"):
         links.append(f'<a href="mailto:{_h(job["email"])}">إيميل</a>')
     for s in job.get("sources", [])[:2]:

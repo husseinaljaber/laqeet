@@ -19,7 +19,7 @@ from . import taxonomy as tx
 from .arabic import normalize, soft_fold
 from .classify import classify as computer_subfield, is_computer_degree
 from .models import Job
-from .spam import is_job_post, is_spam
+from .spam import is_job_post, is_spam, is_tr_citizenship_only
 
 F = soft_fold
 
@@ -101,7 +101,8 @@ _DEADLINE_HINT = re.compile(F(
     r"اخر يوم|حتي تاريخ|حتي يوم|حتي|لغايه تاريخ|لغايه|ينتهي التقديم|ينتهي في|ينتهي بتاريخ|ينتهي يوم|ينتهي|"
     r"نهايه الاعلان|deadline|تاريخ الانتهاء|قبل تاريخ|قبل يوم|لاستقبال الطلبات|لاستلام الطلبات|"
     r"لتقديم الطلبات|تلقي الطلبات|اقصاه تاريخ|اقصاه|اخر مهله|مهله التقديم|مده التقديم|"
-    r"متاح حتى|متاح لغايه|تاريخ الاغلاق|اغلاق الاستماره|اغلاق الشاغر|اغلاق التقديم|يقفل باب التقديم|يغلق التقديم"
+    r"متاح حتى|متاح لغايه|تاريخ الاغلاق|اغلاق الاستماره|اغلاق الشاغر|اغلاق التقديم|يقفل باب التقديم|يغلق التقديم|"
+    r"son başvuru(?:\s*tarihi)?|⏰"
 ))
 _CLOSED_RX = re.compile(F(
     r"تم (?:اغلاق|قفل|ملء|تعبئه) (?:الشاغر|الطلب|الاستماره|باب التقديم|التسجيل)|"
@@ -401,11 +402,11 @@ def _ordinal_items(lines: list[str]) -> list[tuple[str, str | None]]:
     return out
 
 
-def _split_item_city(item: str) -> tuple[str, list[str]]:
+def _split_item_city(item: str, country: str = "sy") -> tuple[str, list[str]]:
     """'مروجة - طرطوس' -> ('مروجة', ['طرطوس'])"""
     m = re.match(r"(.+?)\s*[-–]\s*(.+)$", item)
     if m:
-        cities = tx.cities_from_text(m.group(2))
+        cities = tx.tr_cities_from_text(m.group(2)) if country == "tr" else tx.cities_from_text(m.group(2))
         if cities and len(m.group(2)) <= 25:
             return m.group(1).strip(), cities
     return item, []
@@ -498,8 +499,10 @@ _NOT_FALLBACK = re.compile(F(r"^(لجنه|منظمه|جمعيه|مؤسسه|ال�
 def _only_places(t: str) -> bool:
     """A line that is just city names («إدلب _ سرمدا»)."""
     rest = F(t)
-    for city in tx.CITIES + ["سرمدا", "اعزاز", "الباب", "عفرين", "منبج",
-                             "لبنان", "بيروت", "سوريا", "سورية", "لرقة", "ريف", "الاردن", "عمان", "العراق", "اربيل"]:
+    for city in tx.CITIES + tx.TR_CITIES + [
+        "سرمدا", "اعزاز", "الباب", "عفرين", "منبج",
+        "لبنان", "بيروت", "سوريا", "سورية", "لرقة", "ريف", "الاردن", "عمان", "العراق", "اربيل", "تركيا", "turkiye", "turkey",
+    ]:
         rest = rest.replace(F(city), " ")
     return not re.sub(r"[\W_\d]+", "", rest)
 
@@ -571,6 +574,8 @@ _SOURCE_DEFAULT_EMPLOYER = {
     "reliefweb": "منظمات دولية ووكالات أممية (ReliefWeb)",
     "worklink": "منصة ورك لينك (WorkLink Syria)",
     "ngosquare": "منصة ساحة المنظمات (NGO Square)",
+    "gaziantepis": "شركات ومصانع غازي عنتاب",
+    "gelbaslacom": "منظمات ومؤسسات في تركيا",
 }
 
 
@@ -593,31 +598,30 @@ def _extract_tasks_and_skills(text: str) -> tuple[list[str], list[str]]:
     tasks: list[str] = []
     skills: list[str] = []
     current = None
-    task_rx = re.compile(r"^(?:ال)?مهام|(?:ال)?مسؤوليات|الواجبات|طبيعة العمل", re.I)
-    skill_rx = re.compile(r"^(?:ال)?شروط|(?:ال)?متطلبات|(?:ال)?مؤهلات|(?:ال)?مهارات", re.I)
+    task_rx = re.compile(r"^(?:(?:ال)?مهام|(?:ال)?مسؤوليات|الواجبات|طبيعة العمل|responsibilities|duties|what you will do)\b", re.I)
+    skill_rx = re.compile(r"^(?:(?:ال)?شروط|(?:ال)?متطلبات|(?:ال)?مؤهلات|(?:ال)?مهارات|requirements|qualifications|skills)\b", re.I)
     for line in text.splitlines():
         line = line.strip()
         if not line:
             continue
         cleaned = re.sub(r"^[\s#*•🔹▪️▫️🔻👇👉✔️✅\-]+\s*", "", line).strip(" :：")
-        if task_rx.match(cleaned):
+        if task_rx.match(cleaned) and len(cleaned) <= 45:
             current = "tasks"
             continue
-        elif skill_rx.match(cleaned):
+        elif skill_rx.match(cleaned) and len(cleaned) <= 45:
             current = "skills"
             continue
-        elif re.match(r"^(?:تفاصيل|مكان العمل|الراتب|الدوام|طريقة التقديم|للتواصل|ملاحظات|المصدر)", cleaned):
+        elif re.match(r"^(?:تفاصيل|مكان العمل|الراتب|الدوام|طريقة التقديم|للتواصل|ملاحظات|المصدر|معلومات التوظيف)", cleaned):
             current = None
             continue
         if current in ("tasks", "skills"):
             m_bullet = re.match(r"^[\s*•🔹▪️▫️🔻👇👉✔️✅\-]+\s*(.+)$", line)
-            if m_bullet:
-                item = m_bullet.group(1).strip()
-                if 5 <= len(item) <= 150:
-                    if current == "tasks" and len(tasks) < 8:
-                        tasks.append(item)
-                    elif current == "skills" and len(skills) < 8:
-                        skills.append(item)
+            item = m_bullet.group(1).strip() if m_bullet else cleaned
+            if (m_bullet or (12 <= len(item) <= 150 and ":" not in item[:30])) and 5 <= len(item) <= 160:
+                if current == "tasks" and len(tasks) < 8:
+                    tasks.append(item)
+                elif current == "skills" and len(skills) < 8:
+                    skills.append(item)
     return tasks, skills
 
 
@@ -629,44 +633,80 @@ def resolve_employer(emp: str | None, src: str, official: bool, text: str, hint:
     return None
 
 
+def _resolve_target_country(text: str, links: list[str] | None, country: str | None) -> str:
+    """Route channel posts cleanly between Syria ('sy') and Turkey ('tr')."""
+    if country == "tr":
+        return "tr"
+    if country != "mixed":
+        return "sy"
+    sy_cities = tx.cities_from_text(text)
+    tr_cities = tx.tr_cities_from_text(text)
+    if tr_cities and not sy_cities:
+        return "tr"
+    if sy_cities and not tr_cities:
+        return "sy"
+    mentions_sy = bool(re.search(r"\bسوريا\b|\bsyria\b|الشمال السوري|دمشق|حلب|إدلب|ادلب", text, re.I))
+    mentions_tr = bool(re.search(r"\bتركيا\b|\bturkey\b|türkiye", text, re.I))
+    if mentions_tr and not mentions_sy:
+        return "tr"
+    if sy_cities or mentions_sy:
+        return "sy"
+    if tx.phones_tr(" ".join([text] + (links or []))) and not tx.phones(text):
+        return "tr"
+    return "sy"
+
+
 def extract(text: str, source: str, post_url: str, posted_at: str | None = None, default_kind: str = "formal",
             links: list[str] | None = None, country: str | None = None, sector: str | None = None) -> list[Job]:
     """All the jobs in one channel post. Returns [] for posts that are not job ads."""
-    if country == "tr":
+    if not text or len(re.sub(r"https?://\S+|\s+", "", text)) < 15:
         return []
+    target_country = _resolve_target_country(text, links, country)
     # «نبحث عن :» or «في وظيفة:» with the title as a hashtag on the next line («#مشرف_تعبئة_وتغليف») → one line
     text = re.sub(r"((?:نبحث|تبحث|يبحث)\s+عن|في\s+وظيف[ةه]|بمسمى|مطلوب|يلزمنا)\s*[:：]?\s*(?:\n\s*)+[^\w\n#]{0,4}#(\S+)",
                   lambda m: f"\n{m.group(1)} {m.group(2).replace('_', ' ')}", text or "")
-    if text and _ABROAD.search(F(text)) and not tx.cities_from_text(text):
-        return []  # jobs in Turkey and elsewhere: this platform is for work inside Syria
-    if text and _TR_PHONE_IN_TEXT.search(" ".join([text] + (links or []))) and not (
-        tx.phones(text) or any(re.search(r"963\s*9\d{8}", l) for l in (links or []))
-    ):
-        return []  # skip ads whose only contact number is Turkish (+90)
-    if not text or not is_job_post(text):
+    if target_country == "sy":
+        if text and _ABROAD.search(F(text)) and not tx.cities_from_text(text):
+            return []  # jobs in Turkey and elsewhere: this branch is for work inside Syria
+        if text and _TR_PHONE_IN_TEXT.search(" ".join([text] + (links or []))) and not (
+            tx.phones(text) or any(re.search(r"963\s*9\d{8}", l) for l in (links or []))
+        ):
+            return []  # skip ads whose only contact number is Turkish (+90)
+    else:
+        if is_tr_citizenship_only(text):
+            return []
+        if tx.cities_from_text(text) and not tx.tr_cities_from_text(text):
+            return []
+    if not is_job_post(text):
         return []
     spam = is_spam(text)
+    if target_country == "tr" and spam:
+        return []
     text = re.sub("[\u064B-\u0652\u0640]", "", text)  # harakat and tatweel: «تٌعلن» → «تعلن», «مطوّر» → «مطور»
     lines = _clean_lines(text)
     body = "\n".join(lines)
     if not body or _NOT_JOB.search(F(body)):
         return []
-    cities = tx.cities_from_text("\n".join(l for l in text.splitlines() if not _NOISE_LINE.search(F(l))))
+    city_text = "\n".join(l for l in text.splitlines() if not _NOISE_LINE.search(F(l)))
+    if target_country == "tr":
+        cities = tx.tr_cities_from_text(city_text) or (["غازي عنتاب"] if source == "gaziantepis" else ["عدة ولايات في تركيا"])
+    else:
+        cities = tx.cities_from_text(city_text)
     all_links = list(dict.fromkeys(tx.urls(text) + [l for l in (links or []) if l.startswith("http")]))
     valid_links = [u for u in all_links if _is_valid_apply_url(u)]
     valid_links.sort(key=lambda u: 0 if da.is_direct_form_or_ats(u) else (1 if da.is_shortener(u) else 2))
     apply_url = da.strip_tracking(valid_links[0]) if valid_links else None
-    phones = tx.phones(body)
+    phones = tx.phones_tr(body) if target_country == "tr" else tx.phones(body)
     for u in all_links:
-        if m := re.search(r"(?:wa\.me/|phone=)\+?963\s*(9\d{8})\b", u, re.I):
-            p = "0" + m.group(1)
+        for p in da.extract_phone_from_wa(u, country=target_country):
             if p not in phones:
                 phones.append(p)
     phones.sort()
-    emails = tx.emails(body)
+    emails = [e for e in tx.emails(body) if da._good_email(e)]
     deadline = parse_deadline(body, posted_at)
-    employer = _employer(body)
-    official = bool(_MOAD_LINK.search(" ".join(all_links))) or bool(employer and _OFFICIAL.search(F(employer)) and "منظمات" not in F(employer))
+    tr_pair = re.search(r"💼\s*([^:\n]{2,70}):\s*([^\n📍⏰🔗]{4,110})", text) if target_country == "tr" else None
+    employer = tr_pair.group(1).strip() if tr_pair else _employer(body)
+    official = False if target_country == "tr" else (bool(_MOAD_LINK.search(" ".join(all_links))) or bool(employer and _OFFICIAL.search(F(employer)) and "منظمات" not in F(employer)))
     employer = resolve_employer(employer, source, official, body, hint=sector)
     tasks, skills = _extract_tasks_and_skills(body)
     base = dict(source=source, post_url=post_url, posted_at=posted_at, employer=employer, deadline=deadline,
@@ -693,7 +733,7 @@ def extract(text: str, source: str, post_url: str, posted_at: str | None = None,
     if items and not item_urls and (link_pairs := _link_items_with_urls(lines)):
         url_map = {F(t): u for t, u in link_pairs if u}
         if url_map:
-            item_urls = [url_map.get(F(it[0])) or url_map.get(F(_split_item_city(it[0])[0])) for it in items]
+            item_urls = [url_map.get(F(it[0])) or url_map.get(F(_split_item_city(it[0], target_country)[0])) for it in items]
     if not items and _MOAD_LINK.search(text) and not strong:
         return []  # a re-post of a ministry announcement: the ministry adapter reads the real cards
     titles: list[tuple[str, str, list[str], str | None, str | None]] = []  # (title, source text, cities, grade, item_url)
@@ -701,13 +741,17 @@ def extract(text: str, source: str, post_url: str, posted_at: str | None = None,
     if not single:
         doctors = bool(re.search(F(r"اطباء|الاطباء"), F(header)))
         for idx, (item, grade) in enumerate(items):
-            title, item_cities = _split_item_city(item)
+            title, item_cities = _split_item_city(item, target_country)
             if doctors and not re.search(F(r"طبيب|اطباء"), F(title)):
                 title = "طبيب " + title  # «أطباء من الاختصاصات التالية: الجراحة العامة»
             i_url = item_urls[idx] if idx < len(item_urls) else None
             titles.append((title, item, item_cities, grade, i_url))
     else:
-        title, src = _single_title(body, lines)
+        if tr_pair:
+            title = _clean_title(tr_pair.group(2))
+            src = tr_pair.group(0)
+        else:
+            title, src = _single_title(body, lines)
         grade = None
         i_url = None
         g = _GRADE_LINE.match(F(title))
@@ -722,17 +766,17 @@ def extract(text: str, source: str, post_url: str, posted_at: str | None = None,
                 title, i_url = link_one[0]
                 src = title
         if title:
-            title, item_cities = _split_item_city(title)
+            title, item_cities = _split_item_city(title, target_country)
             titles.append((title, src, item_cities, grade, i_url))
 
     jobs = []
     tags = tx.job_tags(body)
     for title, title_text, item_cities, grade, i_url in titles:
-        if not _good_title(title) or _only_places(title) or title in tx.CITIES:
+        if not _good_title(title) or _only_places(title) or title in tx.CITIES or title in tx.TR_CITIES:
             continue
         per_apply = i_url or apply_url
         job_kw = {**base, "apply_url": per_apply, "phones": list(base["phones"])}
-        job = Job(title=title, cities=item_cities or cities, tags=tags, country="sy", **job_kw)
+        job = Job(title=title, cities=item_cities or cities, tags=tags, country=target_country, **job_kw)
         _fill_details(job, body, title_text, single, grade, header)
         if source == "syrianjobs" and not job.education:
             job.education, job.education_from = "none", "source"

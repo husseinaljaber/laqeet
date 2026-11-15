@@ -385,7 +385,7 @@
   }
 
   function primaryJobLink(j) {
-    if (j.apply_url && !/^https?:\/\/wa\.me\//i.test(j.apply_url)) return j.apply_url;
+    if (j.apply_url && !/^https?:\/\/(?:wa\.me\/|api\.whatsapp\.com\/)/i.test(j.apply_url)) return j.apply_url;
     return `${location.origin}/j/${j.id}`;
   }
 
@@ -418,7 +418,7 @@
     }
 
     // Put ONLY the actual application method requested by the employer (link vs email CV vs phone/WhatsApp)
-    const hasDirectLink = Boolean(j.apply_url && !/^https?:\/\/wa\.me\//i.test(j.apply_url));
+    const hasDirectLink = Boolean(j.apply_url && !/^https?:\/\/(?:wa\.me\/|api\.whatsapp\.com\/)/i.test(j.apply_url));
     const hasEmail = Boolean(j.email);
     const phone = (j.phones || [])[0];
     const applyLines = [];
@@ -441,7 +441,7 @@
 
   function shareJob(j) {
     const pageUrl = `${location.origin}/j/${j.id}`;
-    const hasDirectLink = Boolean(j.apply_url && !/^https?:\/\/wa\.me\//i.test(j.apply_url));
+    const hasDirectLink = Boolean(j.apply_url && !/^https?:\/\/(?:wa\.me\/|api\.whatsapp\.com\/)/i.test(j.apply_url));
     const linkToCopy = hasDirectLink ? j.apply_url : pageUrl;
     const fullText = buildShareText(j);
     const dlg = $('shareDialog');
@@ -558,11 +558,12 @@
     if (phone && !j.whatsapp) {
       out.append(el('a', { class: 'call', href: 'tel:' + phone }, 'اتصل ' + phone));
     }
-    if (j.apply_url && !/^https?:\/\/wa\.me\//i.test(j.apply_url) && !(j.deadline && daysLeft(j.deadline) < 0)) {
+    if (j.apply_url && !/^https?:\/\/(?:wa\.me\/|api\.whatsapp\.com\/)/i.test(j.apply_url) && !(j.deadline && daysLeft(j.deadline) < 0)) {
       const isForm = (j.apply_types || []).includes('form');
       out.append(el('a', { class: 'apply', href: j.apply_url, target: '_blank', rel: 'noopener' }, isForm ? 'تعبئة استمارة التقديم' : 'التقديم عبر الموقع'));
     }
-    if (j.details_url && j.details_url !== j.apply_url) {
+    const isWrapperUrl = (u) => /(?:^|\.)(?:worklink\.sy|jobinsyria\.com|reliefweb\.int|unjobs\.org|ngosquare\.com|jobsyria\.org|nsjobs\.net|ngossyria\.com|sqrjobs\.net|jobsintr\.net|salamjobs\.com|adwhit\.com|ab-ilan\.com|spc\.sy)(?:\/|$)/i.test((() => { try { return new URL(u).hostname; } catch { return ''; } })());
+    if (j.details_url && j.details_url !== j.apply_url && !isWrapperUrl(j.details_url)) {
       out.append(el('a', { href: j.details_url, target: '_blank', rel: 'noopener' }, 'تفاصيل الإعلان'));
     }
     if (j.email) {
@@ -581,7 +582,7 @@
       }
     }, isSav ? '🔖 محفوظة' : 'احفظ');
 
-    const hasDirectLink = Boolean(j.apply_url && !/^https?:\/\/wa\.me\//i.test(j.apply_url));
+    const hasDirectLink = Boolean(j.apply_url && !/^https?:\/\/(?:wa\.me\/|api\.whatsapp\.com\/)/i.test(j.apply_url));
     out.append(
       el('button', { class: 'report share-btn', onclick: () => shareJob(j) }, '📤 مشاركة ونسخ الإعلان'),
       j.email && !hasDirectLink
@@ -634,7 +635,7 @@
 
     const listBlock = (title, items) => (items && items.length) ? [el('h4', null, title), el('ul', null, items.map((x) => el('li', null, x)))] : [];
     const summaryBlock = j.summary ? [el('h4', null, 'نبذة ووصف الشاغر'), el('p', { style: 'margin:4px 0 10px;line-height:1.6' }, j.summary)] : [];
-    const hasDirectLink = Boolean(j.apply_url && !/^https?:\/\/wa\.me\//i.test(j.apply_url));
+    const hasDirectLink = Boolean(j.apply_url && !/^https?:\/\/(?:wa\.me\/|api\.whatsapp\.com\/)/i.test(j.apply_url));
     const shareSection = el('div', { class: 'share-box' },
       el('div', { class: 'share-box-title' }, '📤 مشاركة الإعلان أو نسخه مع الوصف وطريقة التقديم:'),
       el('div', { class: 'share-actions' },

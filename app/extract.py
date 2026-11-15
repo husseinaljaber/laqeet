@@ -487,7 +487,11 @@ _NOT_TITLE = re.compile(r"^(?:ال)?سلام عليكم|^مرحبا|^من (?:ب�
                         r"^(?:مكان\s+العمل|الموقع|المعرف\s+الوظيف[يى])\s*(?:[:：(]|$)|^الوظيفتان\s+بدوام\s+كامل|"
                         r"^(?:امتلاك\s+مهار|اللباق[ةه]\s+وحسن|القدرة\s+على|[إا]جادة\s+(?:ال|لغ)|[إا]تقان\s+(?:ال|عمل)|حسن\s+(?:التعامل|المظهر)|الالتزام\s+ب)|"
                         r"^(?:لتوظيف\s+في\b|لمركز\s+|مميز[ةه]\s+بانتظارك|كبر\s+فريقنا|كيف\s+تحدث\b)|"
+                        r"^(?:مدة\s+ال[إا]علان\b|فتر[ةه]\s+التقديم\b|التفاصيل\s+والشروط\s+كامل[ةه]?$|الشاغر\s*:|وصف\s+الشواغر|[آا]خر\s+موعد\s+تقديم\b|أوقات\s+الدوام\s*:|الصفات\s*:|الفئ[ةه]\s+المستهدف[ةه]\s*:|التبعي[ةه]\s+ال[إا]داري[ةه]\b|جهة\s+العمل\s*:)|"
+                        r"^(?:السير[ةه]\s+الذاتي[ةه]|رسالة\s+تعريفي[ةه]|يرجى\s+[إا]رسال|[أا]رسل\s+السير|[أا]رفق\s+\d|لا\s+نستقبل\s+اتصالات|يجب\s+استخدام\s+نموذج|شو\s+عم\s+تستنى|هل\s+تحلم\s+بالعمل|نحو\s+تجرب[ةه]\s+مصرفي[ةه])|"
+                        r"^(?:العمل\s+(?:من\s+البيت|حضوري|عن\s+بعد|24\s+ساعة)|وظيف[ةه]\s+عن\s+بعد|لا\s+تشترط\s+شهاد[ةه]|متاح\s+للشباب\s+فقط|خبر[ةه]\s+(?:جيد[ةه]|عملي[ةه])\s+(?:في|ب)|[إا]لمام\s+جيد|[إا]جادة\s+استخدام|الأفضلي[ةه]\s+لمن|الدق[ةه]\s+وتحمل|الجدي[ةه]\s+والالتزام|أن\s+يتراوح\s+العمر|حاصل/?[ةه]?\s+على\s+شهاد[ةه]|متفرغ/?[ةه]?\s+للعمل|خريجون\s+جدد\s+مرحب|المطلوب\s+أصحاب\s+الخبر[ةه])|"
                         r"(?i:^(?:organization|closes|closing\s*date|deadline|duty\s*station|location|son\s+başvuru\s+tarihi)\s*[:：]|"
+                        r"^(?:current\s+salary|expected\s+salary|notice\s+period|competitive\s+salary|internet\s+allowance|job\s+opportunity|university\s+graduates|age\s+up\s+to|very\s+good\s+english|available\s+to\s+join|stable\s+and\s+reliable|comfortable\s+in\s+a\s+target|creative\s+thinking|opportunities\s+for\s+professional|performance-based\s+bonuses|stay\s+updated|plan\s+and\s+coordinate|track\s+growth|present\s+product|handle\s+inquiries|follow\s+up\s+on\s+leads|achieve\s+monthly|building\s+and\s+maintaining|mobile\s+shooting|reel\s+editing)\b|"
                         r"^(?:for\s+)?(?:two|three|four|five|several|\d+)\s+positions?\b|"
                         r"^excellente\s+maîtrise\b)")
 _LATIN_SENTENCE = re.compile(
@@ -889,7 +893,7 @@ def extract(text: str, source: str, post_url: str, posted_at: str | None = None,
         job.kind = "quick" if (default_kind == "quick" or quick) else "formal"
         job.sector = tx.infer_sector(job.official, job.field, job.employer, body, hint=sector)
         job.apply_types = tx.infer_apply_types(job.apply_url, job.phones, job.whatsapp, job.email)
-        da.resolve_job_apply(job, client=None)
+        da.resolve_job_apply(job, client=None, strict=False)
         jobs.append(job)
     return jobs
 

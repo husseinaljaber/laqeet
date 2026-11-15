@@ -99,10 +99,10 @@ def scrape_sema(client: httpx.Client) -> list[Job]:
     return jobs
 
 
-def _is_recent_iso(iso_str: str | None) -> bool:
+def _is_recent_iso(iso_str: str | None, max_days: int | None = None) -> bool:
     if not iso_str:
         return True
-    cutoff = (datetime.now(timezone.utc) - timedelta(days=config.HISTORY_DAYS)).date().isoformat()
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=max_days or config.FORMAL_DAYS)).date().isoformat()
     return iso_str[:10] >= cutoff
 
 
@@ -400,6 +400,8 @@ def _parse_worklink_detail(full_url: str, html_text: str, today_str: str) -> Job
         return None
 
     info = da.extract_apply_from_html(html_text, full_url)
+    if info.get("closed"):
+        return None
     email = info.get("email")
     phones = info.get("phones") or []
     apply_u = info.get("apply_url")
@@ -869,7 +871,8 @@ def scrape_jobinsyria(client: httpx.Client) -> list[Job]:
                 content_html = (it.get("content") or {}).get("rendered") or ""
                 posted = (it.get("date_gmt") or it.get("date") or "")[:19]
                 posted_iso = (posted + "+00:00") if posted else None
-                if not _is_recent_iso(posted_iso):
+                dl = (metas.get("_job_application_deadline_date") or exp or "").strip()[:10] or None
+                if not _is_recent_iso(posted_iso, max_days=config.HISTORY_DAYS if (dl and dl >= today_str) else config.FORMAL_DAYS):
                     continue
                 recent_on_page += 1
                 open_on_page += 1
@@ -877,7 +880,6 @@ def scrape_jobinsyria(client: httpx.Client) -> list[Job]:
                 loc_str = " ".join(loc_meta.values()) if isinstance(loc_meta, dict) else (
                     " ".join(loc_meta) if isinstance(loc_meta, list) else str(loc_meta or "")
                 )
-                dl = (metas.get("_job_application_deadline_date") or exp or "").strip()[:10] or None
                 extra_html = f"<p>{loc_str}</p><p>{metas.get('_job_apply_email') or ''}</p><p>{metas.get('_job_phone') or ''}</p>"
                 job = _make_wp_job(
                     title=raw_t,
@@ -1155,38 +1157,46 @@ def scrape_syria_un(client: httpx.Client) -> list[Job]:
     return jobs
 
 
-def _warm_resolve_cache(jobs: list[Job], cache: dict, max_workers: int = 8) -> None:
+def _warm_resolve_cache(jobs: list[Job], cache: dict, max_workers: int = 4) -> None:
     """Resolve pending wrapper/shortener URLs concurrently into cache for large batches."""
-    pending: list[str] = []
-    seen_u: set[str] = set()
+    today_str = datetime.now(timezone.utc).date().isoformat()
+    formal_cutoff = (datetime.now(timezone.utc) - timedelta(days=config.FORMAL_DAYS)).date().isoformat()
+    pending: list[tuple[str, str]] = []
+    seen_u: set[tuple[str, str]] = set()
     for j in jobs:
+        if j.deadline and j.deadline < today_str:
+            continue
+        if not j.deadline and j.posted_at and j.posted_at[:10] < formal_cutoff:
+            continue
         u = da.strip_tracking(j.apply_url or "")
-        if not u or u in seen_u or u in cache:
+        ctry = getattr(j, "country", "sy") or "sy"
+        if not u or (u, ctry) in seen_u or (u, ctry) in cache:
             continue
         if da.is_disallowed_offline_url(u) or da._host(u) == "wa.me":
             continue
         if da.is_shortener(u) or da.is_wrapper_portal(u) or not da.is_direct_form_or_ats(u):
-            seen_u.add(u)
-            pending.append(u)
+            seen_u.add((u, ctry))
+            pending.append((u, ctry))
     if len(pending) <= 15:
         return
     tl = threading.local()
     lock = threading.Lock()
     clients: list[httpx.Client] = []
 
-    def _worker(u: str) -> tuple[str, dict]:
+    def _worker(pair: tuple[str, str]) -> tuple[tuple[str, str], dict]:
+        u, ctry = pair
         c = getattr(tl, "client", None)
         if c is None:
             c = httpx.Client(headers={"User-Agent": USER_AGENT}, timeout=12, verify=False, follow_redirects=True)
             tl.client = c
             with lock:
                 clients.append(c)
-        return u, da._resolve_url_live(u, c, {})
+        return pair, da._resolve_url_live(u, c, {}, country=ctry)
 
     try:
         with ThreadPoolExecutor(max_workers=max_workers) as pool:
-            for u, res in pool.map(_worker, pending):
-                cache[u] = res
+            for pair, res in pool.map(_worker, pending):
+                cache[pair] = res
     finally:
         for c in clients:
             c.close()
@@ -1220,6 +1230,13 @@ def fetch_all_web_portal_jobs(client: httpx.Client | None = None, cache: dict | 
                 all_jobs.extend(fn(client))
             except Exception as e:
                 log.warning("%s failed: %s", fn.__name__, e)
+        today_str = datetime.now(timezone.utc).date().isoformat()
+        formal_cutoff = (datetime.now(timezone.utc) - timedelta(days=config.FORMAL_DAYS)).date().isoformat()
+        all_jobs = [
+            j for j in all_jobs
+            if not (j.deadline and j.deadline < today_str)
+            and not (not j.deadline and j.posted_at and j.posted_at[:10] < formal_cutoff)
+        ]
         if isinstance(client, httpx.Client):
             _warm_resolve_cache(all_jobs, cache)
         return [j for j in all_jobs if da.resolve_job_apply(j, client=client, cache=cache)]

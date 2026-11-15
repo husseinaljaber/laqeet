@@ -57,8 +57,8 @@ SOURCE_LABEL = {v["source"]: v["label"] for v in CHANNELS.values()} | {
 }
 
 HISTORY_DAYS = int(os.getenv("HISTORY_DAYS", 183))      # show the last ~6 months
-QUICK_DAYS = int(os.getenv("QUICK_DAYS", 45))           # quick jobs expire 45 days after posting
-FORMAL_DAYS = int(os.getenv("FORMAL_DAYS", 60))         # formal jobs without a deadline: 60 days
+QUICK_DAYS = int(os.getenv("QUICK_DAYS", 14))           # quick jobs expire 14 days after posting
+FORMAL_DAYS = int(os.getenv("FORMAL_DAYS", 21))         # formal jobs without a deadline: 21 days
 UPDATE_MINUTES = int(os.getenv("UPDATE_MINUTES", 20))   # collector interval (every 20 minutes)
 REQUEST_GAP = float(os.getenv("REQUEST_GAP", 1.2))      # seconds between requests to one host (≥1 s, be polite)
 REPORTS_TO_HIDE = int(os.getenv("REPORTS_TO_HIDE", 3))  # «بلّغ عن إعلان»: hide after this many reports

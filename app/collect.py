@@ -11,7 +11,9 @@ import gc
 import json
 import logging
 import re
+import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, timedelta, timezone
 
 import httpx
@@ -229,6 +231,10 @@ def collect(offline: bool = False, quick: bool = False) -> dict:
                     log.info("%s: %d jobs, %d new jobs", key, len(batch), new_count)
                 except Exception as e:
                     log.warning("%s collect failed: %s", key, e)
+            try:
+                stats["live_audit"] = verify_live_jobs(con, cache=resolve_cache, max_checks=100 if quick else 250)
+            except Exception as e:
+                log.warning("live_audit failed: %s", e)
         pruned = db.prune_old(con, config.HISTORY_DAYS)
         if pruned:
             log.info("pruned %d jobs older than %d days", pruned, config.HISTORY_DAYS)
@@ -242,6 +248,133 @@ def collect(offline: bool = False, quick: bool = False) -> dict:
         con.close()
         gc.collect()
     return stats
+
+
+def verify_live_jobs(con, cache: dict | None = None, max_checks: int = 120) -> dict:
+    """Periodically re-check live job URLs to expire closed postings and unwrap any lingering wrappers."""
+    cache = cache if cache is not None else {}
+    now_dt = datetime.now(timezone.utc)
+    today_str = now_dt.date().isoformat()
+    stale_cutoff = (now_dt - timedelta(hours=24)).isoformat(timespec="seconds")
+
+    rows = con.execute(
+        "SELECT id, country, data, posted_at, expires_on, deadline FROM jobs WHERE status='live'"
+    ).fetchall()
+    priority: list[tuple[int, str, dict]] = []
+    regular: list[tuple[int, str, dict]] = []
+    for r in rows:
+        try:
+            d = json.loads(r["data"])
+        except Exception:
+            continue
+        u = d.get("apply_url") or ""
+        if not u or u.startswith("https://wa.me/") or u.startswith("http://wa.me/"):
+            continue
+        if da.is_shortener(u) or da.is_wrapper_portal(u) or da.is_disallowed_offline_url(u) or not da.is_direct_form_or_ats(u):
+            priority.append((r["id"], r["country"] or "sy", d))
+        else:
+            ver_at = d.get("verified_at") or ""
+            if not ver_at or ver_at < stale_cutoff:
+                regular.append((r["id"], r["country"] or "sy", d))
+
+    targets = (priority + regular)[:max_checks]
+    if not targets:
+        return {"checked": 0, "expired": 0, "rejected": 0, "unwrapped": 0}
+
+    tl = threading.local()
+    lock = threading.Lock()
+    clients: list[httpx.Client] = []
+
+    def _check_one(item: tuple[int, str, dict]) -> tuple[int, str, dict, dict]:
+        jid, country, d = item
+        u = d.get("apply_url") or ""
+        c = getattr(tl, "client", None)
+        if c is None:
+            c = httpx.Client(headers={"User-Agent": USER_AGENT}, timeout=10.0, verify=False, follow_redirects=True)
+            tl.client = c
+            with lock:
+                clients.append(c)
+        res = da._resolve_url_live(u, c, {}, country=country)
+        return jid, country, d, res
+
+    checked_results: list[tuple[int, str, dict, dict]] = []
+    try:
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            checked_results = list(pool.map(_check_one, targets))
+    finally:
+        for c in clients:
+            c.close()
+
+    expired = rejected = unwrapped = 0
+    ver_iso = now_dt.isoformat(timespec="seconds")
+    for jid, country, d, res in checked_results:
+        orig_u = d.get("apply_url") or ""
+        if res.get("closed") or (res.get("dead") and not d.get("email") and not d.get("phones")):
+            d["apply_url"] = None
+            d["verified_at"] = ver_iso
+            con.execute(
+                "UPDATE jobs SET status='expired', expires_on=min(expires_on, ?), data=?, updated_at=? WHERE id=?",
+                (today_str, json.dumps(d, ensure_ascii=False), db.now(), jid),
+            )
+            expired += 1
+            continue
+
+        new_u = orig_u
+        changed = False
+        if res.get("dead") or res.get("status") in (404, 410):
+            new_u = None
+            changed = True
+        elif res.get("status") == 200:
+            if res.get("email") and not d.get("email"):
+                d["email"] = res["email"]
+                changed = True
+            if res.get("phones"):
+                merged_p = sorted({p for p in (d.get("phones") or []) + res["phones"] if p})
+                if merged_p != (d.get("phones") or []):
+                    d["phones"] = merged_p
+                    changed = True
+            cand = res.get("apply_url")
+            if cand and not da.is_strict_portal_wrapper(cand):
+                if cand != orig_u:
+                    unwrapped += 1
+                    changed = True
+                new_u = cand
+            elif (res.get("has_internal_form") and not da.is_strict_portal_wrapper(res["final_url"])) or da.is_direct_form_or_ats(res["final_url"]):
+                new_u = res["final_url"]
+                if new_u != orig_u:
+                    changed = True
+            else:
+                new_u = None
+                changed = True
+        elif da.is_shortener(orig_u) or da.is_strict_portal_wrapper(orig_u):
+            new_u = None
+            changed = True
+
+        if new_u and (da.is_disallowed_offline_url(new_u) or da.is_shortener(new_u) or da.is_strict_portal_wrapper(new_u)):
+            new_u = None
+            changed = True
+
+        d["apply_url"] = new_u
+        d["verified_at"] = ver_iso
+        if not (d.get("apply_url") or d.get("phones") or d.get("email")):
+            con.execute(
+                "UPDATE jobs SET status='rejected', data=?, updated_at=? WHERE id=?",
+                (json.dumps(d, ensure_ascii=False), db.now(), jid),
+            )
+            rejected += 1
+            continue
+
+        new_types = tx.infer_apply_types(d.get("apply_url"), d.get("phones") or [], bool(d.get("whatsapp")), d.get("email"))
+        d["apply_types"] = new_types
+        if changed:
+            con.execute(
+                "UPDATE jobs SET apply_types=?, data=?, updated_at=? WHERE id=?",
+                ("|" + "|".join(new_types) + "|" if new_types else "", json.dumps(d, ensure_ascii=False), db.now(), jid),
+            )
+        else:
+            con.execute("UPDATE jobs SET data=? WHERE id=?", (json.dumps(d, ensure_ascii=False), jid))
+    con.commit()
+    return {"checked": len(targets), "expired": expired, "rejected": rejected, "unwrapped": unwrapped}
 
 
 def reprocess() -> int:

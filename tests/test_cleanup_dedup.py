@@ -209,3 +209,112 @@ def test_generic_vs_cross_month_and_same_contact_dedup(tmp_path):
         cities=["دمشق"], country="sy", phones=["0933999888"],
     ))
     assert p_new1 is True and p_new2 is True and ph1 != ph2
+
+
+def test_worklink_closed_banner_and_strict_direct_apply_only():
+    from datetime import date, timedelta
+    import httpx
+    from app.sources import web_portals as wp
+
+    today_s = date.today().isoformat()
+    future_s = (date.today() + timedelta(days=15)).isoformat()
+    closed_worklink_html = f"""
+    <html><head><title>رئيس دائرة الخطط والمتابعة</title></head><body>
+      <div class="alert"><span>تم الانتهاء من التقديم على هذه الفرصة وهي لم تعد متاحة الآن</span></div>
+      <main>
+        <script type="application/ld+json">{{"@type":"JobPosting","title":"رئيس دائرة الخطط والمتابعة",
+          "description":"دمشق","datePosted":"{today_s}","validThrough":"{future_s}",
+          "hiringOrganization":{{"name":"وزارة التنمية الإدارية"}},
+          "jobLocation":[{{"address":{{"addressCountry":"SY","addressLocality":"دمشق"}}}}]}}</script>
+        <a href="https://apply.hiring.moad.gov.sy/single/98c785a437eb7769a5d5855d237c81fd">تقديم</a>
+      </main>
+    </body></html>
+    """
+    info = da.extract_apply_from_html(closed_worklink_html, "https://worklink.sy/jobs/demo")
+    assert info["closed"] is True
+    assert wp._parse_worklink_detail("https://worklink.sy/jobs/demo", closed_worklink_html, today_s) is None
+
+    def handler(req: httpx.Request) -> httpx.Response:
+        u = str(req.url)
+        if "worklink.sy" in u:
+            return httpx.Response(200, headers={"content-type": "text/html"}, text=closed_worklink_html)
+        if "reliefweb.int" in u or "jobinsyria.com" in u:
+            return httpx.Response(202, headers={"content-type": "text/html"}, text="waf")
+        return httpx.Response(404)
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as c:
+        j_wl = Job(title="رئيس دائرة الخطط والمتابعة", source="sy_jobb", post_url="https://t.me/sy_jobb/1",
+                   apply_url="https://worklink.sy/jobs/demo")
+        assert da.resolve_job_apply(j_wl, client=c, cache={}) is False
+
+        # WAF 202 / failed fetch on wrapper must never leave wrapper URL as apply_url
+        j_rw = Job(title="MEAL Officer", source="reliefweb", post_url="https://reliefweb.int/job/1",
+                   apply_url="https://reliefweb.int/job/1")
+        assert da.resolve_job_apply(j_rw, client=c, cache={}) is False
+        j_rw_email = Job(title="MEAL Officer", source="wazafne", post_url="https://t.me/w/1",
+                         apply_url="https://reliefweb.int/job/1", email="hr@ngo.org")
+        assert da.resolve_job_apply(j_rw_email, client=c, cache={}) is True
+        assert j_rw_email.apply_url is None
+
+    # Offline strict gate blocks wrappers, shorteners, aggregators, and Google Maps pins
+    for bad in (
+        "https://worklink.sy/jobs/1",
+        "https://jobinsyria.com/job/1",
+        "https://reliefweb.int/job/1",
+        "https://unjobs.org/vacancies/1",
+        "https://jobsintr.net/jobs/fvsales",
+        "https://bit.ly/abc123",
+        "https://shorturl.at/xyz",
+        "https://maps.app.goo.gl/abc",
+        "https://spc.sy/",
+    ):
+        j_bad = Job(title="مهندس", source="wazafne", post_url="https://t.me/w/2", apply_url=bad)
+        assert da.resolve_job_apply(j_bad, client=None) is False
+
+
+def test_tightened_ttl_and_no_expired_zombie_resurrection(tmp_path):
+    from datetime import date, datetime, timedelta, timezone
+    from app import config
+
+    assert config.QUICK_DAYS <= 14
+    assert config.FORMAL_DAYS <= 21
+
+    con = db.connect(tmp_path / "ttl.db")
+    old_26d = (datetime.now(timezone.utc) - timedelta(days=26)).isoformat(timespec="seconds")
+    j_old = Job(
+        title="رئيس دائرة الخطط والمتابعة",
+        source="sy_jobb",
+        post_url="https://t.me/sy_jobb/99",
+        posted_at=old_26d,
+        cities=["دمشق"],
+        kind="formal",
+        apply_url="https://apply.hiring.moad.gov.sy/single/test123",
+    )
+    assert db.expires_on(j_old) < date.today().isoformat()
+    jid_old, _ = db.upsert(con, j_old)
+    assert db.expire_past(con) >= 1
+    assert con.execute("SELECT status FROM jobs WHERE id=?", (jid_old,)).fetchone()[0] == "expired"
+
+    # Expired official deadline cannot be resurrected by an undated duplicate mirror
+    past_dl = (date.today() - timedelta(days=5)).isoformat()
+    j_exp = Job(
+        title="أخصائي مشاريع تنموية في دمشق",
+        source="moad",
+        post_url="https://t.me/SyMOAD/1",
+        posted_at=(datetime.now(timezone.utc) - timedelta(days=10)).isoformat(timespec="seconds"),
+        cities=["دمشق"],
+        deadline=past_dl,
+        apply_url="https://apply.hiring.moad.gov.sy/single/exp123",
+    )
+    jid_exp, _ = db.upsert(con, j_exp, status="expired")
+    j_mirror = Job(
+        title="أخصائي مشاريع تنموية في دمشق",
+        source="sy_jobb",
+        post_url="https://t.me/sy_jobb/2",
+        posted_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        cities=["دمشق"],
+        apply_url="https://apply.hiring.moad.gov.sy/single/exp123",
+    )
+    jid_dup, is_new = db.upsert(con, j_mirror)
+    assert is_new is False and jid_dup == jid_exp
+    assert con.execute("SELECT status FROM jobs WHERE id=?", (jid_exp,)).fetchone()[0] == "expired"

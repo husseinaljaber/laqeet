@@ -269,12 +269,12 @@ def scrape_jobsintr_web(client: httpx.Client, max_pages: int = 4) -> list[Job]:
                 overview_node = ds.select_one(".job-overview")
                 overview_txt = overview_node.get_text("\n", strip=True) if overview_node else ""
                 body_lines = content_node.get_text("\n", strip=True)
-                full_text = f"{body_lines}\n{overview_txt}".strip() if overview_txt else body_lines
 
-                info = da.extract_apply_from_html(str(content_node), u, country="tr")
+                main_scope = ds.find("main") or ds.find("article") or ds
+                info = da.extract_apply_from_html(str(main_scope), u, country="tr")
                 apply_u = info.get("apply_url")
-                if not apply_u and da._has_application_form(ds):
-                    apply_u = u
+                if info.get("closed"):
+                    continue
 
                 job = _build_tr_job(
                     title=raw_title,
@@ -586,7 +586,8 @@ def fetch_all_tr_portal_jobs(
                 jobs.extend(res)
             except Exception as e:
                 log.warning("TR portal %s failed: %s", name, e)
+        res_cache = cache if cache is not None else {}
+        return [j for j in jobs if da.resolve_job_apply(j, client=cli, cache=res_cache)]
     finally:
         if close_after:
             cli.close()
-    return jobs

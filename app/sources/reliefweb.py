@@ -68,6 +68,22 @@ def parse_reliefweb_rss(xml_text: str) -> list[Job]:
             raw_html = html.unescape(desc)
             info = da.extract_apply_from_html(raw_html, url) if raw_html else {}
             desc_clean = re.sub(r"<[^>]+>", " ", raw_html)
+            if employer == "منظمة دولية / وكالة أممية":
+                m_org = re.search(r"Organization:\s*([^\n<]+)", desc_clean)
+                if m_org and m_org.group(1).strip():
+                    employer = m_org.group(1).strip()
+
+            deadline = None
+            m_close = re.search(r"Closing date:\s*(\d{1,2}\s+[A-Za-z]{3,9}\s+\d{4})", desc_clean)
+            if m_close:
+                for fmt in ("%d %b %Y", "%d %B %Y"):
+                    try:
+                        deadline = datetime.strptime(m_close.group(1).strip(), fmt).date().isoformat()
+                        break
+                    except ValueError:
+                        continue
+            if deadline and deadline < datetime.now(timezone.utc).date().isoformat():
+                continue
 
             # Date
             posted_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
@@ -130,6 +146,7 @@ def parse_reliefweb_rss(xml_text: str) -> list[Job]:
                 details_url=url,
                 phones=phones,
                 email=email,
+                deadline=deadline,
                 apply_types=app_types,
                 experience=exp,
                 confidence=0.9,

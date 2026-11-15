@@ -435,7 +435,7 @@ def employer_post(request: Request, body: dict = Body(...)):
     parsed_phones = tx.phones(phone or "")
     if not title or not employer or not (phone or apply_url or email):
         raise HTTPException(400, "لازم المسمى واسم الجهة وطريقة تقديم (رقم تلفون أو رابط أو إيميل)")
-    if apply_url and da.is_disallowed_offline_url(apply_url):
+    if apply_url and (da.is_disallowed_offline_url(apply_url) or da.is_strict_portal_wrapper(apply_url) or da.is_shortener(apply_url)):
         raise HTTPException(400, "رابط التقديم لازم يكون فورم أو موقع توظيف مباشر، مو صفحة تواصل اجتماعي أو منصة تجميع")
     if email and "@" not in email:
         raise HTTPException(400, "صيغة الإيميل غير صحيحة")

@@ -34,7 +34,7 @@ _SOCIAL_HOSTS = {
 _AGGREGATOR_HOSTS = {
     "tawzeefportal.com", "job.sy", "hanwazafak.com", "baaeed.com", "indeed.com",
     "eg.indeed.com", "tr.indeed.com", "jooble.org", "bayt.com", "wuzzuf.net", "forasna.com",
-    "akhtaboot.com", "tanqeeb.com", "unjobnet.org", "gulftalent.com",
+    "akhtaboot.com", "tanqeeb.com", "unjobnet.org", "unjobs.org", "gulftalent.com",
     "naukrigulf.com", "linkedin.com", "glassdoor.com", "remotive.com",
     "freelancer.com", "upwork.com", "mostaql.com", "khamsat.com",
     "syrianjobs.net", "jobs.sy", "phoenijobs.sy", "lmo.sy",
@@ -44,41 +44,44 @@ _AGGREGATOR_HOSTS = {
 
 _SHORTENER_HOSTS = {
     "bit.ly", "shorturl.at", "tinyurl.com", "share.google", "cutt.ly",
-    "is.gd", "rebrand.ly", "rb.gy", "t.co", "ow.ly", "lnkd.in", "tr.ee", "goo.gl", "q.me-qr.com",
+    "is.gd", "rebrand.ly", "rb.gy", "t.co", "ow.ly", "lnkd.in", "tr.ee", "goo.gl", "q.me-qr.com", "unf.pa",
 }
 
-_WRAPPER_HOSTS = {
-    "ataarelief.org", "worklink.sy", "ngosquare.com", "sarc.sy", "shafak.org",
-    "srd.org.tr", "ahf.ngo", "dan-ngo.org", "sanad.ngo", "sened.ngo", "bahar.ngo", "sema-sy.org",
-    "ida-org.com", "mikrotiksyria.com", "reliefweb.int", "sana.sy", "mohe.gov.sy",
-    "spu.edu.sy", "unicef.org", "solidarites.org", "acu-sy.org", "beyazeller.org",
-    "ipv-sy.org", "medglobal.org", "ghirasalkhaeer.com", "sycac.org", "ghawth.org",
-    "salam-sy.org", "medica.sy", "lgsprefabsy.com", "almaqala.blog", "arabicline.com",
-    "sqrjobs.net", "jobsyria.org", "nsjobs.net", "jobinsyria.com", "ngossyria.com",
-    "syria.un.org", "au.edu.sy", "jude.edu.sy",
+_STRICT_PORTAL_HOSTS = {
+    "worklink.sy", "jobinsyria.com", "reliefweb.int", "unjobs.org", "ngosquare.com",
+    "jobsyria.org", "nsjobs.net", "ngossyria.com", "syria.un.org", "sqrjobs.net",
     "jobsintr.net", "salamjobs.com", "adwhit.com", "ab-ilan.com",
+    "sana.sy", "mohe.gov.sy", "spu.edu.sy", "au.edu.sy", "jude.edu.sy", "spc.sy",
+    "mikrotiksyria.com", "lgsprefabsy.com", "almaqala.blog", "arabicline.com",
+}
+
+_WRAPPER_HOSTS = _STRICT_PORTAL_HOSTS | {
+    "ataarelief.org", "sarc.sy", "shafak.org", "srd.org.tr", "ahf.ngo", "dan-ngo.org",
+    "sanad.ngo", "sened.ngo", "bahar.ngo", "sema-sy.org", "ida-org.com",
+    "solidarites.org", "acu-sy.org", "beyazeller.org", "ipv-sy.org", "medglobal.org",
+    "ghirasalkhaeer.com", "sycac.org", "ghawth.org", "salam-sy.org", "medica.sy", "acted.org",
 }
 
 _DIRECT_FORM_OR_ATS_RE = re.compile(
     r"(?:docs\.google\.com/forms|forms\.gle|forms\.office\.com|forms\.cloud\.microsoft|"
     r"ee(?:-eu)?\.kobotoolbox\.org|ee\.humanitarianresponse\.info|enketo\.ona\.io|"
     r"(?:form\.)?jotform\.com|typeform\.com|airtable\.com/(?:app|shr)|tally\.so|surveymonkey\.com|"
-    r"zfrmz\.com|script\.google\.com/macros/|"
+    r"zfrmz\.com|script\.google\.com/macros/|form\.goldyol\.com|"
     r"apply\.hiring\.moad\.gov\.sy|moad\.gov\.sy/recruitment/jobs|recruitment\.ssf\.gov\.sy|"
-    r"career\.ihsanrd\.org|jobs\.unicef\.org|careers\.un\.org|inspira\.un\.org/psp/.+HRS_JOB_OPENING_ID|"
-    r"bamboohr\.com|hrpeak\.com|hr-manager\.net|baseilowcloud\.com|emply\.com|jobs\.tdh\.org|"
+    r"career\.ihsanrd\.org|jobs\.unicef\.org|careers\.un\.org|careers\.unops\.org|jobs\.oxfam\.org|"
+    r"inspira\.un\.org/psp/.+HRS_JOB_OPENING_ID|"
+    r"bamboohr\.com|hrpeak\.com|hr-manager\.net|baseilowcloud\.com|emply\.com|jobs\.tdh\.org|jobvite\.com|"
     r"greenhouse\.io|lever\.co|myworkdayjobs\.com|myworkdaysite\.com|smartrecruiters\.com|workable\.com|"
     r"recruitee\.com|taleo\.net|successfactors\.(?:com|eu)|oraclecloud\.com|ultipro\.com|csod\.com|"
     r"zohorecruit\.com|odoo\.com/jobs|webcruiter\.no|employ\.acf-e\.org|careers-page\.com|"
     r"sams-hr\.com|talkpu\.sh|erp\.bonyan-ngo\.org|sssd-ngo\.net|alignerr\.com|mercor\.com|creativetaskflow\.com|"
-    r"sened\.org\.tr/job_ad/|jobsintr\.net/jobs/[A-Za-z0-9_-]+$|"
-    r"ee\.moi-sy\.com|au\.edu\.sy/job/)",
+    r"sened\.org\.tr/job_ad/|ee\.moi-sy\.com)",
     re.I,
 )
 
 _NON_JOB_LANDING_RE = re.compile(
     r"(?:/account/(?:applicants|login|register)|/recruiting-agencies/?$|ab-ilan\.com/ngocareers/?$|"
-    r"inspira\.un\.org/psp/[^/]+/\?cmd=login|cibeg\.taleo\.net|"
+    r"inspira\.un\.org/psp/[^/]+/\?cmd=login|cibeg\.taleo\.net|jobs\.unicef\.org/jobs/search/?$|"
     r"mahereen\.com/login|salamjobs\.com/login|jobsintr\.net/(?:account|login|register))",
     re.I,
 )
@@ -103,9 +106,13 @@ _BROWSER_HEADERS = {
 }
 
 _CLOSED_PAGE_RE = re.compile(
-    r"no longer accepting applications|this job has expired|expired job|position has been filled|"
-    r"انتهى موعد التقديم|تم إغلاق الشاغر|تمت تعبئة الشاغر|الشاغر لم يعد متاح|"
-    r"başvuru süresi dolmuştur|ilan yayından kaldırılmıştır|ilan süresi doldu",
+    r"no longer accepting (?:applications|responses)|this job has expired|expired job|position has been filled|"
+    r"application already expired|opportunity is no longer available|this job is closed|"
+    r"vacancy (?:is )?closed|applications? (?:are|is) (?:now )?closed|"
+    r"تم الانتهاء من التقديم|لم تعد متاح[ةه]?|انتهى موعد التقديم|انتهى التقديم|انتهت صلاحية|"
+    r"تم [إا]غلاق (?:الشاغر|التقديم|الفرصة)|تم [إا]يقاف التقديم|تمت تعبئة الشاغر|الشاغر لم يعد متاح|"
+    r"فرصة منتهية|لم يعد هذا النموذج يقبل|لم يعد يقبل ردود|"
+    r"başvuru süresi dolmuştur|ilan yayından kaldırılmıştır|ilan süresi doldu|başvurular sona ermiştir",
     re.I,
 )
 
@@ -152,9 +159,11 @@ def is_social_or_channel(url: str) -> bool:
 def is_file_folder_or_viewer(url: str) -> bool:
     h = _host(url)
     u = url.lower()
-    if h == "drive.google.com" or h == "docs.google.com" and "/forms" not in u:
+    if h == "drive.google.com" or (h == "docs.google.com" and "/forms" not in u):
         return True
-    if h.endswith("sharepoint.com") or h == "dropbox.com":
+    if h.endswith("sharepoint.com") or h == "onedrive.live.com" or h == "dropbox.com":
+        return True
+    if h in ("maps.app.goo.gl", "maps.google.com") or (h == "goo.gl" and "/maps" in u) or ("/maps/" in u and "google." in h):
         return True
     return False
 
@@ -167,12 +176,16 @@ def is_shortener(url: str) -> bool:
     return _matches_domain_set(_host(url), _SHORTENER_HOSTS)
 
 
+def is_strict_portal_wrapper(url: str) -> bool:
+    return _matches_domain_set(_host(url), _STRICT_PORTAL_HOSTS)
+
+
 def is_wrapper_portal(url: str) -> bool:
     return _matches_domain_set(_host(url), _WRAPPER_HOSTS)
 
 
 def is_direct_form_or_ats(url: str) -> bool:
-    if is_social_or_channel(url) or is_aggregator_or_wall(url) or is_file_folder_or_viewer(url):
+    if is_social_or_channel(url) or is_aggregator_or_wall(url) or is_file_folder_or_viewer(url) or is_strict_portal_wrapper(url):
         return False
     if _DIRECT_FORM_OR_ATS_RE.search(url):
         return True
@@ -215,12 +228,16 @@ def _good_email(em: str) -> bool:
     return bool(re.fullmatch(r"[\w.+-]+@[\w-]+\.[a-z]{2,}", low, re.I))
 
 
-def _has_application_form(soup: BeautifulSoup) -> bool:
-    """True when the page embeds an actual job application HTML form (not search/login/newsletter)."""
+def _has_application_form(soup: BeautifulSoup, page_url: str = "") -> bool:
+    """True when the page embeds an actual direct application HTML form (never on third-party wrapper boards)."""
+    if page_url and is_strict_portal_wrapper(page_url):
+        return False
     for form in soup.find_all("form"):
         cls_id = " ".join(form.get("class") or []) + " " + (form.get("id") or "") + " " + (form.get("action") or "")
         if re.search(r"search|login|register|newsletter|subscribe|comment|forgot|filter|s=", cls_id, re.I):
             continue
+        if re.search(r"formio|hr_recruitment|/website/form/", cls_id, re.I):
+            return True
         if form.find("input", attrs={"type": "file"}):
             return True
         inputs = [i.get("name", "") + " " + i.get("placeholder", "") + " " + i.get("type", "")
@@ -235,7 +252,7 @@ def _score_candidate_link(href: str, text: str, page_url: str) -> int:
     """Rank external/anchor candidates found on a job page; higher is better, <=0 ignored."""
     low_href = href.lower()
     low_txt = text.lower()
-    if low_href.startswith(("#", "javascript:", "tel:", "mailto:")) or "wa.me/" in low_href or "whatsapp.com/" in low_href:
+    if low_href.startswith(("#", "javascript:", "tel:", "mailto:")) or "wa.me/" in low_href or "whatsapp.com/" in low_href or "/cdn-cgi/l/email-protection" in low_href:
         return 0
     full = urljoin(page_url, href)
     if not full.startswith(("http://", "https://")):
@@ -245,7 +262,7 @@ def _score_candidate_link(href: str, text: str, page_url: str) -> int:
     # Avoid self links, pagination, language switchers, category pages, and cross-portal promo cards
     page_host = _host(page_url)
     full_host = _host(full)
-    if full_host != page_host and full_host == "jobsintr.net" and "/jobs/" in low_href and page_host in ("salamjobs.com", "adwhit.com", "mahereen.com", "wazifturk.com"):
+    if is_strict_portal_wrapper(full) and full_host != page_host:
         return 0
     if urlparse(full).path.rstrip("/") == urlparse(page_url).path.rstrip("/"):
         return 0
@@ -263,6 +280,7 @@ def _score_candidate_link(href: str, text: str, page_url: str) -> int:
 def extract_apply_from_html(html_text: str, page_url: str, country: str = "sy") -> dict:
     """Pull direct form/ATS URLs, career emails, phones, and internal form signal from HTML."""
     soup = BeautifulSoup(html_text, "html.parser")
+    page_title = soup.title.get_text(" ", strip=True) if soup.title else ""
     for noise in soup.select(
         ".sj-card, .similar, .similar-jobs, .related, .related-jobs, .sidebar, "
         "[class*='sidebar'], [class*='related'], [class*='similar'], "
@@ -271,7 +289,9 @@ def extract_apply_from_html(html_text: str, page_url: str, country: str = "sy") 
         noise.decompose()
     main_node = soup.find("article") or soup.find("main") or soup.select_one(".entry-content,.post-content,.job-description,.ck-content,.content-single") or soup
     main_text = main_node.get_text(" ", strip=True)
-    closed = bool(_CLOSED_PAGE_RE.search(main_text or soup.get_text(" ", strip=True)))
+    # Check closed/expired banners across de-noised body & title (covers top alert banners outside <main>/<article>).
+    closed_haystack = " ".join(x for x in (page_title, main_text, soup.get_text(" ", strip=True)) if x)
+    closed = bool(_CLOSED_PAGE_RE.search(closed_haystack))
     phone_fn = tx.phones_tr if country == "tr" else tx.phones
 
     best_url = None
@@ -335,11 +355,12 @@ def extract_apply_from_html(html_text: str, page_url: str, country: str = "sy") 
                 best_url = strip_tracking(u)
                 break
 
+    has_form = _has_application_form(main_node, page_url) or (main_node is not soup and _has_application_form(soup, page_url))
     return {
         "apply_url": best_url,
         "email": emails[0] if emails else None,
         "phones": phones,
-        "has_internal_form": _has_application_form(main_node),
+        "has_internal_form": has_form,
         "closed": closed,
     }
 
@@ -350,6 +371,14 @@ def _resolve_url_live(url: str, client: httpx.Client, cache: dict, depth: int = 
     if cache_key in cache:
         return cache[cache_key]
     res = {"status": 0, "final_url": url, "apply_url": None, "email": None, "phones": [], "has_internal_form": False, "closed": False, "dead": False}
+    if "/cdn-cgi/l/email-protection#" in url.lower():
+        em = _decode_cf_email(url.split("#", 1)[1].split("?", 1)[0])
+        if _good_email(em):
+            res["email"] = em
+        else:
+            res["dead"] = True
+        cache[cache_key] = res
+        return res
     try:
         r = client.get(url, headers=_BROWSER_HEADERS, timeout=12, follow_redirects=True)
         res["status"] = r.status_code
@@ -363,19 +392,49 @@ def _resolve_url_live(url: str, client: httpx.Client, cache: dict, depth: int = 
             res["dead"] = True
             cache[cache_key] = res
             return res
+        ct = r.headers.get("content-type", "").lower()
+        is_html = r.status_code == 200 and "html" in ct
+        if "/closedform" in final.lower():
+            res["closed"] = True
+            cache[cache_key] = res
+            return res
         if is_direct_form_or_ats(final):
+            if is_html:
+                page_html = r.content.decode("utf-8", "replace") if (r.encoding or "").lower() in ("", "iso-8859-1", "latin-1") else r.text
+                if _CLOSED_PAGE_RE.search(page_html):
+                    res["closed"] = True
+                    cache[cache_key] = res
+                    return res
             res["apply_url"] = final
             cache[cache_key] = res
             return res
-        if r.status_code == 200 and "html" in r.headers.get("content-type", "").lower():
+        if is_html:
             page_html = r.content.decode("utf-8", "replace") if (r.encoding or "").lower() in ("", "iso-8859-1", "latin-1") else r.text
             info = extract_apply_from_html(page_html, final, country=country)
             res.update(info)
-            if res["apply_url"] and is_shortener(res["apply_url"]) and depth < 1:
-                sub = _resolve_url_live(res["apply_url"], client, cache, depth + 1, country=country)
-                if sub.get("apply_url"):
+            if res["closed"]:
+                cache[cache_key] = res
+                return res
+            next_u = res["apply_url"]
+            if (
+                next_u
+                and depth < 2
+                and (is_shortener(next_u) or (is_wrapper_portal(next_u) and not is_direct_form_or_ats(next_u)))
+            ):
+                sub = _resolve_url_live(next_u, client, cache, depth + 1, country=country)
+                if sub.get("closed"):
+                    res["closed"] = True
+                    res["apply_url"] = None
+                elif sub.get("apply_url"):
                     res["apply_url"] = sub["apply_url"]
-                elif sub.get("dead"):
+                elif sub.get("email") or sub.get("phones"):
+                    res["apply_url"] = None
+                    if not res.get("email") and sub.get("email"):
+                        res["email"] = sub["email"]
+                    res["phones"] = sorted(set((res.get("phones") or []) + (sub.get("phones") or [])))
+                elif sub.get("has_internal_form") and not is_strict_portal_wrapper(sub.get("final_url") or ""):
+                    res["apply_url"] = sub["final_url"]
+                elif sub.get("dead") or is_shortener(next_u) or is_strict_portal_wrapper(next_u) or sub.get("status") != 200:
                     res["apply_url"] = None
     except Exception as e:
         log.debug("resolve %s failed: %s", url, e)
@@ -383,12 +442,12 @@ def _resolve_url_live(url: str, client: httpx.Client, cache: dict, depth: int = 
     return res
 
 
-def resolve_job_apply(job: Job, client: httpx.Client | None = None, cache: dict | None = None) -> bool:
+def resolve_job_apply(job: Job, client: httpx.Client | None = None, cache: dict | None = None, strict: bool = True) -> bool:
     """Normalize/unwrap a job's apply link and return True iff it has a real way to apply."""
     cache = cache if cache is not None else {}
     country = "tr" if getattr(job, "country", "sy") == "tr" else "sy"
 
-    # 1. Clean URLs, rescue email mistyped as URL, & extract embedded wa.me phones
+    # 1. Clean URLs, rescue email mistyped as URL, & extract embedded wa.me / api.whatsapp.com phones
     if job.email:
         em = job.email.strip()
         job.email = em if _good_email(em) else None
@@ -403,23 +462,32 @@ def resolve_job_apply(job: Job, client: httpx.Client | None = None, cache: dict 
     if job.details_url:
         job.details_url = strip_tracking(job.details_url) or None
     if job.apply_url:
-        for p in extract_phone_from_wa(job.apply_url, country=country):
-            if p not in job.phones:
-                job.phones.append(p)
-        job.phones = sorted(set(job.phones))
+        wa_p = extract_phone_from_wa(job.apply_url, country=country)
+        if wa_p:
+            job.whatsapp = True
+            for p in wa_p:
+                if p not in job.phones:
+                    job.phones.append(p)
+            job.phones = sorted(set(job.phones))
+            if _host(job.apply_url) == "api.whatsapp.com":
+                job.apply_url = None
 
-    # 2. Enforce static rejections (aggregators, social, channels, folders/drive viewers)
+    # 2. Enforce static rejections (aggregators, social, channels, folders/maps)
     if job.apply_url and is_disallowed_offline_url(job.apply_url):
-        if is_file_folder_or_viewer(job.apply_url) and not job.details_url:
-            job.details_url = job.apply_url
         job.apply_url = None
 
     # 3. Live resolution for shorteners, wrapper pages, and unverified generic URLs when online client is passed
+    verified_live = False
     should_resolve = (
         client is not None
         and job.apply_url
-        and not _host(job.apply_url) == "wa.me"
-        and (is_shortener(job.apply_url) or is_wrapper_portal(job.apply_url) or not is_direct_form_or_ats(job.apply_url))
+        and _host(job.apply_url) not in ("wa.me", "api.whatsapp.com")
+        and (
+            is_shortener(job.apply_url)
+            or is_strict_portal_wrapper(job.apply_url)
+            or is_wrapper_portal(job.apply_url)
+            or not is_direct_form_or_ats(job.apply_url)
+        )
     )
     if should_resolve:
         orig = job.apply_url
@@ -439,12 +507,14 @@ def resolve_job_apply(job: Job, client: httpx.Client | None = None, cache: dict 
                     job.phones.append(p)
             job.phones = sorted(set(job.phones))
 
-            if res["apply_url"]:
+            if res["apply_url"] and not is_strict_portal_wrapper(res["apply_url"]):
                 if orig != res["apply_url"] and not job.details_url and not is_shortener(orig):
                     job.details_url = orig
                 job.apply_url = res["apply_url"]
-            elif res["has_internal_form"] or is_direct_form_or_ats(res["final_url"]):
+                verified_live = True
+            elif (res["has_internal_form"] and not is_strict_portal_wrapper(res["final_url"])) or is_direct_form_or_ats(res["final_url"]):
                 job.apply_url = res["final_url"]
+                verified_live = True
             elif res["email"] or res["phones"]:
                 # Applying is via email or phone on the detail page; move article link to details_url.
                 if not job.details_url:
@@ -453,17 +523,24 @@ def resolve_job_apply(job: Job, client: httpx.Client | None = None, cache: dict 
             else:
                 # Page returned 200 OK and had NO form, NO apply link, NO email, NO phone.
                 job.apply_url = None
-        elif is_shortener(orig):
-            # Unreachable/blocked shortener cannot safely be kept as direct link.
-            job.apply_url = None
-        elif is_wrapper_portal(orig) and (job.email or job.phones):
-            if not job.details_url:
-                job.details_url = orig
-            job.apply_url = None
+        else:
+            # Non-200 / WAF 202 / timeout on wrapper or shortener or unverified portal: never expose unverified wrapper as apply_url.
+            if is_shortener(orig) or is_wrapper_portal(orig) or not is_direct_form_or_ats(orig):
+                if is_wrapper_portal(orig) and (job.email or job.phones) and not job.details_url:
+                    job.details_url = orig
+                job.apply_url = None
 
-    # 4. Final strict requirement: MUST have at least ONE real direct contact/apply method
+    # 4. Final strict guarantee: apply_url must NEVER remain a shortener or intermediary wrapper portal
     if job.apply_url and is_disallowed_offline_url(job.apply_url):
         job.apply_url = None
+    if strict and job.apply_url:
+        if (
+            is_shortener(job.apply_url)
+            or is_strict_portal_wrapper(job.apply_url)
+            or (is_wrapper_portal(job.apply_url) and not is_direct_form_or_ats(job.apply_url) and not verified_live)
+        ):
+            job.apply_url = None
+
     has_way = bool(job.apply_url or job.phones or job.email)
     if not has_way:
         return False

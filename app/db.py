@@ -684,16 +684,22 @@ def upsert(con: sqlite3.Connection, job: Job, status: str | None = None) -> tupl
         )
         merged["country"] = job.country
         today_str = date.today().isoformat()
-        new_exp = max(row["expires_on"] or "", expires_on(job))
-        eff_dl = merged.get("deadline") or row["deadline"]
-        if eff_dl:
-            new_exp = min(new_exp, eff_dl)
-        still_open = new_exp >= today_str and not (eff_dl and eff_dl < today_str)
-        new_status = status if status is not None else (
-            "live" if row["status"] == "expired" and still_open else (
-                "expired" if row["status"] == "live" and not still_open else row["status"]
+        old_expired_dl = bool(row["deadline"] and row["deadline"] < today_str)
+        has_valid_new_dl = bool(jd.get("deadline") and jd["deadline"] >= today_str and (not old_expired_dl or job.official))
+        eff_dl = jd.get("deadline") if has_valid_new_dl else (row["deadline"] or jd.get("deadline"))
+        if row["status"] == "expired" and not has_valid_new_dl:
+            new_exp = row["expires_on"] or expires_on(job)
+            new_status = "expired"
+        else:
+            new_exp = max(row["expires_on"] or "", expires_on(job))
+            if eff_dl:
+                new_exp = min(new_exp, eff_dl)
+            still_open = new_exp >= today_str and not (eff_dl and eff_dl < today_str)
+            new_status = status if status is not None else (
+                "live" if row["status"] == "expired" and still_open else (
+                    "expired" if row["status"] == "live" and not still_open else row["status"]
+                )
             )
-        )
         merged_cities_str = "|" + "|".join(merged.get("cities") or []) + "|" if merged.get("cities") else ""
         con.execute(
             "UPDATE jobs SET title=?, cities=?, data=?, country=?, sector=?, apply_types=?, deadline=?, expires_on=?, status=?, updated_at=? WHERE id=?",

@@ -347,14 +347,6 @@ dialog::backdrop{background:rgba(4,12,9,.65);backdrop-filter:blur(2px)}
 .lp-radar-core b{font-size:.76rem;color:#fff;margin-top:2px}
 .lp-radar-core small{font-size:.64rem;color:var(--mint)}
 
-/* Live City & Specialty Ticker */
-.lp-ticker-bar{background:#091712;border-bottom:1px solid var(--line);padding:10px 0;overflow:hidden}
-.lp-ticker-track{display:flex;gap:12px;width:max-content;padding-inline:16px}
-.lp-tick-item{all:unset;cursor:pointer;display:inline-flex;align-items:center;gap:6px;padding:5px 14px;border-radius:999px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.12);color:#EAF4EF;font-size:.82rem;font-weight:600;white-space:nowrap;transition:all .15s}
-.lp-tick-item:hover{background:var(--mint);color:#06140F;border-color:var(--mint)}
-.lp-tick-item.tr{border-color:rgba(248,113,113,.3)}
-.lp-tick-item.tr:hover{background:#EF4444;color:#fff;border-color:#EF4444}
-
 /* Landing Main Content Sections */
 .lp-main{padding-block:36px 24px;display:flex;flex-direction:column;gap:42px}
 .lp-section{display:flex;flex-direction:column;gap:20px}

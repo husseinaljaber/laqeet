@@ -16,7 +16,7 @@ __pycache__/
 .DS_Store
 Thumbs.db
 
-# Runtime SQLite database & scraped raw caches (seed_jobs.json.gz is tracked for instant cloud bootstrap)
+# Runtime SQLite database & scraped raw caches (seed_jobs.jsonl.gz is tracked for instant cloud bootstrap)
 data/laqeet.db*
 data/*.old
 data/pdfs/

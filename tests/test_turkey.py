@@ -158,3 +158,77 @@ def test_stats_by_country_returns_isolated_turkey_and_syria_sector_counts(tmp_pa
         api._stats_cache.clear()
         api.con = old_con
         tmp_db.close()
+
+
+def test_deadline_expiry_and_turkey_multi_province_city_filter(tmp_path):
+    from datetime import datetime, timezone
+    from fastapi.testclient import TestClient
+    from app import api, db
+
+    now_iso = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    tmp_db = db.connect(tmp_path / "expiry_city.db")
+    old_con = api.con
+    api.con = tmp_db
+    api._stats_cache.clear()
+    try:
+        j_past_dl = Job(
+            title="منتهي الموعد", source="wazafne", post_url="https://t.me/s/w/901",
+            posted_at=now_iso, country="sy", cities=["دمشق"],
+            deadline="2020-01-01", email="hr@old.sy",
+        )
+        jid_past, _ = db.upsert(tmp_db, j_past_dl)
+        # Simulate a stale seed row whose expires_on had previously drifted past deadline
+        tmp_db.execute("UPDATE jobs SET expires_on='2099-01-01', status='live' WHERE id=?", (jid_past,))
+        db.upsert(tmp_db, Job(
+            title="محاسب إسطنبول فقط", source="salamjobs", post_url="https://salamjobs.com/j/902",
+            posted_at=now_iso, country="tr", cities=["إسطنبول"], phones=["05343806011"], whatsapp=True,
+        ))
+        db.upsert(tmp_db, Job(
+            title="منسق عمليات عدة ولايات", source="jobsintr", post_url="https://t.me/s/jobsintr/903",
+            posted_at=now_iso, country="tr", cities=["عدة ولايات في تركيا"], phones=["05385844484"], whatsapp=True,
+        ))
+        tmp_db.commit()
+
+        c = TestClient(api.app)
+        # Query excludes past-deadline row even before expire_past runs
+        sy_jobs = c.get("/api/jobs", params={"country": "sy"}).json()
+        assert sy_jobs["total"] == 0
+
+        # City filter in Turkey returns nationwide TR jobs alongside province matches
+        tr_ant = c.get("/api/jobs", params={"country": "tr", "city": "غازي عنتاب"}).json()
+        assert [j["title"] for j in tr_ant["jobs"]] == ["منسق عمليات عدة ولايات"]
+
+        # db.expire_past marks stale past-deadline row expired
+        assert db.expire_past(tmp_db) == 1
+        assert tmp_db.execute("SELECT status FROM jobs WHERE id=?", (jid_past,)).fetchone()["status"] == "expired"
+    finally:
+        api._stats_cache.clear()
+        api.con = old_con
+        tmp_db.close()
+
+
+def test_extract_rejects_section_headings_and_preserves_clean_jobs():
+    # Heading ordinal post must extract only the actual title, never section headings
+    post_text = (
+        "📢 إعلان شاغر وظيفي\n"
+        "يعلن مركز التعليم عن توفر شاغر وظيفي بمسمى:\n"
+        "🔹 أخصائي إعداد المناهج والبرامج التعليمية\n"
+        "أولا: المهام والمسؤوليات\n"
+        "• إعداد المناهج\n"
+        "ثانيا: الشروط المطلوبة\n"
+        "• خبرة سنتين\n"
+        "ثالثا: المهارات المطلوبة\n"
+        "• العمل الجماعي\n"
+        "للتقديم: hr@example.org"
+    )
+    res = extract(post_text, "wazafne", "https://t.me/wazafne/999", posted_at="2026-11-14T10:00:00+00:00")
+    titles = [j.title for j in res]
+    assert "أخصائي إعداد المناهج والبرامج التعليمية" in titles
+    assert not any(bad in t for t in titles for bad in ("المهام والمسؤوليات", "الشروط المطلوبة", "المهارات المطلوبة"))
+
+    # Anti-false-positive spam checks vs real scam detection
+    assert not spam.is_spam("مطلوب مراسل لدى وزارة التنمية لضمان سرعة التداول وسلامة المحتوى الرسمي التقديم مباشر")
+    assert not spam.is_spam("مطلوب موظفة تنظيف مكتب في صحنايا واعتذري عن أي طلب لدفع مبلغ مقابل التوظيف للتواصل 0933112233")
+    assert not spam.is_spam("مطلوب مدرب حلاقة رجالية لتقديم تدريب عملي في القص والتسريح والعناية بالبشرة منظمة شفق hr@shafak.org")
+    assert spam.is_spam("مطلوب مسوقين لتداول العملات الرقمية والفوركس على بينانس بربح يومي بدون رأس مال")
+    assert spam.is_spam("فرصة ربح يومي بدون ايداع مع شجرة الأعضاء وبونص شهري وتسويق شبكي")

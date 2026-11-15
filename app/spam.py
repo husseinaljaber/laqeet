@@ -7,7 +7,7 @@ from .arabic import soft_fold as fold
 
 # Each pattern adds to a score. A post at or above THRESHOLD is hidden from the site and the bot.
 _SIGNALS = [
-    (3, r"binance|بينانس|باينانس|كريبتو|crypto|عملات رقميه|usdt|بيتكوين|bitcoin|تداول|فوركس|forex|xauusd|ذهب فوركس|وساطه ماليه",
+    (3, r"binance|بينانس|باينانس|كريبتو|crypto|عملات رقميه|usdt|بيتكوين|bitcoin|تداول (?:العملات|الذهب|الاسهم|عبر|الكتروني|فوركس|رقم)|منص[هة] تداول|التداول (?:الالكتروني|عبر الانترنت)|فوركس|forex|xauusd|ذهب فوركس|وساطه ماليه",
      "يذكر عملات رقمية أو منصات تداول / فوركس (XAUUSD / Binance)"),
     (3, r"اربح|ربح يومي|دخل يومي|بدون راس مال|من البيت واربح|سجل واربح|مكافاه تسجيل|بدون ايداع",
      "يوعد بربح يومي أو دخل سريع بدون رأس مال (علامة احتيال شائعة)"),
@@ -23,12 +23,20 @@ _SIGNALS = [
      "يذكر تحويل أموال أو محافظ إلكترونية"),
     (1, r"كورس|دوره (تدريبيه|اونلاين)|شهاده دوليه|سجل الان في الدوره",
      "يروّج لدورة تدريبية أو كورس"),
-    (3, r"واقي شمس|سيروم|كافيار|عنايه بالبشره|كولاجين|شجره الاعضاء|التسويق الشبكي|بونص شهري",
-     "يبدو كإعلان ترويجي لمنتجات تجميل أو تسويق شبكي وليس فرصة عمل حقيقية"),
+    (3, r"شجره الاعضاء|التسويق الشبكي|بونص شهري",
+     "يبدو كإعلان تسويق شبكي أو هرمي وليس فرصة عمل حقيقية"),
+    (2, r"واقي شمس|سيروم|كافيار|كولاجين",
+     "يبدو كإعلان ترويجي لمنتجات تجميل وليس فرصة عمل حقيقية"),
+    (1, r"عنايه بالبشره",
+     "يذكر مجال العناية بالبشرة"),
     (2, r"تسويق بالعمول[هة]|ربح من الانترنت|لقاء تعريفي عن العمل الحر|جلسه تعريفيه عبر زوم",
      "إعلان ترويجي للتسويق بالعمولة أو جلسات عامة وليس شاغراً واضحاً"),
 ]
 _COMPILED = [(w, re.compile(fold(p), re.I), reason) for w, p, reason in _SIGNALS]
+_ANTI_SCAM_WARNING_RE = re.compile(
+    fold(r"(?:اعتذري?|احذروا?|تنويه|تحذير|تجنب|يمنع|ممنوع|لا\s+تدفع|بدون\s+اي)[^\n.!،]{0,55}(?:دفع\s+مبلغ|رسوم(?:\s+تسجيل|\s+توظيف|\s+اشتراك)?|تامين\s+مسبق)[^\n.!،]{0,35}"),
+    re.I,
+)
 THRESHOLD = 3
 _JOB_WORDS = re.compile(fold(r"مطلوب|شواغر|شاغر|وظيف|توظيف|بحاجه (الى|ل)|حاجت(ها|ه) (الى|الي|ل)|نبحث عن|فرصه عمل|فرص عمل|للعمل|يلزمنا|"
                                r"بالانضمام (الى|ل)|الانضمام (الى|ل)(فريق|كادر|اسره)|يرغب بالانضمام|التعاقد مع|closing date|vacancy|job|hiring|position|"
@@ -36,7 +44,7 @@ _JOB_WORDS = re.compile(fold(r"مطلوب|شواغر|شاغر|وظيف|توظي�
 
 
 def spam_score(text: str) -> int:
-    t = fold(text)
+    t = _ANTI_SCAM_WARNING_RE.sub(" ", fold(text))
     score = sum(w for w, rx, _ in _COMPILED if rx.search(t))
     if not _JOB_WORDS.search(t):
         score += 1  # no job wording at all
@@ -45,7 +53,7 @@ def spam_score(text: str) -> int:
 
 def analyze_ad(text: str) -> dict:
     """Explain why an ad looks safe, suspicious, or likely a scam."""
-    t = fold(text)
+    t = _ANTI_SCAM_WARNING_RE.sub(" ", fold(text))
     score = 0
     reasons: list[str] = []
     for w, rx, reason in _COMPILED:

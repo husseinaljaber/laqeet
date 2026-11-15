@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import argparse
+import gc
 import json
 import logging
 import re
@@ -35,7 +36,7 @@ class PoliteClient(httpx.Client):
     """An httpx client that waits at least REQUEST_GAP seconds between requests."""
 
     def __init__(self, **kw):
-        super().__init__(headers={"User-Agent": USER_AGENT}, timeout=60, **kw)
+        super().__init__(headers={"User-Agent": USER_AGENT}, timeout=httpx.Timeout(15.0, connect=6.0), **kw)
         self._last = 0.0
 
     def send(self, request, **kw):
@@ -172,13 +173,18 @@ def read_channel(channel: str, client: httpx.Client, stop_id: int, since: str, m
         before = oldest
 
 
-def collect(offline: bool = False) -> dict:
+def collect(offline: bool = False, quick: bool = False) -> dict:
     con = db.connect()
     since = (datetime.now(timezone.utc) - timedelta(days=config.HISTORY_DAYS)).date().isoformat()
     stats = {}
     client = None if offline else PoliteClient()
-    resolve_client = None if offline else httpx.Client(timeout=20, verify=False, follow_redirects=True)
+    resolve_client = (
+        None
+        if offline
+        else httpx.Client(timeout=httpx.Timeout(12.0, connect=6.0), verify=False, follow_redirects=True)
+    )
     resolve_cache: dict = {}
+    max_pages = 2 if quick else 15
     try:
         for channel in config.CHANNELS:
             new = posts = 0
@@ -188,7 +194,7 @@ def collect(offline: bool = False) -> dict:
             else:
                 stop = int(db.get_meta(con, f"last:{channel}", 0))
                 try:
-                    feed = list(read_channel(channel, client, stop, since))
+                    feed = list(read_channel(channel, client, stop, since, max_pages=max_pages))
                 except httpx.HTTPError as e:
                     log.warning("%s: %s", channel, e)
                     feed = []
@@ -204,15 +210,21 @@ def collect(offline: bool = False) -> dict:
             for key, fn in (
                 ("reliefweb", fetch_reliefweb_jobs),
                 ("web_portals", fetch_all_web_portal_jobs),
-                ("turkey_portals", fetch_all_tr_portal_jobs),
+                ("turkey_portals", lambda c, cache=None: fetch_all_tr_portal_jobs(c, cache=cache, max_pages=1 if quick else 3)),
             ):
                 try:
                     batch = fn(resolve_client, cache=resolve_cache)
+                    # Resolve external links BEFORE opening the SQLite write transaction so concurrent web requests never block.
+                    ready = [
+                        j
+                        for j in batch
+                        if db.expires_on(j) >= today and da.resolve_job_apply(j, client=resolve_client, cache=resolve_cache)
+                    ]
                     new_count = 0
-                    for j in batch:
-                        if db.expires_on(j) >= today and da.resolve_job_apply(j, client=resolve_client, cache=resolve_cache):
-                            _, is_new = db.upsert(con, j)
-                            new_count += is_new
+                    for j in ready:
+                        _, is_new = db.upsert(con, j)
+                        new_count += is_new
+                    con.commit()
                     stats[key] = {"posts": len(batch), "new_jobs": new_count}
                     log.info("%s: %d jobs, %d new jobs", key, len(batch), new_count)
                 except Exception as e:
@@ -227,6 +239,8 @@ def collect(offline: bool = False) -> dict:
             resolve_client.close()
         if client:
             client.close()
+        con.close()
+        gc.collect()
     return stats
 
 

@@ -1,6 +1,7 @@
 """HTTP API and the website.  uvicorn app.api:app --port 8000"""
 from __future__ import annotations
 
+import gc
 import hmac
 import html
 import ipaddress
@@ -32,6 +33,9 @@ def _auto_collect_loop(stop: threading.Event) -> None:
     from .collect import collect
 
     gap = max(60, config.UPDATE_MINUTES * 60)
+    # Yield on startup so low-RAM hosts finish booting and pass healthchecks before scraping begins.
+    if stop.wait(90):
+        return
     while not stop.is_set():
         wait = gap
         try:
@@ -52,8 +56,9 @@ def _auto_collect_loop(stop: threading.Event) -> None:
                     wait = max(30, int(gap - age))
             if stale:
                 log.info("auto-collect starting...")
-                res = collect()
+                res = collect(quick=bool(last))
                 _stats_cache.clear()
+                gc.collect()
                 log.info("auto-collect done: %s", res)
                 wait = gap
         except Exception:
@@ -103,18 +108,28 @@ def _levels(edu: str | None, lower: bool) -> list[str] | None:
     return out
 
 
+_LIGHT_COLS = (
+    "id, fp, title, source, country, sector, apply_types, education, education_from, "
+    "field, subfield, kind, official, cities, experience, deadline, posted_at, expires_on, "
+    "status, reports, first_seen, updated_at"
+)
+
+
 def _query(edu=None, lower=False, field=None, sub=None, city=None, kind=None, q=None, official=None,
            expired=False, status="live", since_days=None, gender=None, country=None, sector=None, apply=None,
-           edu_group=None, source=None, sort: str = "relevance"):
+           edu_group=None, source=None, sort: str = "relevance", light: bool = False):
+    has_q = bool(q and q.strip())
+    cols = "*" if (has_q or not light) else _LIGHT_COLS
     if expired and status == "live":
-        sql = ["SELECT * FROM jobs WHERE status IN ('live', 'expired') AND posted_at >= ?"]
+        sql = [f"SELECT {cols} FROM jobs WHERE status IN ('live', 'expired') AND posted_at >= ?"]
         args: list = [_since()]
     else:
-        sql = ["SELECT * FROM jobs WHERE status=? AND posted_at >= ?"]
+        sql = [f"SELECT {cols} FROM jobs WHERE status=? AND posted_at >= ?"]
         args: list = [status, _since()]
     if not expired:
-        sql.append("AND expires_on >= ?")
-        args.append(_today())
+        today_s = _today()
+        sql.append("AND expires_on >= ? AND (deadline IS NULL OR deadline='' OR deadline >= ?)")
+        args.extend([today_s, today_s])
     sql.append("AND country=?")
     args.append("tr" if country == "tr" else "sy")
     if sector in ("gov", "ngo", "private"):
@@ -142,7 +157,9 @@ def _query(edu=None, lower=False, field=None, sub=None, city=None, kind=None, q=
         sql.append("AND (education IN ('basic', 'none') OR education IS NULL)")
     cs = [c.strip() for c in (city or "").split(",") if c.strip()]
     if cs:
-        sql.append("AND (cities LIKE '%|عدة محافظات|%' OR " + " OR ".join(["cities LIKE ?"] * len(cs)) + ")")
+        multi_city = "%|عدة ولايات في تركيا|%" if country == "tr" else "%|عدة محافظات|%"
+        sql.append("AND (cities LIKE ? OR " + " OR ".join(["cities LIKE ?"] * len(cs)) + ")")
+        args.append(multi_city)
         args += [f"%|{c}|%" for c in cs]
     if gender in ("male", "female"):  # hide ads that are only for the other gender
         sql.append("AND (json_extract(data, '$.gender') IS NULL OR json_extract(data, '$.gender')=?)")
@@ -180,11 +197,18 @@ def _query(edu=None, lower=False, field=None, sub=None, city=None, kind=None, q=
     return rows
 
 
+@app.get("/api/health")
+def health():
+    return {"ok": True, "updated_at": db.get_meta(con, "updated_at")}
+
+
 @app.get("/api/meta")
 def meta():
+    today_s = _today()
     open_rows = con.execute(
-        "SELECT education, sector FROM jobs WHERE status='live' AND country='sy' AND expires_on>=? AND posted_at>=?",
-        (_today(), _since())).fetchall()
+        "SELECT education, sector FROM jobs WHERE status='live' AND country='sy' "
+        "AND expires_on>=? AND (deadline IS NULL OR deadline='' OR deadline>=?) AND posted_at>=?",
+        (today_s, today_s, _since())).fetchall()
     counts = Counter(r["education"] or "unknown" for r in open_rows)
     sy_sectors = Counter(r["sector"] for r in open_rows)
     return {
@@ -221,7 +245,8 @@ def jobs(edu: str | None = None, lower: bool = False, field: str | None = None, 
     q_clean = (q or "").strip() or None
     sort_mode = "recent" if sort == "recent" else "relevance"
     base = _query(edu, lower, None, None, city, kind, q_clean, official, expired, since_days=1 if new else None,
-                  gender=gender, country=country, sector=None, apply=apply, edu_group=edu_group, source=source, sort=sort_mode)
+                  gender=gender, country=country, sector=None, apply=apply, edu_group=edu_group, source=source,
+                  sort=sort_mode, light=(q_clean is None))
     hl_terms: list[str] = []
     if q_clean:
         for g in sq.expand_query_groups(q_clean):
@@ -239,7 +264,18 @@ def jobs(edu: str | None = None, lower: bool = False, field: str | None = None, 
     subs = Counter(r["subfield"] for r in sectored if r["field"] == "computer" and r["subfield"])
     applies = Counter(a for r in rows for a in filter(None, (r["apply_types"] or "").split("|")))
     sources_cnt = Counter(r["source"] for r in rows)
-    return {"total": len(rows), "jobs": [db.row_to_dict(con, r) for r in rows[offset:offset + limit]],
+    page_rows = rows[offset:offset + limit]
+    if page_rows and "data" not in page_rows[0].keys():
+        ids = [r["id"] for r in page_rows]
+        full_map = {
+            fr["id"]: fr
+            for fr in con.execute(
+                f"SELECT * FROM jobs WHERE id IN ({','.join('?' * len(ids))})",
+                ids,
+            ).fetchall()
+        }
+        page_rows = [full_map[jid] for jid in ids if jid in full_map]
+    return {"total": len(rows), "jobs": [db.row_to_dict(con, r) for r in page_rows],
             "terms": hl_terms,
             "suggestion": suggestion,
             "facets": {"field": [{"code": f, "label": tx.FIELD_LABEL.get(f, f), "count": n} for f, n in fields.most_common()],
@@ -305,12 +341,19 @@ def report(job_id: int, request: Request, body: dict = Body(default={})):
 
 
 _stats_cache: dict[str, tuple[float, dict]] = {}
+_stats_lock = threading.Lock()
 
 
 def _country_summary(country_code: str) -> dict:
     """Compute live/6-month metrics, sector breakdown, and city counts for one market ('sy' | 'tr')."""
-    open_rows = _query(country=country_code)
-    all_rows = _query(expired=True, country=country_code)
+    open_rows = _query(country=country_code, light=True)
+    all_rows = _query(expired=True, country=country_code, light=True)
+    emp_count = con.execute(
+        "SELECT COUNT(DISTINCT json_extract(data, '$.employer')) FROM jobs "
+        "WHERE status IN ('live', 'expired') AND posted_at >= ? AND country=? "
+        "AND json_extract(data, '$.employer') IS NOT NULL AND json_extract(data, '$.employer') != ''",
+        (_since(), country_code),
+    ).fetchone()[0]
     demand = Counter()
     city_counts = Counter()
     field_counts = Counter()
@@ -327,7 +370,7 @@ def _country_summary(country_code: str) -> dict:
         "open": len(open_rows),
         "six_months": len(all_rows),
         "junior": sum(1 for r in open_rows if r["experience"] is not None and r["experience"] <= 2),
-        "employers": len({json.loads(r["data"]).get("employer") for r in all_rows} - {None}),
+        "employers": emp_count,
         "today": sum(1 for r in open_rows if (r["posted_at"] or "") >= today_iso),
         "official": sum(1 for r in open_rows if r["official"]),
         "gov_count": sum(1 for r in open_rows if r["sector"] == "gov"),
@@ -347,21 +390,26 @@ def _country_summary(country_code: str) -> dict:
 def stats(country: str | None = None):
     """Numbers for the opening screen (cached briefly: they change every 30 minutes at most)."""
     key = f"{country or 'sy'}:{_today()}"
-    if (hit := _stats_cache.get(key)) and time.time() - hit[0] < 10 and hit[1].get("updated_at") == db.get_meta(con, "updated_at"):
+    updated = db.get_meta(con, "updated_at")
+    if (hit := _stats_cache.get(key)) and time.time() - hit[0] < 300 and hit[1].get("updated_at") == updated:
         return hit[1]
-    sy_sum = _country_summary("sy")
-    tr_sum = _country_summary("tr")
-    active = tr_sum if country == "tr" else sy_sum
-    out = {
-        **active,
-        "open_sy": sy_sum["open"],
-        "open_tr": tr_sum["open"],
-        "city_counts_tr": tr_sum["city_counts"],
-        "by_country": {"sy": sy_sum, "tr": tr_sum},
-        "updated_at": db.get_meta(con, "updated_at"),
-    }
-    _stats_cache[key] = (time.time(), out)
-    return out
+    with _stats_lock:
+        updated = db.get_meta(con, "updated_at")
+        if (hit := _stats_cache.get(key)) and time.time() - hit[0] < 300 and hit[1].get("updated_at") == updated:
+            return hit[1]
+        sy_sum = _country_summary("sy")
+        tr_sum = _country_summary("tr")
+        active = tr_sum if country == "tr" else sy_sum
+        out = {
+            **active,
+            "open_sy": sy_sum["open"],
+            "open_tr": tr_sum["open"],
+            "city_counts_tr": tr_sum["city_counts"],
+            "by_country": {"sy": sy_sum, "tr": tr_sum},
+            "updated_at": updated,
+        }
+        _stats_cache[key] = (time.time(), out)
+        return out
 
 
 # ------------------------------------------------------------------ Phase 3: employers, review queue, market pulse
@@ -455,7 +503,8 @@ def admin_decide(job_id: int, body: dict = Body(...), x_admin_token: str | None 
 @app.get("/api/pulse")
 def pulse(city: str | None = None, edu: str | None = None, country: str | None = None):
     """«نبض السوق»: what is asked for most, by month, field, city and education, over the last 6 months."""
-    rows = _query(expired=True, country=country)
+    c_code = "tr" if country == "tr" else "sy"
+    rows = _query(expired=True, country=c_code, light=True)
     if city:
         rows = [r for r in rows if f"|{city}|" in r["cities"]]
     if edu:
@@ -467,8 +516,9 @@ def pulse(city: str | None = None, edu: str | None = None, country: str | None =
         if r["posted_at"]:
             by_month[r["posted_at"][:7]][r["field"]] += 1
         titles[soft_fold(r["title"]).split("(")[0].strip()] += 1
+        valid_cities = tx.TR_CITIES + ["عدة ولايات في تركيا"] if c_code == "tr" else tx.CITIES + ["عدة محافظات"]
         for c in filter(None, r["cities"].split("|")):
-            if c in tx.CITIES or c == "عدة محافظات":
+            if c in valid_cities:
                 cities[c] += 1
         edus[r["education"] or "unknown"] += 1
         exp["unknown" if r["experience"] is None else "0-2" if r["experience"] <= 2 else "3-4" if r["experience"] < 5 else "5+"] += 1
@@ -488,8 +538,17 @@ def pulse(city: str | None = None, edu: str | None = None, country: str | None =
             a, b = by_month[prev_m], by_month[cur_m]
         trend = {f: b[f] - a[f] for f in top_fields}
     today = _today()
-    open_now = [r for r in rows if r["status"] == "live" and (r["expires_on"] or "") >= today]
-    remote_open = sum(1 for r in open_now if "عن بعد" in r["data"])
+    open_now = [r for r in rows if r["status"] == "live" and (r["expires_on"] or "") >= today and (not r["deadline"] or r["deadline"] >= today)]
+    open_ids = [r["id"] for r in open_now]
+    remote_open = 0
+    if open_ids:
+        # Count remote live jobs without materializing the full JSON blob for all 6-month rows.
+        for i in range(0, len(open_ids), 800):
+            chunk = open_ids[i:i + 800]
+            remote_open += con.execute(
+                f"SELECT COUNT(*) FROM jobs WHERE id IN ({','.join('?' * len(chunk))}) AND data LIKE '%عن بعد%'",
+                chunk,
+            ).fetchone()[0]
     names = {soft_fold(r["title"]).split("(")[0].strip(): r["title"].split("(")[0].strip() for r in rows}
     return {
         "total": len(rows), "open_now": len(open_now), "remote_open": remote_open,

@@ -1,7 +1,9 @@
 """SQLite store. Plain SQL with nothing SQLite-only beyond `INSERT OR IGNORE`/`ON CONFLICT`, so Postgres is a short move."""
 from __future__ import annotations
 
+import gc
 import json
+import logging
 import re
 import sqlite3
 from datetime import date, datetime, timedelta, timezone
@@ -37,6 +39,7 @@ CREATE TABLE IF NOT EXISTS jobs (
     updated_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS jobs_list ON jobs(status, expires_on, posted_at);
+CREATE INDEX IF NOT EXISTS jobs_country_status ON jobs(country, status, expires_on, posted_at);
 CREATE TABLE IF NOT EXISTS job_keys (
     k TEXT PRIMARY KEY,
     job_id INTEGER NOT NULL REFERENCES jobs(id)
@@ -103,22 +106,28 @@ def sync_fts(con: sqlite3.Connection, job_id: int, job_dict: dict | None = None)
 
 
 def rebuild_fts(con: sqlite3.Connection) -> int:
-    """Drop and rebuild the entire FTS5 search index from the jobs table."""
+    """Drop and rebuild the entire FTS5 search index from the jobs table in memory-bounded batches."""
     from .search import build_fts_fields
 
     con.execute("DELETE FROM jobs_fts")
-    rows = con.execute("SELECT id, data FROM jobs").fetchall()
-    batch = []
-    for r in rows:
-        jd = json.loads(r["data"])
-        t, e, s, b, a = build_fts_fields(jd)
-        batch.append((r["id"], t, e, s, b, a))
-    if batch:
-        con.executemany(
-            "INSERT INTO jobs_fts (job_id, title_text, employer_text, specs_text, body_text, aux_text) VALUES (?,?,?,?,?,?)",
-            batch,
-        )
-    return len(batch)
+    cur = con.execute("SELECT id, data FROM jobs")
+    total = 0
+    while True:
+        chunk = cur.fetchmany(400)
+        if not chunk:
+            break
+        batch = []
+        for r in chunk:
+            jd = json.loads(r["data"])
+            t, e, s, b, a = build_fts_fields(jd)
+            batch.append((r["id"], t, e, s, b, a))
+        if batch:
+            con.executemany(
+                "INSERT INTO jobs_fts (job_id, title_text, employer_text, specs_text, body_text, aux_text) VALUES (?,?,?,?,?,?)",
+                batch,
+            )
+            total += len(batch)
+    return total
 
 
 def delete_jobs(con: sqlite3.Connection, job_ids: list[int]) -> int:
@@ -155,7 +164,7 @@ def _migrate(con: sqlite3.Connection) -> None:
 
 
 def _bootstrap_seed_if_empty(con: sqlite3.Connection, path) -> None:
-    """When deployed to a cloud host (e.g. Render) with no existing DB, load data/seed_jobs.json.gz on first boot."""
+    """When deployed to a cloud host (e.g. Render) with no existing DB, stream seed_jobs.jsonl.gz on first boot."""
     import gzip
     import os
     import sys
@@ -164,10 +173,81 @@ def _bootstrap_seed_if_empty(con: sqlite3.Connection, path) -> None:
         return
     if con.execute("SELECT 1 FROM jobs LIMIT 1").fetchone():
         return
-    seed_path = config.ROOT / "data" / "seed_jobs.json.gz"
+    jsonl_path = config.ROOT / "data" / "seed_jobs.jsonl.gz"
+    json_path = config.ROOT / "data" / "seed_jobs.json.gz"
+    seed_path = jsonl_path if jsonl_path.exists() else json_path
     if not seed_path.exists():
         return
     try:
+        if seed_path == jsonl_path:
+            jobs_buf, fts_buf, src_buf, key_buf, meta_buf = [], [], [], [], []
+            jobs_sql = ""
+            has_fts = False
+
+            def _flush_jobs() -> None:
+                if jobs_buf and jobs_sql:
+                    con.executemany(jobs_sql, jobs_buf)
+                    jobs_buf.clear()
+
+            def _flush_fts() -> None:
+                if fts_buf:
+                    con.executemany(
+                        "INSERT INTO jobs_fts (job_id, title_text, employer_text, specs_text, body_text, aux_text) VALUES (?,?,?,?,?,?)",
+                        fts_buf,
+                    )
+                    fts_buf.clear()
+
+            def _flush_src() -> None:
+                if src_buf:
+                    con.executemany(
+                        "INSERT OR IGNORE INTO job_sources (job_id, source, post_url, posted_at) VALUES (?,?,?,?)",
+                        src_buf,
+                    )
+                    src_buf.clear()
+
+            def _flush_keys() -> None:
+                if key_buf:
+                    con.executemany("INSERT OR IGNORE INTO job_keys (k, job_id) VALUES (?,?)", key_buf)
+                    key_buf.clear()
+
+            with gzip.open(seed_path, "rt", encoding="utf-8") as f:
+                header = json.loads(f.readline())
+                cols = header["jobs_cols"]
+                has_fts = bool(header.get("fts"))
+                jobs_sql = f"INSERT OR IGNORE INTO jobs ({','.join(cols)}) VALUES ({','.join('?' * len(cols))})"
+                for line in f:
+                    tag, raw_val = line.split("\t", 1)
+                    val = json.loads(raw_val)
+                    if tag == "j":
+                        jobs_buf.append(val)
+                        if len(jobs_buf) >= 400:
+                            _flush_jobs()
+                    elif tag == "f":
+                        fts_buf.append(val)
+                        if len(fts_buf) >= 400:
+                            _flush_fts()
+                    elif tag == "s":
+                        src_buf.append(val)
+                        if len(src_buf) >= 1000:
+                            _flush_src()
+                    elif tag == "k":
+                        key_buf.append(val)
+                        if len(key_buf) >= 1000:
+                            _flush_keys()
+                    elif tag == "m":
+                        meta_buf.append(val)
+            _flush_jobs()
+            _flush_fts()
+            _flush_src()
+            _flush_keys()
+            if meta_buf:
+                con.executemany("INSERT OR REPLACE INTO meta (key, value) VALUES (?,?)", meta_buf)
+            if not has_fts:
+                rebuild_fts(con)
+            expire_past(con)
+            con.commit()
+            return
+
         with gzip.open(seed_path, "rt", encoding="utf-8") as f:
             payload = json.load(f)
         jobs_rows = payload.get("jobs") or []
@@ -176,23 +256,39 @@ def _bootstrap_seed_if_empty(con: sqlite3.Connection, path) -> None:
         cols = list(jobs_rows[0].keys())
         col_list = ",".join(cols)
         placeholders = ",".join("?" * len(cols))
-        con.executemany(
-            f"INSERT OR IGNORE INTO jobs ({col_list}) VALUES ({placeholders})",
-            [[r.get(c) for c in cols] for r in jobs_rows],
-        )
-        for s in payload.get("sources") or []:
-            con.execute(
-                "INSERT OR IGNORE INTO job_sources (job_id, source, post_url, posted_at) VALUES (?,?,?,?)",
-                (s.get("job_id"), s.get("source"), s.get("post_url"), s.get("posted_at")),
+        for i in range(0, len(jobs_rows), 500):
+            chunk = jobs_rows[i:i + 500]
+            con.executemany(
+                f"INSERT OR IGNORE INTO jobs ({col_list}) VALUES ({placeholders})",
+                [[r.get(c) for c in cols] for r in chunk],
             )
-        for k in payload.get("keys") or []:
-            con.execute("INSERT OR IGNORE INTO job_keys (k, job_id) VALUES (?,?)", (k.get("k"), k.get("job_id")))
-        for m in payload.get("meta") or []:
-            con.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?,?)", (m.get("key"), m.get("value")))
+        sources_rows = payload.get("sources") or []
+        for i in range(0, len(sources_rows), 1000):
+            chunk = sources_rows[i:i + 1000]
+            con.executemany(
+                "INSERT OR IGNORE INTO job_sources (job_id, source, post_url, posted_at) VALUES (?,?,?,?)",
+                [(s.get("job_id"), s.get("source"), s.get("post_url"), s.get("posted_at")) for s in chunk],
+            )
+        key_rows = payload.get("keys") or []
+        for i in range(0, len(key_rows), 1000):
+            chunk = key_rows[i:i + 1000]
+            con.executemany(
+                "INSERT OR IGNORE INTO job_keys (k, job_id) VALUES (?,?)",
+                [(k.get("k"), k.get("job_id")) for k in chunk],
+            )
+        meta_rows = payload.get("meta") or []
+        if meta_rows:
+            con.executemany(
+                "INSERT OR REPLACE INTO meta (key, value) VALUES (?,?)",
+                [(m.get("key"), m.get("value")) for m in meta_rows],
+            )
+        del payload, jobs_rows, sources_rows, key_rows, meta_rows
+        gc.collect()
         rebuild_fts(con)
+        expire_past(con)
         con.commit()
     except Exception:
-        pass
+        logging.getLogger("db").exception("Seed bootstrap failed for %s", seed_path)
 
 
 def connect(path=None) -> sqlite3.Connection:
@@ -202,7 +298,8 @@ def connect(path=None) -> sqlite3.Connection:
     con = sqlite3.connect(path, timeout=30.0, check_same_thread=False)
     con.row_factory = sqlite3.Row
     con.execute("PRAGMA journal_mode=WAL")
-    con.execute("PRAGMA busy_timeout=10000")
+    con.execute("PRAGMA busy_timeout=15000")
+    con.execute("PRAGMA cache_size=-8000")
     con.executescript(SCHEMA)
     _migrate(con)
     _bootstrap_seed_if_empty(con, path)
@@ -292,9 +389,9 @@ def upsert(con: sqlite3.Connection, job: Job, status: str | None = None) -> tupl
 
     fp = fingerprint(job)
     keys = dedupe_keys(job)
-    row = con.execute("SELECT id, data, status, expires_on FROM jobs WHERE fp=?", (fp,)).fetchone()
+    row = con.execute("SELECT id, data, status, expires_on, deadline FROM jobs WHERE fp=?", (fp,)).fetchone()
     if not row and keys:
-        q = f"SELECT j.id, j.data, j.status, j.expires_on FROM job_keys k JOIN jobs j ON j.id=k.job_id WHERE k.k IN ({','.join('?' * len(keys))}) LIMIT 1"
+        q = f"SELECT j.id, j.data, j.status, j.expires_on, j.deadline FROM job_keys k JOIN jobs j ON j.id=k.job_id WHERE k.k IN ({','.join('?' * len(keys))}) LIMIT 1"
         row = con.execute(q, keys).fetchone()
     t = now()
     if row:
@@ -323,17 +420,24 @@ def upsert(con: sqlite3.Connection, job: Job, status: str | None = None) -> tupl
         if merged.get("apply_url") and da.is_disallowed_offline_url(merged["apply_url"]):
             merged["apply_url"] = None
         merged["country"] = job.country
+        today_str = date.today().isoformat()
         new_exp = max(row["expires_on"] or "", expires_on(job))
+        eff_dl = merged.get("deadline") or row["deadline"]
+        if eff_dl:
+            new_exp = min(new_exp, eff_dl)
+        still_open = new_exp >= today_str and not (eff_dl and eff_dl < today_str)
         new_status = status if status is not None else (
-            "live" if row["status"] == "expired" and new_exp >= date.today().isoformat() else row["status"]
+            "live" if row["status"] == "expired" and still_open else (
+                "expired" if row["status"] == "live" and not still_open else row["status"]
+            )
         )
         con.execute(
-            "UPDATE jobs SET data=?, country=?, sector=?, apply_types=?, expires_on=?, status=?, updated_at=? WHERE id=?",
+            "UPDATE jobs SET data=?, country=?, sector=?, apply_types=?, deadline=?, expires_on=?, status=?, updated_at=? WHERE id=?",
             (json.dumps(merged, ensure_ascii=False),
              job.country,
              merged.get("sector", job.sector),
              "|" + "|".join(merged.get("apply_types") or []) + "|" if merged.get("apply_types") else "",
-             new_exp, new_status, t, jid),
+             eff_dl, new_exp, new_status, t, jid),
         )
     else:
         if status is None:
@@ -358,7 +462,10 @@ def upsert(con: sqlite3.Connection, job: Job, status: str | None = None) -> tupl
 def expire_past(con: sqlite3.Connection) -> int:
     """Mark live jobs whose deadline / expiry date has already passed as expired."""
     today = date.today().isoformat()
-    cur = con.execute("UPDATE jobs SET status='expired' WHERE status='live' AND expires_on < ?", (today,))
+    cur = con.execute(
+        "UPDATE jobs SET status='expired' WHERE status='live' AND (expires_on < ? OR (deadline IS NOT NULL AND deadline != '' AND deadline < ?))",
+        (today, today),
+    )
     return cur.rowcount
 
 

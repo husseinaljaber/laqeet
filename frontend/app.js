@@ -85,9 +85,30 @@
   }
 
   async function get(path) {
-    const r = await fetch(API + path);
-    if (!r.ok) throw new Error(r.status);
-    return r.json();
+    const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    const tid = ctrl ? setTimeout(() => ctrl.abort(), 16000) : null;
+    try {
+      const r = await fetch(API + path, ctrl ? { signal: ctrl.signal } : undefined);
+      if (!r.ok) throw new Error(r.status);
+      return await r.json();
+    } finally {
+      if (tid) clearTimeout(tid);
+    }
+  }
+
+  async function getWithRetry(path, tries = 4, delayMs = 2000) {
+    let lastErr;
+    for (let i = 0; i < tries; i++) {
+      try {
+        return await get(path);
+      } catch (e) {
+        lastErr = e;
+        if (i + 1 < tries) {
+          await new Promise((r) => setTimeout(r, delayMs * (i + 1)));
+        }
+      }
+    }
+    throw lastErr;
   }
 
   function toast(msg) {
@@ -934,12 +955,18 @@
 
     let data;
     try {
-      data = await get('/jobs?' + buildParams());
+      data = await getWithRetry('/jobs?' + buildParams(), 3, 1800);
     } catch (e) {
       $('grid').replaceChildren(
         el('div', { class: 'empty' },
-          el('b', null, 'تعذر الاتصال بالسيرفر'),
-          el('span', null, 'تأكد من تشغيل خادم المنصة (عبر run.bat) ثم أعد تحديث الصفحة.')
+          el('b', null, 'تعذر تحميل الشواغر حالياً'),
+          el('span', null, 'قد يكون الخادم في مرحلة الإقلاع المؤقت. اضغط إعادة المحاولة بعد ثوانٍ.'),
+          el('button', {
+            type: 'button',
+            class: 'btn primary',
+            style: 'margin-top:12px',
+            onclick: () => refresh(append)
+          }, 'إعادة تحميل الشواغر')
         )
       );
       return;
@@ -1770,10 +1797,30 @@
     setupEvents();
     updateSavedCount();
 
+    const oldErr = $('initErrorBanner');
+    if (oldErr) oldErr.remove();
+
     try {
-      [META, STATS] = await Promise.all([get('/meta'), get('/stats')]);
+      [META, STATS] = await Promise.all([
+        getWithRetry('/meta', 4, 2000),
+        getWithRetry('/stats', 4, 2000)
+      ]);
     } catch (e) {
-      document.body.prepend(el('div', { class: 'empty' }, 'تعذر الاتصال بالسيرفر. يرجى التأكد من تشغيل الخادم وتحديث الصفحة.'));
+      const errBanner = el('div', {
+        id: 'initErrorBanner',
+        class: 'empty',
+        style: 'margin:18px auto;max-width:680px;z-index:99;position:relative'
+      },
+        el('b', null, 'تعذر الاتصال بالسيرفر مؤقتاً'),
+        el('span', null, 'قد يستغرق إيقاظ الخادم السحابي بضع ثوانٍ. اضغط زر إعادة المحاولة.'),
+        el('button', {
+          type: 'button',
+          class: 'btn primary',
+          style: 'margin-top:12px',
+          onclick: () => { errBanner.remove(); init(); }
+        }, 'إعادة المحاولة الآن')
+      );
+      document.body.prepend(errBanner);
       return;
     }
 

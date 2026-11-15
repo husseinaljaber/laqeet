@@ -102,7 +102,8 @@ _CITY_ALIASES = {
     "الحسكة": ["الحسكه", "القامشلي", "قامشلي", "راس العين", "المالكيه", "عامودا", "الدرباسيه", "hasakah", "hasakeh", "qamishli", "al qamishli"],
     "الرقة": ["الرقه", "الطبقه", "تل ابيض", "raqqa", "tabqa"],
 }
-_CITY_RE = [(city, re.compile(r"(?<![\w])#?(" + "|".join(re.escape(fold(a)).replace(r"\ ", r"[\s_]*") for a in aliases) + r")(?![\w])", re.I))
+_AR_PROCLITIC = r"(?:[بلو](?=(?:دمشق|حلب|حمص|حماه|ادلب|درعا|طرطوس|اللاذقيه|اللاذقية|اسطنبول|إسطنبول|الفاتح|شيشلي|تقسيم|اكسراي|مرسين|بورصه|بورصة|انقره|أنقرة|غازي|عنتاب|انطاليا|أنطاليا|ازمير|إزمير|انطاكيا|أنطاكيا|قونيا|اضنه|أضنة|قيصري|طرابزون|باشاك|اسنيورت|زيتون|بيليك|بهتشه|اورتاكوي|بشكتاش|كاديكوي|اسكودار|باغجلار|عمرانيه)))?"
+_CITY_RE = [(city, re.compile(r"(?<![\w])(?:" + _AR_PROCLITIC + r"|#)(" + "|".join(re.escape(fold(a)).replace(r"\ ", r"[\s_]*") for a in aliases) + r")(?![\w])", re.I))
             for city, aliases in _CITY_ALIASES.items()]
 _ALL_CITIES = re.compile(fold(r"جميع المحافظات|كافه المحافظات|عده محافظات|عده من المحافظات|محافظات مختلفه|كل المحافظات"))
 _FALSE_CITY_CONTEXT = re.compile(
@@ -124,7 +125,8 @@ _HASHTAG_SPAM_LINE = re.compile(r"(?m)^(?:[^\n]*#[^\n]*){5,}$")
 def cities_from_text(text: str) -> list[str]:
     raw_t = text or ""
     stripped_hashtags = _HASHTAG_SPAM_LINE.sub(" ", raw_t)
-    t = _FALSE_CITY_CONTEXT.sub(" ", fold(stripped_hashtags if stripped_hashtags.strip() else raw_t))
+    cleaned_raw = re.sub(r"(?<![ء-ي])(?:ال)?بصر(?:ي|ية)(?![ء-ي])", " ", stripped_hashtags if stripped_hashtags.strip() else raw_t)
+    t = _FALSE_CITY_CONTEXT.sub(" ", fold(cleaned_raw))
     if _ALL_CITIES.search(t):
         return ["عدة محافظات"]
     found = []
@@ -163,19 +165,26 @@ _TR_CITY_ALIASES = {
     "إسطنبول": [
         "اسطنبول", "إسطنبول", "اسطنبول الاوروبية", "اسطنبول الاسيوية", "istanbul",
         "basaksehir", "باشاك شهير", "باشاكشهير", "esenyurt", "اسنيورت", "إسنيورت",
+        "bahcesehir", "بهتشه شهير", "بهشة شهير", "بهجه شهير",
         "sisli", "شيشلي", "fatih", "الفاتح", "zeytinburnu", "زيتون بورنو",
-        "beylikduzu", "بيليك دوزو", "بيلك دوزو", "merter", "مرتر", "مارتر",
-        "avcilar", "أفجلار", "افجلار", "bagcilar", "باغجلار", "yenibosna", "ينيبوسنا",
-        "sirinevler", "شيرين إيفلر", "شيرين ايفلر", "kayasehir", "كيا شهير", "كاياشهير", "كايا شهير",
+        "beylikduzu", "بيليك دوزو", "بيلك دوزو", "بيليكدوزو", "merter", "مرتر", "مارتر",
+        "avcilar", "أفجلار", "افجلار", "bagcilar", "باغجلار", "yenibosna", "ينيبوسنا", "يني بوسنا", "ينيبوسنه",
+        "sirinevler", "شيرين إيفلر", "شيرين ايفلر", "شيرينيفلر",
+        "kayasehir", "كيا شهير", "كاياشهير", "كايا شهير",
         "taksim", "تقسيم", "aksaray", "أكسراي", "اكسراي", "uskudar", "أوسكودار", "اسكودار",
         "kadikoy", "كاديكوي", "umraniye", "عمرانية", "pendik", "بنديك", "istoc", "إستوش", "استوش",
+        "ortakoy", "أورتاكوي", "اورتاكوي", "besiktas", "بشكتاش",
+        "mecidiyekoy", "مجيدية كوي", "maslak", "مسلك", "maltepe", "مال تبه", "مالتبه",
+        "topkapi", "توب كابي", "توبكابي", "sultanahmet", "السلطان أحمد", "سلطان أحمد", "سلطان احمد",
+        "laleli", "لالالي", "لاللي",
         "arnavutkoy", "ارناؤوط كوي", "kucukcekmece", "كوتشوك تشكمجه", "bahcelievler", "بهجلي ايفلر",
         "sultangazi", "سلطان غازي", "bayrampasa", "بايرام باشا", "kagithane", "كاغت هانه",
         "sariyer", "ساريير", "beykoz", "بيكوز", "tuzla", "توزلا", "kartal", "كارتال",
-        "gungoren", "غونغورين", "esenler", "إسنلر", "اتاشهير", "atasehir", "bakirkoy", "بكركوي",
+        "gungoren", "غونغورين", "غونغران", "esenler", "إسنلر", "اتاشهير", "atasehir", "bakirkoy", "بكركوي", "باكيركوي",
+        "tahtakale", "تحت القلعة",
     ],
     "غازي عنتاب": [
-        "غازي عنتاب", "عنتاب", "gaziantep", "antep", "baspinar", "باشبينار",
+        "غازي عنتاب", "عنتاب", "gaziantep", "antep", "baspinar", "باشبينار", "منطقة باشبينار",
         "sahinbey", "شاهين بيه", "sehitkamil", "شهيد كامل", "nizip", "نزيب",
     ],
     "مرسين": ["مرسين", "mersin", "mezitli", "مزيتلي", "tarsus", "طرسوس", "yenisehir mersin"],
@@ -198,10 +207,29 @@ _TR_CITY_ALIASES = {
     "سامسون": ["سامسون", "samsun"],
 }
 _TR_CITY_RE = [
-    (city, re.compile(r"(?<![\w])#?(" + "|".join(re.escape(_fold_tr(a)).replace(r"\ ", r"[\s_-]*") for a in aliases) + r")(?![\w])", re.I))
+    (city, re.compile(r"(?<![\w])(?:" + _AR_PROCLITIC + r"|#)(" + "|".join(re.escape(_fold_tr(a)).replace(r"\ ", r"[\s_-]*") for a in aliases) + r")(?![\w])", re.I))
     for city, aliases in _TR_CITY_ALIASES.items()
 ]
 _ALL_TR_CITIES = re.compile(fold(r"جميع الولايات|كافه الولايات|كل الولايات|عده ولايات|عدة مدن تركية|farkli sehirler"), re.I)
+
+_FOREIGN_EMAIL_TLD = re.compile(r"@[^@\s]+\.(?:eg|sa|ae|kw|qa|bh|om|jo|lb|iq|ye|ma|tn|dz|ly|sd)\b", re.I)
+_FOREIGN_URL_RE = re.compile(r"https?://(?:[^/\s]+\.)?(?:cibeg\.taleo\.net|[^/\s]+\.gov\.eg|wuzzuf\.net|forasna\.com|bayt\.com|tanqeeb\.com)\b", re.I)
+_FOREIGN_COUNTRY_RE = re.compile(
+    r"(?<![ء-ي])(?:القاهرة|الإسكندرية|الاسكندرية|الجيزة|6\s*أكتوبر|التجمع\s+الخامس|شبرا|المنصورة|"
+    r"جمهورية\s+مصر|في\s+مصر|السعودية|الرياض|جدة|الدمام|الإمارات|دبي|أبوظبي|الكويت|الدوحة|قطر|عمان\s*-\s*الأردن)(?![ء-ي])",
+    re.I,
+)
+
+
+def is_foreign_non_target(text: str = "", apply_url: str | None = None, email: str | None = None, has_local_city: bool = False) -> bool:
+    """Return True for clearly non-Syria/non-Turkey listings (e.g. Egypt CIB/Intersport-EG, Gulf)."""
+    if email and _FOREIGN_EMAIL_TLD.search(email):
+        return True
+    if apply_url and _FOREIGN_URL_RE.search(apply_url):
+        return True
+    if not has_local_city and text and _FOREIGN_COUNTRY_RE.search(text):
+        return True
+    return False
 
 
 def tr_cities_from_text(text: str) -> list[str]:
@@ -279,7 +307,7 @@ def field_from_text(title: str, context: str = "") -> str:
 # ---------------------------------------------------------------- other details
 _PHONE = re.compile(r"(?<!\d)(?:\+?963\s?|0)?(9\d{2})[\s-]?(\d{3})[\s-]?(\d{3})(?!\d)")
 _TR_PHONE = re.compile(
-    r"(?<!\d)(?:\+?90|0090|0)\s*[-./(]*?(5\d{2})[\s.\-)/]*?(\d{3})[\s.\-]*?(\d{2})[\s.\-]*?(\d{2})(?!\d)"
+    r"(?<!\d)(?:(?:\+|00?)?90|0)\s*[-./(]*?(5\d{2})[\s.\-)/]*?(\d{3})[\s.\-]*?(\d{2})[\s.\-]*?(\d{2})(?!\d)"
     r"|(?:wa\.me/|phone=(?:%2B|\+)?)(?:90|0090)(5\d{2})(\d{3})(\d{2})(\d{2})(?!\d)",
     re.I,
 )

@@ -314,12 +314,93 @@ def _norm(s: str | None) -> str:
     return re.sub(r"[^\w]", "", soft_fold(s or "")).replace("_", "")
 
 
+_STOP_CORE_WORDS = frozenset({
+    "مطلوب", "مطلوبه", "مطلوبين", "مطلوبون", "يلزمنا", "موظف", "موظفه", "موظفين", "موظفات",
+    "فرصه", "عمل", "للعمل", "شركه", "لشركه", "بشركه", "مكتب", "مركز", "عياده", "في", "لدي", "لدى",
+    "مع", "من", "الي", "الى", "على", "عن", "ضمن", "حسب", "تركيا", "سوريا", "اسطنبول", "الاوروبيه",
+    "الاسيويه", "باشاك", "شهير", "اسنيورت", "شيشلي", "الفاتح", "بيليك", "دوزو", "بيليكدوزو", "باغجلار",
+    "غازي", "عنتاب", "مرسين", "بورصه", "دمشق", "حلب", "ادلب", "حمص", "حماه", "دوام", "كامل",
+    "جزئي", "جزئى", "بعد", "حضوري", "عاجل", "فورا", "بخبره", "خبره", "انثي", "انثى", "ذكور", "اناث",
+    "شاب", "صبيه", "منطقه", "بمنطقه", "باستطنبول", "باسطنبول", "بدمشق", "بحلب", "و", "او", "في",
+})
+
+
+def _strip_title_noise(t: str) -> str:
+    """Canonicalize title for dedup matching; keeps distinguishing Arabic specialty brackets intact."""
+    import unicodedata
+
+    s = unicodedata.normalize("NFKC", t or "").replace("ـ", "")
+    s = re.sub("[\u064B-\u0652]", "", s)
+    s = re.sub(r"[\U0001F000-\U0001FAFF☀-➿️‍⬀-⯿←-⇿■-◿]", " ", s)
+    s = re.sub(r"^\s*(?:\d{1,2}|[٠-٩]{1,2})\s*[-.)]?\s*", "", s)
+    for _ in range(3):
+        s = re.sub(
+            r"^\s*(?:إعلان\s*توظيف|اعلان\s*توظيف|إعلان\s*شاغر|اعلان\s*شاغر|إعلان|اعلان|فرص[ةه]\s*عمل|شاغر\s*وظيف[يى]|وظيف[ةه]|نحن\s*نوظ[ّ]?ف|hiring|vacancy(?:\s*announcement)?|position(?:\s*title)?|job\s*title)\s*[:\-–|/|]*\s*",
+            "",
+            s,
+            flags=re.I,
+        )
+        s = re.sub(
+            r"^\s*(?:تعلن|يعلن|نعلن)\s+(?:شركة|مؤسسة|منظمة|عيادة|مركز|مطعم|مصنع|معمل|مجموعة|جمعية)[^:\n]{2,55}?(?:عن\s+حاجتها\s*(?:إلى|الى|لـ|ل)|عن\s+توفر\s+(?:فرصة\s+عمل|شاغر(?:\s+وظيفي)?)\s*(?:بمسمى|لـ|ل|بصفة)?|لشغل\s+وظيفة|لتوظيف)\s*[:\-–]?\s*",
+            "",
+            s,
+            flags=re.I,
+        )
+        s = re.sub(r"^\s*(?:مطلوب(?:ة|ون|ين)?|يلزمنا)\s*[:\-–/]*\s*", "", s, flags=re.I)
+    s = soft_fold(s).lower()
+    if re.search(r"[ء-ي]", s):
+        s = re.sub(r"\([^)]*[a-z][^)]*\)", " ", s)
+        s = re.sub(r"\s+[–\-|]\s*[a-z0-9 &/,.-]{5,}$", " ", s)
+    s = re.sub(
+        r"\([^)]*(?:دوام|عن\s*بعد|حضوري|عاجل|syria|سوريا|turkey|t[uü]rkiye|تركيا|re-?advertised|maternity\s+cover)[^)]*\)",
+        " ",
+        s,
+        flags=re.I,
+    )
+    s = re.sub(r"\([^)]*$", " ", s)
+    s = re.sub(r"/\s*[ةه]\b", "", s)
+    s = re.sub(r"(?:دوام\s*(?:كامل|جزئي|جزئى|حضوري)|عن\s*بعد|عمل\s*حر)\s*$", " ", s)
+    s = re.sub(
+        r"(?:\s+(?:في|بـ?|منطق[ةه]|ضمن)|\s+[-–/]+)?\s*(?:اسطنبول(?:\s+(?:الاوروبيه|الاسيويه))?|تركيا|سوريا|دمشق|حلب|غازي\s+عنتاب|مرسين|بورصه|انطاليا|انقره|ازمير|سقاريا|ادلب)\b.*$",
+        " ",
+        s,
+    )
+    return re.sub(r"\s+", " ", s).strip()
+
+
 def _title_key(t: str) -> str:
-    """«مدير/ة تقنية المعلومات (IT Manager)» and «مدير تقنية المعلومات» are the same job.
-    Arabic brackets stay: «سائق آليات (جرار زراعي)» and «سائق آليات (آلية نظافة)» are two jobs."""
-    if re.search(r"[ء-ي]", t or ""):
-        t = re.sub(r"\([^)]*[A-Za-z][^)]*\)|/\s*ة|[A-Za-z]+", " ", t or "")
-    return _norm(t)
+    return _norm(_strip_title_noise(t))
+
+
+def _specific_core_key(t: str) -> str:
+    """For distinct >=3-word (or long >=2-word) titles, return a city/filler-agnostic key for mirror dedup."""
+    cleaned = _strip_title_noise(t)
+    words = [w for w in re.findall(r"[ء-يa-z0-9]+", cleaned) if len(w) >= 2 and w not in _STOP_CORE_WORDS]
+    joined = "".join(words)
+    if len(words) >= 3 or (len(words) >= 2 and len(joined) >= 16):
+        return joined
+    return ""
+
+
+def _norm_phone(p: str | None, country: str = "sy") -> str:
+    d = re.sub(r"\D", "", p or "")
+    if country == "tr" and (m := re.match(r"^(?:00)?90(5\d{9})$", d)):
+        return "0" + m.group(1)
+    if country != "tr" and (m := re.match(r"^(?:00)?963(9\d{8})$", d)):
+        return "0" + m.group(1)
+    return d or (p or "").strip()
+
+
+def _adjacent_months(iso_str: str | None) -> list[str]:
+    """Return [month, prev_month, next_month] so late-month reposts never miss a boundary match."""
+    try:
+        d = datetime.fromisoformat((iso_str or "")[:10]).date() if iso_str else date.today()
+    except ValueError:
+        d = date.today()
+    cur = d.strftime("%Y-%m")
+    prev_m = (d.replace(day=1) - timedelta(days=1)).strftime("%Y-%m")
+    next_m = (d.replace(day=28) + timedelta(days=5)).strftime("%Y-%m")
+    return list(dict.fromkeys([cur, prev_m, next_m]))
 
 
 def _norm_url(u: str | None) -> str:
@@ -337,24 +418,170 @@ def fingerprint(job: Job) -> str:
     if not when and job.posted_at:
         d = datetime.fromisoformat(job.posted_at.replace("Z", "+00:00")).date()
         when = "w%d-%02d" % d.isocalendar()[:2]
-    who = "gov" if job.official and job.deadline else (_norm(job.employer)[:20] or (job.phones[0] if job.phones else ""))
+    who = "gov" if job.official and job.deadline else (_norm(job.employer)[:20] or (_norm_phone(job.phones[0], job.country) if job.phones else ""))
     return "|".join([_title_key(job.title), _norm(job.cities[0] if job.cities else ""), who, when or ""])
 
 
+def _role_tokens_ordered(title: str) -> list[str]:
+    """Ordered distinguishing tokens of a job title after stripping boilerplate and venue/salary modifiers."""
+    s = _strip_title_noise(title)
+    s = re.sub(r"\b(?:براتب|راتب)\s+[\d,.]+(?:\s*(?:الف|ليره|ليرة|دولار|tl|try|usd|\$))?", " ", s, flags=re.I)
+    s = re.sub(r"\b(?:في\s+)?منطق[هة]\s+\S+", " ", s)
+    boiler = {
+        "مطلوب", "مطلوبه", "مطلوبين", "مطلوبون", "يلزمنا", "فرصه", "نبحث", "تبحث", "اعلان", "تعلن", "يعلن", "نعلن",
+        "موظف", "موظفه", "موظفين", "موظفات", "شاب", "فتاه", "سيده", "عامل", "عامله", "عمال", "معلم", "حصرا",
+        "عمل", "للعمل", "ضمن", "فريق", "العمل", "في", "من", "الى", "الي", "على", "عن", "مع", "او", "لدى", "لدي",
+        "بخبره", "خبره", "دوام", "بدوام", "صباحي", "مسائي", "كامل", "جزئي", "جزئى", "حضوري", "عاجل", "فورا", "بعد",
+        "تركيا", "سوريا", "اسطنبول", "لشركه", "بشركه", "شركه", "شركتنا", "متخصصه", "المتخصصه", "رائده", "ناشئه",
+        "للاعلان", "تعيين", "انضمام", "للانضمام", "مجال", "بمشاريع", "فعليه", "مثبته", "قانونيه", "اوراق",
+        "براتب", "ليره", "تركيه", "كيملك", "اقامه", "سياحيه", "لاحد", "احد", "بدون", "حضور", "ولباقه",
+        "بحضور", "بمستوى", "جيد", "جدا", "المجال", "والعمل", "ذات", "سابقه",
+    }
+    return [
+        w for w in re.findall(r"[ء-يa-z0-9]+", s)
+        if len(w) >= 2 and w not in boiler and not w.isdigit()
+    ]
+
+
+_ENTITY_NOUNS = frozenset({
+    "صيدليه", "بصيدليه", "مستشفى", "مشفى", "عياده", "مركز", "مكتب", "منظمه", "جمعيه",
+    "مؤسسه", "مطعم", "كافيه", "محل", "معمل", "مصنع", "مدرسه", "معهد", "روضة", "شبكه",
+})
+
+
+def _same_contact_posting(
+    old_title: str,
+    old_raw: str,
+    new_title: str,
+    new_raw: str,
+    old_post_url: str = "",
+    new_post_url: str = "",
+) -> bool:
+    """Confirm two ads sharing a phone/email are the same cross-source posting, not multi-role/syndicate siblings."""
+    if old_post_url and new_post_url and old_post_url == new_post_url:
+        return _title_key(old_title) == _title_key(new_title)
+    tk1, tk2 = _title_key(old_title), _title_key(new_title)
+    if tk1 and tk1 == tk2:
+        return True
+    ctk1, ctk2 = _specific_core_key(old_title), _specific_core_key(new_title)
+    if ctk1 and ctk1 == ctk2:
+        return True
+    s1 = set(_role_tokens_ordered(old_title))
+    s2 = set(_role_tokens_ordered(new_title))
+    if not s1 or not s2:
+        return False
+    # Mutually exclusive tokens (e.g. 'junior' vs 'technical', 'curricula' vs 'integration', 'الطلياني' vs 'اليرموك'): never merge
+    if not (s1 <= s2 or s2 <= s1):
+        return False
+    smaller = s1 if len(s1) <= len(s2) else s2
+    non_entity_smaller = [w for w in smaller if w not in _ENTITY_NOUNS]
+    return len(non_entity_smaller) >= 2
+
+
 def dedupe_keys(job: Job) -> list[str]:
-    """Extra exact-match keys so the same job reposted across 300-400 channels merges even if one lacks employer."""
+    """Extra exact-match & specific-core keys so mirrors merge cleanly across channels."""
     tk = _title_key(job.title)
     if not tk:
         return []
+    ctk = _specific_core_key(job.title)
+    month = (job.posted_at or "")[:7] or date.today().isoformat()[:7]
     keys = []
     if u := _norm_url(job.apply_url):
         keys.append(f"url:{tk}|{u}")
-    if job.phones:
-        month = (job.posted_at or "")[:7] or date.today().isoformat()[:7]
-        keys.append(f"ph:{tk}|{job.phones[0]}|{month}")
+        if ctk and ctk != tk:
+            keys.append(f"urc:{ctk}|{u}")
+    for raw_p in (job.phones or [])[:2]:
+        np = _norm_phone(raw_p, job.country)
+        if np:
+            keys.append(f"ph:{tk}|{np}|{month}")
+            keys.append(f"cp:{job.country}:{np}|{month}")
+            if ctk and ctk != tk:
+                keys.append(f"phc:{ctk}|{np}|{month}")
+    if job.email:
+        em = job.email.strip().lower()
+        keys.append(f"em:{tk}|{em}|{month}")
+        keys.append(f"ce:{job.country}:{em}|{month}")
+        if ctk and ctk != tk:
+            keys.append(f"emc:{ctk}|{em}|{month}")
     if job.deadline and job.cities:
         keys.append(f"dl:{tk}|{_norm(job.cities[0])}|{job.deadline}")
-    return keys
+    if ctk:
+        keys.append(f"sp:{job.country}:{ctk}|{month}")
+    return list(dict.fromkeys(keys))
+
+
+def _dedupe_lookup_keys(job: Job, include_contact: bool = False) -> tuple[list[str], list[str]]:
+    """Expand month-bucketed keys across adjacent months for lookup without polluting stored keys."""
+    tk = _title_key(job.title)
+    if not tk:
+        return ([], []) if include_contact else []
+    ctk = _specific_core_key(job.title)
+    months = _adjacent_months(job.posted_at)
+    keys = []
+    contact_keys = []
+    if u := _norm_url(job.apply_url):
+        keys.append(f"url:{tk}|{u}")
+        if ctk and ctk != tk:
+            keys.append(f"urc:{ctk}|{u}")
+    for raw_p in (job.phones or [])[:2]:
+        np = _norm_phone(raw_p, job.country)
+        if np:
+            for m in months:
+                keys.append(f"ph:{tk}|{np}|{m}")
+                contact_keys.append(f"cp:{job.country}:{np}|{m}")
+                if ctk and ctk != tk:
+                    keys.append(f"phc:{ctk}|{np}|{m}")
+    if job.email:
+        em = job.email.strip().lower()
+        for m in months:
+            keys.append(f"em:{tk}|{em}|{m}")
+            contact_keys.append(f"ce:{job.country}:{em}|{m}")
+            if ctk and ctk != tk:
+                keys.append(f"emc:{ctk}|{em}|{m}")
+    if job.deadline and job.cities:
+        keys.append(f"dl:{tk}|{_norm(job.cities[0])}|{job.deadline}")
+    if ctk:
+        for m in months:
+            keys.append(f"sp:{job.country}:{ctk}|{m}")
+    k_list = list(dict.fromkeys(keys))
+    if include_contact:
+        return k_list, list(dict.fromkeys(contact_keys))
+    return k_list
+
+
+_GENERIC_EMP = frozenset({
+    "", "غير معلن", "شركه خاصه", "شركة خاصة", "فرص عمل في تركيا الرسميه", "فرص عمل في تركيا",
+    "منظمات ومؤسسات في تركيا", "شركات ومصانع غازي عنتاب", "منظمه دوليه / وكاله امميه",
+    "منظمة دولية / وكالة أممية", "موقع فرص عمل في تركيا", "منصه سلام جوبز", "موقع ادويت",
+})
+
+
+def _compatible_duplicate(old: dict, job: Job) -> bool:
+    """Prevent false merges between distinct employers or provinces when matching on sp: keys."""
+    if _norm_url(old.get("apply_url")) and _norm_url(old.get("apply_url")) == _norm_url(job.apply_url):
+        return True
+    old_ph = {_norm_phone(p, job.country) for p in (old.get("phones") or []) if _norm_phone(p, job.country)}
+    new_ph = {_norm_phone(p, job.country) for p in (job.phones or []) if _norm_phone(p, job.country)}
+    if old_ph and new_ph and old_ph.isdisjoint(new_ph):
+        return False
+    old_em = (old.get("email") or "").strip().lower()
+    new_em = (job.email or "").strip().lower()
+    if old_em and new_em and old_em != new_em:
+        return False
+    if (old_ph and old_ph == new_ph) or (old_em and old_em == new_em):
+        return True
+    generic_cities = {"", "غير محدد", "عدة محافظات", "عدة ولايات في تركيا"}
+    old_c = {c for c in (old.get("cities") or []) if c not in generic_cities}
+    new_c = {c for c in (job.cities or []) if c not in generic_cities}
+    if old_c and new_c and old_c.isdisjoint(new_c):
+        return False
+    old_e = _norm(old.get("employer"))
+    new_e = _norm(job.employer)
+    gen_emp_norm = {_norm(x) for x in _GENERIC_EMP}
+    if old_e and new_e and old_e not in gen_emp_norm and new_e not in gen_emp_norm:
+        if old_e not in new_e and new_e not in old_e:
+            return False
+    return True
 
 
 def expires_on(job: Job) -> str:
@@ -389,10 +616,29 @@ def upsert(con: sqlite3.Connection, job: Job, status: str | None = None) -> tupl
 
     fp = fingerprint(job)
     keys = dedupe_keys(job)
+    lookup_keys, contact_keys = _dedupe_lookup_keys(job, include_contact=True)
     row = con.execute("SELECT id, data, status, expires_on, deadline FROM jobs WHERE fp=?", (fp,)).fetchone()
-    if not row and keys:
-        q = f"SELECT j.id, j.data, j.status, j.expires_on, j.deadline FROM job_keys k JOIN jobs j ON j.id=k.job_id WHERE k.k IN ({','.join('?' * len(keys))}) LIMIT 1"
-        row = con.execute(q, keys).fetchone()
+    if not row and lookup_keys:
+        q = f"SELECT j.id, j.data, j.status, j.expires_on, j.deadline FROM job_keys k JOIN jobs j ON j.id=k.job_id WHERE k.k IN ({','.join('?' * len(lookup_keys))}) AND j.country=?"
+        for cand in con.execute(q, lookup_keys + [job.country]):
+            old_cand = json.loads(cand["data"])
+            if _compatible_duplicate(old_cand, job):
+                row = cand
+                break
+    if not row and contact_keys:
+        q = f"SELECT j.id, j.data, j.status, j.expires_on, j.deadline FROM job_keys k JOIN jobs j ON j.id=k.job_id WHERE k.k IN ({','.join('?' * len(contact_keys))}) AND j.country=?"
+        for cand in con.execute(q, contact_keys + [job.country]):
+            old_cand = json.loads(cand["data"])
+            if _compatible_duplicate(old_cand, job) and _same_contact_posting(
+                old_cand.get("title") or "",
+                old_cand.get("raw") or "",
+                job.title,
+                job.raw or "",
+                old_post_url=old_cand.get("post_url") or "",
+                new_post_url=job.post_url or "",
+            ):
+                row = cand
+                break
     t = now()
     if row:
         jid, new = row["id"], False
@@ -411,14 +657,31 @@ def upsert(con: sqlite3.Connection, job: Job, status: str | None = None) -> tupl
             for k in ("employer", "salary", "deadline", "education", "apply_url", "email", "shift"):
                 if not merged.get(k) and jd.get(k):
                     merged[k] = jd[k]
-            if jd.get("phones") and not merged.get("phones"):
-                merged["phones"] = jd["phones"]
-            if jd.get("apply_types"):
-                merged["apply_types"] = sorted(set(merged.get("apply_types") or []) | set(jd["apply_types"]))
-            if jd.get("tags"):
-                merged["tags"] = sorted(set(merged.get("tags") or []) | set(jd["tags"]))
+        # Prefer specific cities over generic country/multi-province placeholders
+        generic_cities = {"غير محدد", "عدة محافظات", "عدة ولايات في تركيا"}
+        old_cs = old.get("cities") or []
+        new_cs = jd.get("cities") or []
+        if new_cs and not any(c in generic_cities for c in new_cs) and (not old_cs or any(c in generic_cities for c in old_cs)):
+            merged["cities"] = new_cs
+        elif old_cs and not any(c in generic_cities for c in old_cs):
+            merged["cities"] = old_cs
+        merged["phones"] = sorted({
+            _norm_phone(p, job.country)
+            for p in (old.get("phones") or []) + (jd.get("phones") or [])
+            if _norm_phone(p, job.country)
+        })
+        if jd.get("apply_types") or old.get("apply_types"):
+            merged["apply_types"] = sorted(set(old.get("apply_types") or []) | set(jd.get("apply_types") or []))
+        if jd.get("tags") or old.get("tags"):
+            merged["tags"] = sorted(set(old.get("tags") or []) | set(jd.get("tags") or []))
+        # Prefer direct ATS/form apply URL when either version had one
+        if jd.get("apply_url") and da.is_direct_form_or_ats(jd["apply_url"]) and not (merged.get("apply_url") and da.is_direct_form_or_ats(merged["apply_url"])):
+            merged["apply_url"] = jd["apply_url"]
         if merged.get("apply_url") and da.is_disallowed_offline_url(merged["apply_url"]):
             merged["apply_url"] = None
+        merged["apply_types"] = tx.infer_apply_types(
+            merged.get("apply_url"), merged.get("phones") or [], bool(merged.get("whatsapp")), merged.get("email")
+        )
         merged["country"] = job.country
         today_str = date.today().isoformat()
         new_exp = max(row["expires_on"] or "", expires_on(job))
@@ -431,9 +694,11 @@ def upsert(con: sqlite3.Connection, job: Job, status: str | None = None) -> tupl
                 "expired" if row["status"] == "live" and not still_open else row["status"]
             )
         )
+        merged_cities_str = "|" + "|".join(merged.get("cities") or []) + "|" if merged.get("cities") else ""
         con.execute(
-            "UPDATE jobs SET data=?, country=?, sector=?, apply_types=?, deadline=?, expires_on=?, status=?, updated_at=? WHERE id=?",
-            (json.dumps(merged, ensure_ascii=False),
+            "UPDATE jobs SET title=?, cities=?, data=?, country=?, sector=?, apply_types=?, deadline=?, expires_on=?, status=?, updated_at=? WHERE id=?",
+            (merged.get("title", job.title), merged_cities_str,
+             json.dumps(merged, ensure_ascii=False),
              job.country,
              merged.get("sector", job.sector),
              "|" + "|".join(merged.get("apply_types") or []) + "|" if merged.get("apply_types") else "",

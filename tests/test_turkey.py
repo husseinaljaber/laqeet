@@ -112,7 +112,7 @@ def test_turkey_portals_parsers():
         posted_at="2026-11-14T13:00:00+00:00",
         body_text="نبحث عن مدير فرع\nالراتب: 55,000 TL\nالشروط المطلوبة:\n- خبرة 5 سنوات\nالمهام:\n- إدارة الفريق",
         city_hint="Başakşehir İstanbul",
-        phones=["05385844484"],
+        phones=["05391112233"],
         email="hr@example-tr.org",
     )
     assert job is not None
@@ -120,6 +120,16 @@ def test_turkey_portals_parsers():
     assert "55,000 TL" in (job.salary or "")
     assert "خبرة 5 سنوات" in job.skills and "إدارة الفريق" in job.tasks
     assert "email" in job.apply_types and "whatsapp" in job.apply_types
+
+    # Adwhit site-wide floating WhatsApp support phone must NOT pass alone as an employer contact
+    assert tp._build_tr_job(
+        title="مطلوب محاسب في إسطنبول",
+        source="adwhit_web",
+        post_url="https://www.adwhit.com/ar/test-2",
+        posted_at="2026-11-14T13:00:00+00:00",
+        body_text="محاسب بدوام كامل",
+        phones=["05385844484"],
+    ) is None
 
 
 def test_stats_by_country_returns_isolated_turkey_and_syria_sector_counts(tmp_path):

@@ -77,19 +77,20 @@ _NON_JOB_EXCLUDES = re.compile(
         r"دعوه لتقديم عروض اسعار|تقديم عروض اسعار|عروض اسعار|\bitb\b|\brfp\b|\brfq\b|استدراج عروض|"
         r"حاله الطقس|درجات الحراره|توقعات الطقس|الارصاد الجويه|"
         r"\bبورس\b|منحه دراسيه|منح دراسيه|\bburslar[ıi]\b|\bburs\s+program|"
-        r"egitimlerine kayitlar|eğitimlerine kayıtlar|ucretsiz ogrenci|ücretsiz öğrenci|\btubitak\b|\btübitak\b|ogrenci plan"
+        r"egitimlerine kayitlar|eğitimlerine kayıtlar|ucretsiz ogrenci|ücretsiz öğrenci|\btubitak\b|\btübitak\b|ogrenci plan|"
+        r"للاطلاع علي (?:تفاصيل )?الشواغر المتاحه"
     ),
     re.I,
 )
 _TR_GOV_CIVIL_RE = re.compile(
     r"\bkpss\b|\bt\.?c\.?\s*vatanda[şs][ıi]\b|\btürkiye cumhuriyeti vatanda[şs][ıi]\b|"
-    r"\b(?:kamu|memur|uzman yard[ıi]mc[ıi]s[ıi]|müfettiş yard[ıi]mc[ıi]s[ıi]|kontrolörü|sözleşmeli\s+(?:personel|mühendis|tekniker))\b[^\n]{0,40}\bal[ıi]m[ıi]\b|"
-    r"(?:bakanlığ[ıi]|cumhurbaşkanlığ[ıi]|genel müdürlüğü|valiliğ[ıi]|kaymakamlığ[ıi]|belediye[^\n]{0,30}al[ıi]m[ıi]|\bsgk\b|işkur devlet memur|kamu ihale kurumu|savunma sanayii başkanlığ[ıi])",
+    r"\b(?:kamu|memur|uzman yard[ıi]mc[ıi]s[ıi]|müfettiş yard[ıi]mc[ıi]s[ıi]|kontrolörü|sözleşmeli\s+(?:personel|bilişim\s+personeli|mühendis|tekniker))\b[^\n]{0,40}\b(?:al[ıi]m[ıi]|duyuru)|"
+    r"(?:kalk[ıi]nma ajans[ıi]|bakanl[ıi]ğ[ıi]|cumhurbaşkanl[ıi]ğ[ıi]|genel müdürlüğü|valiliğ[ıi]|kaymakaml[ıi]ğ[ıi]|belediye[^\n]{0,30}al[ıi]m[ıi]|\bsgk\b|\bytb\b|işkur devlet memur|kamu ihale kurumu|savunma sanayii başkanl[ıi]ğ[ıi])",
     re.I,
 )
 _TR_CITIZEN_MANDATE_RE = re.compile(
     fold(
-        r"(?:تحمل|يحمل|حامل[ةه]?|شروط التقديم[^\n]{0,40}|يشترط|شرط)[^\n]{0,25}(?:ال)?جنسيه(?:\s+ال)?تركيه|"
+        r"(?:تحمل|يحمل|حامل[ةه]?|حاصل[ةه]?\s+على|الشروط[^\n]{0,40}|شروط التقديم[^\n]{0,40}|يشترط|شرط)[^\n]{0,25}(?:ال)?جنسيه(?:\s+ال)?تركيه|"
         r"(?:ال)?جنسيه(?:\s+ال)?تركيه\s*(?:حصرا|فقط)|"
         r"(?:مع|ب|لديه|لديها|ذو|ذات)[^\n]{0,12}(?:ال)?جنسيه(?:\s+ال)?تركيه"
     ),

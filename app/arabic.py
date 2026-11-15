@@ -11,8 +11,8 @@ import unicodedata
 
 _ARABIC_LETTERS = re.compile(r"[ء-ي]")
 _DIGIT_RUN = re.compile(r"\d+")
-# Characters we keep: Arabic letters and marks, Latin letters, digits, basic punctuation.
-_JUNK = re.compile(r"[^؀-ۿ0-9A-Za-z\s\-\(\)/.,:+]")
+# Characters we keep: Arabic letters and marks, Latin + Extended Latin (Turkish İıŞşĞğÇçÖöÜü), digits, basic punctuation.
+_JUNK = re.compile(r"[^\u0600-\u06FF0-9A-Za-z\u00C0-\u024F\s\-\(\)/.,:+&']")
 
 # A few frequent words, written backwards. If they appear, the text is in visual order.
 _REVERSED_MARKERS = ("ةئفلا", "لمعلا ةظفاحم", "ةيسيئرلا ماهملا", "لضفملا", "قشمد")

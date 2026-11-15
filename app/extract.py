@@ -136,19 +136,75 @@ def _strip_emoji(s: str) -> str:
     return re.sub(r"\s+", " ", _EMOJI.sub(" ", s)).strip()
 
 
-def _clean_title(s: str) -> str:
+def _clean_parens(s: str) -> str:
+    """Fix dangling/unclosed parentheses and spacing inside brackets without breaking valid tags."""
+    s = re.sub(r"\(\s+", "(", s)
+    s = re.sub(r"\s+\)", ")", s)
+    s = re.sub(r"\(\s*\)", "", s)
+    s = re.sub(r"\s*\(\s*$", "", s)
+    while s.count("(") > s.count(")"):
+        idx = s.rfind("(")
+        if idx < 0:
+            break
+        tail = s[idx + 1:].strip(" -–:،,.|")
+        if not tail or (len(s) >= 75 and " " not in tail and len(tail) <= 3):
+            s = s[:idx].strip(" -–:،,.|")
+        else:
+            s = s[:idx] + "(" + tail + ")"
+    return re.sub(r"\s+", " ", s).strip()
+
+
+def normalize_title_display(s: str, keep_matlob: bool = False) -> str:
+    """Normalize a display job title cleanly: strip emojis, announcements, leading single count, doubled shifts, dangling '('."""
     s = _strip_emoji(normalize(s))
     s = re.sub(r"^\s*(?:\d{1,2}|[٠-٩]{1,2})\s*[-.)]\s*", "", s)  # «11- مدير عام»
+    # Strip single leading vacancy count («1 سائق آليات» -> «سائق آليات»), preserving phrases like «4 شواغر توظيف» for filtering
+    s = re.sub(
+        r"^\s*(?:[1-9]|1[0-9]|[١-٩])\s+(?=[ء-يA-Za-z])(?!سنوات|اشهر|أشهر|ايام|أيام|عام|سنة|ساعة|ساعات|دولار|ليرة|شواغر|وظائف)",
+        "",
+        s,
+    )
     s = re.sub(r"^\s*o\s+(?=[ء-ي])", "", s)
-    s = re.sub(r"^\s*(?:(?:المسم[ىي]|المنصب|الشاغر)\s*الوظيف[يى]|(?:إعلان|اعلان)\s+شاغر|المسمى|مطلوب(?:ة|ون|ين)?|يلزمنا|Position(?:\s*Title)?|Job\s*Title|Vacancy(?:\s*Title)?)\s*[:：\-–]?\s*", "", s, flags=re.I)
+    for _ in range(3):
+        if keep_matlob:
+            s = re.sub(
+                r"^\s*(?:(?:إعلان|اعلان)\s+(?:توظيف|شاغر(?:\s+وظيف[يى])?)|(?:المسم[ىي]|المنصب|الشاغر)\s*الوظيف[يى]|فرص[ةه]\s*عمل|نحن\s*نوظ[ّ]?ف|Hiring|Position(?:\s*Title)?|Job\s*Title|Vacancy(?:\s*Title)?)\s*[:：\-–|/|]*\s*",
+                "",
+                s,
+                flags=re.I,
+            )
+        else:
+            s = re.sub(
+                r"^\s*(?:(?:المسم[ىي]|المنصب|الشاغر)\s*الوظيف[يى]|(?:إعلان|اعلان)\s+(?:توظيف|شاغر(?:\s+وظيف[يى])?)|فرص[ةه]\s*عمل|نحن\s*نوظ[ّ]?ف|المسمى|مطلوب(?:ة|ون|ين)?|يلزمنا|Hiring|Position(?:\s*Title)?|Job\s*Title|Vacancy(?:\s*Title)?)\s*[:：\-–|/|]*\s*",
+                "",
+                s,
+                flags=re.I,
+            )
     s = re.sub(r"^\s*(?:أولا|اولا|ثانيا|ثالثا|رابعا|خامسا|سادسا)ً?\s*[:\-–]\s*", "", s)
     s = re.sub(r"\s*[-–]\s*غير محدد\s*$", "", s)
     s = re.sub(r"[#@]\S+", " ", s)
     s = re.sub(r"\*+", " ", s)
-    s = re.sub(r"\s+", " ", s).strip(" -–:،,.|")
+    s = re.sub(r"\s+", " ", s).strip(" -–:،,.|/")
+    # Remove doubled trailing shift chips when the shift/mode already appears earlier in the title
+    s = re.sub(
+        r"(\([^)]*(?:دوام|عن\s*ب[ُ]?عد)[^)]*\))\s+(?:دوام\s*(?:جزئي|جزئى|كامل|حضوري)|عن\s*ب[ُ]?عد|عمل\s*حر)\s*$",
+        r"\1",
+        s,
+    )
+    s = re.sub(r"([–\-|]\s*عن\s*ب[ُ]?عد\b.+?)\s+عن\s*ب[ُ]?عد\s*$", r"\1", s)
     for _ in range(3):
         s = _TITLE_TRAIL.sub("", s).strip(" -–:،,.")
-    return s[:80].strip()
+    if len(s) > 94:
+        cut = s[:94]
+        if not s[94:95].isspace() and " " in cut[40:]:
+            cut = cut.rsplit(" ", 1)[0]
+        s = cut.strip(" -–:،,.")
+    s = _clean_parens(s)
+    return s.strip(" -–:،,.")
+
+
+def _clean_title(s: str) -> str:
+    return normalize_title_display(s, keep_matlob=False)[:80].strip()
 
 
 def _cut_title(s: str) -> str:
@@ -416,16 +472,56 @@ def _split_item_city(item: str, country: str = "sy") -> tuple[str, list[str]]:
 _NOT_TITLE = re.compile(r"^(?:ال)?سلام عليكم|^مرحبا|^من (?:بيتك|البيت|المنزل)|"
                         r"^(?:تحديد|إعداد|اعداد|متابعة|تنفيذ|القيام|المساهمة|ضمان|تقديم|التواصل|التنسيق|المشاركة|مراجعة|"
                         r"كتابة|بناء|دعم|إدارة|ادارة)\s+\S+\s+\S+|"
-                        r"^\(|^(?:مطلوب[ةه]?|بهار|نارة|فريق|صبية|شاب|فرصة)$|^عرض خاص|^الزملاء|^للجنسي?ين|^اكيد|^أكيد|^كفاءات|^الهندسية$|^تلفزيون|^قناة|^إذاعة|"
+                        r"^\(|^(?:مطلوب[ةه]?|بهار|نارة|فريق|صبية|شاب|فرصة|كوادر)$|^عرض خاص|^الزملاء|^للجنسي?ين|^اكيد|^أكيد|^كفاءات|^الهندسية$|^تلفزيون|^قناة|^إذاعة|"
                         r"^الموعد|^صدور|نتائج|^لتقديم|قم بالدخول|^نواصل|بترحب|^حرصا|^نسبة|^تسجيل و|^دعوة|^من جميع المتقدمين|ممن تنطبق|"
-                        r"^يوجد|^الهلال الأحمر|^مشفى|^مستشفى|^رابط|^الطبية$|^الشركات|\sهو\s|\sهي\s|"
+                        r"^يوجد|^الهلال الأحمر|^مشفى(?![^\n]*(?:بحاج[ةه]|مطلوب|تطلب|يلزم|شاغر|توظيف))|^مستشفى(?![^\n]*(?:بحاج[ةه]|مطلوب|تطلب|يلزم|شاغر|توظيف))|^رابط|^الطبية$|^الشركات|^(?:ما\s+(?:هو|هي)|النجاح\s+هو|التوظيف\s+هو)|"
                         r"^في\s|^ضمن\s|^اشتراك|^باقة|^www\.|^فرص[ةه]?$|^فرصتك|^فرصة تعاقد|(?:^|\s)لتوريد\b|توريد (?:خدمات|مواد|وقود)|مناقصة|عروض أسعار|"
                         r"^اليوم والتاريخ|^التوقيت|^الوثائق المطلوبة|^يرجى التواجد|^أجرى|^تفاصيل وموعد|^موعد (?:الاختبار|المقابلة|الامتحان)|^الكسل الوظيفي|^تشكل نقاط|^تصريح|^المساعدات الإنسانية|^الرواتب الشهرية|^المدينة الصناعية|^سانا$|"
-                        r"^وظيف[ةه](?:\s+جديد[ةه])?$|^الشواغر\s+الوظيفي[ةه]$|^الرمز\s+الوظيف[يى]|^المميزات\b|^نبذ[ةه]\b|^رواتب\s+عالي[ةه]|^بيئ[ةه]\s+عمل|^اجازات\s+سنوي[ةه]|^تأمين\s+صح[يى]|"
+                        r"^وظيف[ةه](?:\s+جديد[ةه])?$|^الشواغر\s+(?:الوظيفي[ةه]|المتاح[ةه])$|^الرمز\s+الوظيف[يى]|^المميزات\b|^نبذ[ةه]\b|^رواتب\s+عالي[ةه]|^بيئ[ةه]\s+عمل|^اجازات\s+سنوي[ةه]|^تأمين\s+صح[يى]|"
                         r"^العدد\s*[\d٠-٩]+$|^وصف\s+مختصر\s+ل|^نموذج\s+الأعمال\s+السابقة|"
                         r"^(?:المهام|المسؤوليات|الشروط|المهارات|المؤهلات|المتطلبات|ال[إا]ختصاصات|التعاقد\s+مع\s+الشركات|الرواتب)\b|"
-                        r"^(?:(?:أن|ان)\s+يكون\s+(?:سوريا|المتقدم)|وطن$|عربي$|للعم$|حدا$)")
-_LATIN_SENTENCE = re.compile(r"\b(years?|experience|minimum|required|must|apply|send|knowledge|proficiency|familiarity|career move|foundation|understanding|passionate|campaigns|to review|responsibilities|click here|for more|job description|job summary)\b", re.I)
+                        r"^(?:للاطلاع\s+على|هل\s+أنت\s+مهتم|رفد\s+ك[وا]+در|ك[وا]+در(?:\s+(?:وطني[ةه]|مؤهل[ةه]|للعمل))?$|شواغر\s+(?:توظيف|وظيفي[ةه])|\d+\s*شواغر|"
+                        r"نوع\s+الدوام|الدوام\b|دوام\s+(?:كامل|جزئي)|الراتب(?:\s*[:：]|$)|راتب\s+(?:شهري\s+عالي|ثابت|مجز)|"
+                        r"خبر[ةه]\s+(?:في|لا\s*تقل)|العمر\b|السن\b|فرع\s+(?:إدلب|ادلب|دمشق|حلب|حمص|حماة|الحريقة)|شهاد[ةه]\s+معهد)|"
+                        r"^(?:(?:أن|ان)\s+يكون\s+(?:سوريا|المتقدم)|وطن$|عربي$|للعم$|حدا$)|"
+                        r"^(?:مكان\s+العمل|الموقع|المعرف\s+الوظيف[يى])\s*(?:[:：(]|$)|^الوظيفتان\s+بدوام\s+كامل|"
+                        r"^(?:امتلاك\s+مهار|اللباق[ةه]\s+وحسن|القدرة\s+على|[إا]جادة\s+(?:ال|لغ)|[إا]تقان\s+(?:ال|عمل)|حسن\s+(?:التعامل|المظهر)|الالتزام\s+ب)|"
+                        r"^(?:لتوظيف\s+في\b|لمركز\s+|مميز[ةه]\s+بانتظارك|كبر\s+فريقنا|كيف\s+تحدث\b)|"
+                        r"(?i:^(?:organization|closes|closing\s*date|deadline|duty\s*station|location|son\s+başvuru\s+tarihi)\s*[:：]|"
+                        r"^(?:for\s+)?(?:two|three|four|five|several|\d+)\s+positions?\b|"
+                        r"^excellente\s+maîtrise\b)")
+_LATIN_SENTENCE = re.compile(
+    r"\b(years?|experience|minimum|required|must|apply|send|knowledge|proficiency|familiarity|"
+    r"career move|foundation|understanding|passionate|campaigns|to review|responsibilities|"
+    r"click here|for more|job description|job summary|create and|ensure consistent|align all|"
+    r"use the app|strong communication|bachelor'?s? degree|master'?s? degree|working conditions?|"
+    r"ability to|proven experience|commitment to the role)\b|"
+    r"\b(?:yönetecek|liderlik\s+edecek|operasyonlarını|kalitesini)\b|"
+    r"\b(?:roas|kpis?|self-?motivated|objection-handling|closing skills|brand identity|content calendars?|content plans?|track opportunit|customer interactions|strong alignment|kpi reporting|growth in engagement)\b",
+    re.I,
+)
+_STRICT_LATIN_NON_JOB = re.compile(
+    r"\b(?:bachelor'?s?\s+degree|master'?s?\s+degree|working\s+conditions?|create\s+and\b|"
+    r"ensure\s+consistent|align\s+all|strong\s+communication|ability\s+to|"
+    r"commitment\s+to\s+the\s+role|responsibilities|click\s+here|for\s+more|"
+    r"job\s+description|job\s+summary)\b",
+    re.I,
+)
+_EN_IMPERATIVE_START = re.compile(
+    r"^(?:create|ensure|align|develop|manage|coordinate|maintain|prepare|monitor|assist|support|"
+    r"perform|collaborate|participate|provide|conduct|review|update|use|record|"
+    r"strong|clear|improved|growth|organized|proactive|excellent|proven)\s+",
+    re.I,
+)
+_EN_ROLE_NOUN = re.compile(
+    r"\b(?:manager|officer|coordinator|assistant|specialist|engineer|developer|analyst|designer|"
+    r"lead|leader|head|director|supervisor|teacher|trainer|consultant|intern|educator|technician|nurse|"
+    r"accountant|driver|translator|interpreter|representative|advisor|worker|chef|"
+    r"expert|therapist|pharmacist|chemist|doctor|surgeon|editor|writer|producer|marketer|"
+    r"recruiter|auditor|cashier|barista|cook|cleaner|guard|operator|mechanic|electrician|"
+    r"carpenter|tailor)\b",
+    re.I,
+)
 
 
 def _good_title(t: str) -> bool:
@@ -433,8 +529,13 @@ def _good_title(t: str) -> bool:
     if len(t) < 3 or re.fullmatch(r"[\d\s+()-]+", t) or re.match(r"https?://|www\.", t) or _NOT_TITLE.search(t.strip("-•* ")) \
             or _GENERIC_PERSON.match(F(t)) or _only_places(t) or t in tx.CITIES or t == "عدة محافظات" or re.search(r"\.(com|net|org)\b", t):
         return False
-    if not re.search(r"[ء-ي]", t) and _LATIN_SENTENCE.search(t):
-        return False  # «Minimum 2 years of experience in medical tourism» is a requirement line
+    if not re.search(r"[ء-ي]", t):
+        if _STRICT_LATIN_NON_JOB.search(t):
+            return False
+        if _LATIN_SENTENCE.search(t) and not _EN_ROLE_NOUN.search(t):
+            return False  # «Minimum 2 years of experience in medical tourism» / «Create and manage content calendars»
+        if _EN_IMPERATIVE_START.match(t) and not _EN_ROLE_NOUN.search(t):
+            return False
     return bool(re.search(r"[ء-ي]", t)) or len(t.split()) >= 2
 
 
@@ -452,7 +553,7 @@ def _all_needs(text: str) -> list[str]:
     out = []
     for m in rx.finditer(text):
         t = _cut_title(m.group(1))
-        if len(t) >= 3 and not re.search(r"التالي|الآتي|الاتي", t) and t not in out:
+        if len(t) >= 3 and _good_title(t) and not re.search(r"التالي|الآتي|الاتي", t) and t not in out:
             out.append(t)
     return out
 
@@ -705,6 +806,8 @@ def extract(text: str, source: str, post_url: str, posted_at: str | None = None,
                 phones.append(p)
     phones.sort()
     emails = [e for e in tx.emails(body) if da._good_email(e)]
+    if tx.is_foreign_non_target(text, apply_url, emails[0] if emails else None, has_local_city=bool(cities and cities != ["عدة محافظات"] and cities != ["عدة ولايات في تركيا"])):
+        return []
     deadline = parse_deadline(body, posted_at)
     tr_pair = re.search(r"💼\s*([^:\n]{2,70}):\s*([^\n📍⏰🔗]{4,110})", text) if target_country == "tr" else None
     employer = tr_pair.group(1).strip() if tr_pair else _employer(body)

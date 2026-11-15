@@ -65,14 +65,21 @@ _DIRECT_FORM_OR_ATS_RE = re.compile(
     r"(?:form\.)?jotform\.com|typeform\.com|airtable\.com/(?:app|shr)|tally\.so|surveymonkey\.com|"
     r"zfrmz\.com|script\.google\.com/macros/|"
     r"apply\.hiring\.moad\.gov\.sy|moad\.gov\.sy/recruitment/jobs|recruitment\.ssf\.gov\.sy|"
-    r"career\.ihsanrd\.org|jobs\.unicef\.org|careers\.un\.org|inspira\.un\.org|"
+    r"career\.ihsanrd\.org|jobs\.unicef\.org|careers\.un\.org|inspira\.un\.org/psp/.+HRS_JOB_OPENING_ID|"
     r"bamboohr\.com|hrpeak\.com|hr-manager\.net|baseilowcloud\.com|emply\.com|jobs\.tdh\.org|"
     r"greenhouse\.io|lever\.co|myworkdayjobs\.com|myworkdaysite\.com|smartrecruiters\.com|workable\.com|"
     r"recruitee\.com|taleo\.net|successfactors\.(?:com|eu)|oraclecloud\.com|ultipro\.com|csod\.com|"
     r"zohorecruit\.com|odoo\.com/jobs|webcruiter\.no|employ\.acf-e\.org|careers-page\.com|"
     r"sams-hr\.com|talkpu\.sh|erp\.bonyan-ngo\.org|sssd-ngo\.net|alignerr\.com|mercor\.com|creativetaskflow\.com|"
-    r"sened\.org\.tr/job_ad/|jobsintr\.net/jobs/[^/?#]+$|"
+    r"sened\.org\.tr/job_ad/|jobsintr\.net/jobs/[A-Za-z0-9_-]+$|"
     r"ee\.moi-sy\.com|au\.edu\.sy/job/)",
+    re.I,
+)
+
+_NON_JOB_LANDING_RE = re.compile(
+    r"(?:/account/(?:applicants|login|register)|/recruiting-agencies/?$|ab-ilan\.com/ngocareers/?$|"
+    r"inspira\.un\.org/psp/[^/]+/\?cmd=login|cibeg\.taleo\.net|"
+    r"mahereen\.com/login|salamjobs\.com/login|jobsintr\.net/(?:account|login|register))",
     re.I,
 )
 
@@ -175,7 +182,7 @@ def is_direct_form_or_ats(url: str) -> bool:
 
 def is_disallowed_offline_url(url: str) -> bool:
     """Fast static check when no HTTP client is available."""
-    return is_social_or_channel(url) or is_aggregator_or_wall(url) or is_file_folder_or_viewer(url)
+    return is_social_or_channel(url) or is_aggregator_or_wall(url) or is_file_folder_or_viewer(url) or bool(_NON_JOB_LANDING_RE.search(url or ""))
 
 
 def extract_phone_from_wa(url: str, country: str = "sy") -> list[str]:
@@ -233,12 +240,16 @@ def _score_candidate_link(href: str, text: str, page_url: str) -> int:
     full = urljoin(page_url, href)
     if not full.startswith(("http://", "https://")):
         return 0
-    if is_social_or_channel(full) or is_aggregator_or_wall(full) or is_file_folder_or_viewer(full):
+    if is_social_or_channel(full) or is_aggregator_or_wall(full) or is_file_folder_or_viewer(full) or _NON_JOB_LANDING_RE.search(full):
         return 0
-    # Avoid self links, pagination, language switchers, category pages
+    # Avoid self links, pagination, language switchers, category pages, and cross-portal promo cards
+    page_host = _host(page_url)
+    full_host = _host(full)
+    if full_host != page_host and full_host == "jobsintr.net" and "/jobs/" in low_href and page_host in ("salamjobs.com", "adwhit.com", "mahereen.com", "wazifturk.com"):
+        return 0
     if urlparse(full).path.rstrip("/") == urlparse(page_url).path.rstrip("/"):
         return 0
-    if re.search(r"[?&](?:lang|replytocom|share)=|/category/|/tag/|/jobs/?$|/vacancies/?$|/wp-login|/login|/account/|/register|/signin", low_href):
+    if re.search(r"[?&](?:lang|replytocom|share)=|/category/|/tag/|/jobs/?$|/vacancies/?$|/wp-login|/login|/account/|/register|/signin|/ngocareers/?$", low_href):
         return 0
     if is_direct_form_or_ats(full):
         return 100
@@ -252,34 +263,39 @@ def _score_candidate_link(href: str, text: str, page_url: str) -> int:
 def extract_apply_from_html(html_text: str, page_url: str, country: str = "sy") -> dict:
     """Pull direct form/ATS URLs, career emails, phones, and internal form signal from HTML."""
     soup = BeautifulSoup(html_text, "html.parser")
-    for noise in soup.select(".sj-card, .similar-jobs, .related-jobs"):
+    for noise in soup.select(
+        ".sj-card, .similar, .similar-jobs, .related, .related-jobs, .sidebar, "
+        "[class*='sidebar'], [class*='related'], [class*='similar'], "
+        "header, footer, nav, aside, .site-footer, .site-header"
+    ):
         noise.decompose()
-    text = soup.get_text(" ", strip=True)
-    closed = bool(_CLOSED_PAGE_RE.search(text))
+    main_node = soup.find("article") or soup.find("main") or soup.select_one(".entry-content,.post-content,.job-description,.ck-content,.content-single") or soup
+    main_text = main_node.get_text(" ", strip=True)
+    closed = bool(_CLOSED_PAGE_RE.search(main_text or soup.get_text(" ", strip=True)))
     phone_fn = tx.phones_tr if country == "tr" else tx.phones
 
     best_url = None
     best_score = 0
-    for a in soup.find_all("a", href=True):
+    for a in main_node.find_all("a", href=True):
         href = a["href"].strip()
         sc = _score_candidate_link(href, a.get_text(" ", strip=True), page_url)
         if sc > best_score:
             best_score = sc
             best_url = strip_tracking(urljoin(page_url, href))
 
-    # Also check embedded iframes (JotForm / Google Forms / Kobo)
+    # Also check embedded iframes (JotForm / Google Forms / Kobo) inside main content
     if best_score < 90:
-        for fr in soup.find_all("iframe", src=True):
+        for fr in main_node.find_all("iframe", src=True):
             src = fr["src"].strip()
             if _DIRECT_FORM_OR_ATS_RE.search(src):
                 best_url = strip_tracking(urljoin(page_url, src))
                 best_score = 95
                 break
 
-    # Extract mailto:, Cloudflare email-protection, tel:/wa.me phones, and body emails/phones
+    # Extract mailto:, Cloudflare email-protection, tel:/wa.me phones, and body emails/phones strictly inside main_node
     emails: list[str] = []
     wa_phones: list[str] = []
-    for a in soup.find_all("a", href=True):
+    for a in main_node.find_all("a", href=True):
         href = a["href"].strip()
         low = href.lower()
         if low.startswith("mailto:"):
@@ -299,15 +315,11 @@ def extract_apply_from_html(html_text: str, page_url: str, country: str = "sy") 
                     if tp not in wa_phones:
                         wa_phones.append(tp)
 
-    for el in soup.find_all(attrs={"data-cfemail": True}):
+    for el in main_node.find_all(attrs={"data-cfemail": True}):
         cand = _decode_cf_email(el.get("data-cfemail") or "")
         if _good_email(cand) and cand not in emails:
             emails.append(cand)
 
-    main_node = soup.find("main") or soup.find("article") or soup.select_one(".entry-content,.post-content,.job-description") or soup
-    for noise in main_node.select("header, footer, nav, .site-footer, .site-header"):
-        noise.decompose()
-    main_text = main_node.get_text(" ", strip=True)
     for em in tx.emails(main_text):
         if _good_email(em) and em not in emails:
             emails.append(em)
@@ -319,7 +331,7 @@ def extract_apply_from_html(html_text: str, page_url: str, country: str = "sy") 
     # Also catch raw form URLs pasted as plain text without <a>
     if not best_url:
         for u in tx.urls(main_text):
-            if is_direct_form_or_ats(u):
+            if is_direct_form_or_ats(u) and not _NON_JOB_LANDING_RE.search(u):
                 best_url = strip_tracking(u)
                 break
 
@@ -327,7 +339,7 @@ def extract_apply_from_html(html_text: str, page_url: str, country: str = "sy") 
         "apply_url": best_url,
         "email": emails[0] if emails else None,
         "phones": phones,
-        "has_internal_form": _has_application_form(soup),
+        "has_internal_form": _has_application_form(main_node),
         "closed": closed,
     }
 

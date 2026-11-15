@@ -85,15 +85,18 @@ def _parse_relative_ar_date(text: str, now_dt: datetime | None = None) -> tuple[
     return dt.isoformat(timespec="seconds"), days <= config.HISTORY_DAYS
 
 
+_PORTAL_SITE_PHONES = {"05385844484"}  # Adwhit site-wide floating WhatsApp support icon
+
+
 def _clean_tr_title(title: str) -> str:
     t = html.unescape(re.sub(r"<[^>]+>", " ", title or ""))
     t = re.sub(r"\s*[-|–]\s*(?:فرص عمل في تركيا|أدويت|ادويت|Adwhit|سلام جوبز|SalamJobs).*$", "", t, flags=re.I)
-    return re.sub(r"\s+", " ", t).strip(" -–|:")
+    return ex.normalize_title_display(t, keep_matlob=True)
 
 
 def _is_clean_tr_posting(title: str, body: str) -> bool:
     combined = f"{title}\n{body}"
-    if not title or len(title) < 3 or "\ufffd" in title:
+    if not title or len(title) < 3 or "\ufffd" in title or not ex._good_title(title):
         return False
     if spam.is_spam(combined) or spam.is_tr_citizenship_only(combined):
         return False
@@ -127,14 +130,31 @@ def _build_tr_job(
         return None
 
     combined = f"{clean_t}\n{clean_body}"
-    cities = tx.tr_cities_from_text(f"{city_hint}\n{clean_t}") or tx.tr_cities_from_text(clean_body) or ["عدة ولايات في تركيا"]
-    found_phones = sorted({p for p in (phones or []) + tx.phones_tr(clean_body) if p not in tx._TR_BAD_PHONES})
+    explicit_tr = tx.tr_cities_from_text(f"{city_hint}\n{clean_t}") or tx.tr_cities_from_text(clean_body)
+    sy_cities = tx.cities_from_text(f"{city_hint}\n{clean_t}\n{clean_body}")
+    # Reject Syria or non-Turkey foreign listings mis-posted to Turkish portals
+    if sy_cities and (not explicit_tr or sy_cities and re.search(r"\bسوريا\b|\bsyria\b", combined, re.I)):
+        if not tx.tr_cities_from_text(f"{city_hint}\n{clean_t}"):
+            return None
+    if re.search(r"\b(?:دمشق|حلب|سوريا|syria|damascus|aleppo|درعا)\b", f"{city_hint} {clean_t}", re.I) and not explicit_tr:
+        return None
+    cities = explicit_tr or ["عدة ولايات في تركيا"]
+    found_phones = sorted({
+        p for p in (phones or []) + tx.phones_tr(clean_body)
+        if p not in tx._TR_BAD_PHONES and p not in _PORTAL_SITE_PHONES
+    })
     clean_email = email.strip() if email and da._good_email(email) else None
     if not clean_email:
         for em in tx.emails(clean_body):
             if da._good_email(em):
                 clean_email = em
                 break
+    if tx.is_foreign_non_target(combined, apply_url, clean_email, has_local_city=bool(explicit_tr)):
+        return None
+    if apply_url:
+        apply_url = da.strip_tracking(apply_url) or None
+        if apply_url and da.is_disallowed_offline_url(apply_url):
+            apply_url = None
 
     if not apply_url and not found_phones and not clean_email:
         return None
@@ -237,7 +257,8 @@ def scrape_jobsintr_web(client: httpx.Client, max_pages: int = 4) -> list[Job]:
                     continue
                 recent_on_page += 1
 
-                raw_title = re.sub(r"\s*منذ\s+.+$", "", header_txt).strip()
+                h1_el = header_el.select_one("h1, h2") if header_el else None
+                raw_title = (h1_el.get_text(" ", strip=True) if h1_el else re.sub(r"\s*منذ\s+.+$", "", header_txt)).strip()
                 if not raw_title:
                     og = ds.select_one('meta[property="og:title"]')
                     raw_title = og.get("content", "") if og else ""
@@ -332,7 +353,10 @@ def scrape_adwhit_web(client: httpx.Client, max_pages: int = 4) -> list[Job]:
                 dsc_txt = BeautifulSoup(dsc_html, "html.parser").get_text("\n", strip=True)
 
                 wa_phones: list[str] = []
-                for a in ds.select("a[href*='whatsapp'], a[href*='wa.me'], a[href^='tel:']"):
+                if jdata.get("contactPhone"):
+                    wa_phones.extend(tx.phones_tr(str(jdata["contactPhone"])))
+                dsc_soup = BeautifulSoup(dsc_html, "html.parser")
+                for a in dsc_soup.select("a[href*='whatsapp'], a[href*='wa.me'], a[href^='tel:']"):
                     href = a.get("href") or ""
                     if href.lower().startswith("tel:"):
                         wa_phones.extend(tx.phones_tr(href[4:]))

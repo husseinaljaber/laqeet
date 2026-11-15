@@ -12,6 +12,7 @@ import httpx
 warnings.filterwarnings("ignore", category=XMLParsedAsHTMLWarning)
 
 from .. import direct_apply as da
+from .. import extract as ex
 from .. import taxonomy as tx
 from ..classify import classify as computer_subfield
 from ..models import Job
@@ -107,6 +108,9 @@ def parse_reliefweb_rss(xml_text: str) -> list[Job]:
             apply_url = extracted_url if extracted_url else (None if (email or phones) else url)
             app_types = tx.infer_apply_types(apply_url, phones, False, email)
 
+            title = ex.normalize_title_display(title, keep_matlob=True)
+            if not title or len(title) < 3:
+                continue
             job = Job(
                 title=title[:120],
                 source="reliefweb",

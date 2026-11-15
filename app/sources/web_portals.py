@@ -15,6 +15,7 @@ import httpx
 
 from .. import config
 from .. import direct_apply as da
+from .. import extract as ex
 from .. import taxonomy as tx
 from ..classify import classify as computer_subfield
 from ..models import Job
@@ -120,8 +121,8 @@ def _make_wp_job(
     sector: str = "ngo",
 ) -> Job | None:
     """Build a normalized Job from a WordPress post or custom listing payload."""
-    clean_t = html.unescape(re.sub(r"<[^>]+>", " ", title or "")).strip()
-    if len(clean_t) < 3:
+    clean_t = ex.normalize_title_display(html.unescape(re.sub(r"<[^>]+>", " ", title or "")), keep_matlob=True)
+    if len(clean_t) < 3 or not ex._good_title(clean_t):
         return None
     body_txt = html.unescape(re.sub(r"<[^>]+>", " ", content_html or "")).strip()
     combined = f"{clean_t} {body_txt}"

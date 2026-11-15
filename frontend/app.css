@@ -45,9 +45,9 @@ button{font:inherit}
 /* Headline & Opening Animation */
 h1{font-family:var(--font-display);font-weight:700;font-size:clamp(1.9rem,5vw,3.2rem);line-height:1.25;margin:0;text-wrap:balance}
 .brand{color:var(--mint)}
-.rot{display:inline-grid;color:var(--mint);vertical-align:bottom}
-.rot span{grid-area:1/1;opacity:0;transform:translateY(.4em);white-space:nowrap}
-.rot span.on{opacity:1;transform:none}
+.rot{display:inline-grid;color:var(--mint);vertical-align:bottom;perspective:900px;transform-style:preserve-3d}
+.rot span{grid-area:1/1;opacity:0;white-space:nowrap;pointer-events:none;backface-visibility:hidden;transform-origin:50% 50% -22px;transform:rotateX(-82deg) translateY(.25em) scale(.94);filter:blur(1.5px);will-change:transform,opacity}
+.rot span.on{opacity:1;pointer-events:auto;transform:rotateX(0deg) translateY(0) scale(1);filter:none}
 .sub{margin:0;color:var(--hero-muted);max-width:70ch;font-size:.98rem;line-height:1.6}
 
 /* Counters */
@@ -286,10 +286,11 @@ dialog::backdrop{background:rgba(4,12,9,.65);backdrop-filter:blur(2px)}
 .lp-badge{display:inline-flex;align-items:center;gap:8px;align-self:flex-start;padding:5px 14px;border-radius:999px;background:rgba(60,197,150,.12);border:1px solid rgba(60,197,150,.28);color:var(--mint);font-size:.83rem;font-weight:600}
 .lp-badge-dot{width:8px;height:8px;border-radius:50%;background:var(--mint);box-shadow:0 0 10px var(--mint)}
 .lp-title{font-family:var(--font-display);font-size:clamp(2rem,4.4vw,3.25rem);line-height:1.3;margin:0;color:#fff}
-.lp-country-rot{display:inline-grid;vertical-align:bottom;text-align:center;padding:2px 14px;border-radius:12px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.16);color:#FFD166;transition:background .35s,border-color .35s,color .35s}
-.lp-country-rot.is-tr{background:rgba(239,68,68,.16);border-color:rgba(252,165,165,.38);color:#FCA5A5}
-.lp-country-rot span{grid-area:1/1;opacity:0;transform:translateY(.4em);white-space:nowrap}
-.lp-country-rot span.on{opacity:1;transform:none}
+.lp-country-rot{display:inline-grid;vertical-align:bottom;text-align:center;padding:2px 16px;border-radius:14px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.2);color:#FFD166;box-shadow:0 8px 24px -8px rgba(255,209,102,.2),inset 0 1px 0 rgba(255,255,255,.16);perspective:900px;transform-style:preserve-3d;transition:transform .75s cubic-bezier(.22,1,.36,1),background .95s,border-color .95s,color .95s,box-shadow .95s}
+.lp-country-rot.is-tr{background:rgba(239,68,68,.16);border-color:rgba(252,165,165,.42);color:#FCA5A5;box-shadow:0 8px 26px -8px rgba(239,68,68,.38),inset 0 1px 0 rgba(252,165,165,.2)}
+.lp-country-rot.is-flipping{transform:perspective(900px) rotateX(-16deg) scale(.97)}
+.lp-country-rot span{grid-area:1/1;opacity:0;white-space:nowrap;pointer-events:none;backface-visibility:hidden;transform-origin:50% 50% -22px;transform:rotateX(-82deg) translateY(.25em) scale(.94);filter:blur(1.5px);will-change:transform,opacity}
+.lp-country-rot span.on{opacity:1;pointer-events:auto;transform:rotateX(0deg) translateY(0) scale(1);filter:none}
 .lp-sub-rot-prefix{font-size:.85em;color:var(--hero-muted);margin-inline-end:6px}
 .lp-lead{margin:0;color:var(--hero-muted);font-size:1.02rem;line-height:1.7;max-width:64ch}
 .lp-lead b{color:#fff}
@@ -441,12 +442,12 @@ dialog::backdrop{background:rgba(4,12,9,.65);backdrop-filter:blur(2px)}
 @media (prefers-reduced-motion: no-preference){
   .live i{animation:pulse 2s infinite}
   @keyframes pulse{70%{box-shadow:0 0 0 8px rgba(60,197,150,0)}100%{box-shadow:0 0 0 0 rgba(60,197,150,0)}}
-  .rot span,.lp-country-rot span{transition:opacity .22s ease-in,transform .22s ease-in}
-  .rot span.on,.lp-country-rot span.on{transition:opacity .4s var(--ease) .18s,transform .4s var(--ease) .18s}
-  .rot span.out,.lp-country-rot span.out{transform:translateY(-.35em)}
+  .rot span,.lp-country-rot span{transition:none}
+  .rot span.on,.lp-country-rot span.on{transition:opacity .75s cubic-bezier(.22,1,.36,1) .18s,transform .95s cubic-bezier(.22,1,.36,1) .14s,filter .75s ease .14s}
+  .rot span.out,.lp-country-rot span.out{transform:rotateX(82deg) translateY(-.25em) scale(.94);opacity:0;filter:blur(1.5px);transition:opacity .58s ease,transform .78s cubic-bezier(.4,0,.2,1),filter .58s ease}
   .hero::before{animation:drift 24s linear infinite}
   @keyframes drift{to{transform:translate(22px,22px)}}
-  .rise{animation:rise .7s var(--ease) both;animation-delay:calc(var(--d,0) * 80ms)}
+  .rise{animation:rise .85s cubic-bezier(.22,1,.36,1) both;animation-delay:calc(var(--d,0) * 110ms)}
   @keyframes rise{from{opacity:0;transform:translateY(14px)}}
   .bar .f{transition:width 1s var(--ease)}
   .card.in{animation:rise .4s var(--ease) both;animation-delay:calc(var(--i,0) * 30ms)}
@@ -465,7 +466,8 @@ dialog::backdrop{background:rgba(4,12,9,.65);backdrop-filter:blur(2px)}
   .lp-counters{grid-template-columns:repeat(2,1fr)}
 }
 @media (prefers-reduced-motion: reduce){
-  .rot span,.lp-country-rot span{transform:none}
+  .rot span,.lp-country-rot span{transform:none;filter:none;transition:opacity .65s ease}
+  .lp-country-rot.is-flipping{transform:none}
 }
 @media (max-width:640px){
   .lp-title{font-size:clamp(1.65rem,6.8vw,2.15rem)}

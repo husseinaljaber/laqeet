@@ -1573,31 +1573,49 @@
     });
   }
 
-  function startRotator(selector, intervalMs, onStep) {
+  function startRotator(selector, intervalMs, opts = {}) {
     const spans = [...document.querySelectorAll(selector)];
     if (spans.length < 2) return;
+    const { initialDelayMs = 0, exitMs = 1100, onStep } =
+      typeof opts === 'function' ? { onStep: opts } : opts;
     let i = 0;
-    if (typeof onStep === 'function') onStep(spans[0], 0);
-    setInterval(() => {
+    if (typeof onStep === 'function') onStep(spans[0], 0, true);
+    const tick = () => {
       const prev = spans[i];
       prev.classList.remove('on');
       if (!reduce) {
         prev.classList.add('out');
-        setTimeout(() => prev.classList.remove('out'), 450);
+        setTimeout(() => prev.classList.remove('out'), exitMs);
       }
       i = (i + 1) % spans.length;
       spans[i].classList.add('on');
-      if (typeof onStep === 'function') onStep(spans[i], i);
-    }, intervalMs);
+      if (typeof onStep === 'function') onStep(spans[i], i, false);
+    };
+    if (initialDelayMs > 0) {
+      setTimeout(() => {
+        tick();
+        setInterval(tick, intervalMs);
+      }, initialDelayMs);
+    } else {
+      setInterval(tick, intervalMs);
+    }
   }
 
   function setupHeadlineRotation() {
     const countryBox = $('lpCountryRot');
-    startRotator('#rot span', 2300);
-    startRotator('#lpRoleRot span', 2000);
-    startRotator('#lpCountryRot span', 2200, (activeSpan) => {
-      if (countryBox) {
+    let flipTimer = 0;
+    startRotator('#rot span', 3200);
+    startRotator('#lpRoleRot span', 3400, { initialDelayMs: 1600 });
+    startRotator('#lpCountryRot span', 3800, {
+      initialDelayMs: 3200,
+      onStep: (activeSpan, _idx, isInit) => {
+        if (!countryBox) return;
         countryBox.classList.toggle('is-tr', activeSpan.dataset.rotCountry === 'tr');
+        if (!isInit && !reduce) {
+          countryBox.classList.add('is-flipping');
+          clearTimeout(flipTimer);
+          flipTimer = setTimeout(() => countryBox.classList.remove('is-flipping'), 360);
+        }
       }
     });
   }

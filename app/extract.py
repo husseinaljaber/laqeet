@@ -59,7 +59,7 @@ _TITLE_PATTERNS = [
     re.compile(r"(?:المسم[ىي]|المنصب|الشاغر)\s*الوظيف[يى]\s*[:：]\s*([^\n]+)"),
     re.compile(r"إعلان\s+توظيف\s*[|–\-:]\s*([^\n]+)"),
     re.compile(r"(?:إعلان|اعلان)\s+(?:شاغر|توظيف|فرص[ةه]\s+عمل)\s*[:：\-–|]\s*([^\n]+)"),
-    re.compile(r"(?:Position|Job\s*Title|Vacancy(?:\s*Title)?)\s*[:：]\s*([^\n]+)", re.I),
+    re.compile(r"(?:Position(?:\s*Title)?|Job\s*Title|Vacancy(?:\s*Title)?)\s*[:：]\s*([^\n]+)", re.I),
     re.compile(r"فرص[ةه]\s+عمل\s+لدى\s+[^\n:：]+[:：]\s*(?:\n\s*)+([^\n]+)"),
     re.compile(r"\bبمسمى\s+([^\n،,.]+)"),
     re.compile(r"شاغر[^\n]{0,60}[:：]\s*\n([^\n]+)"),
@@ -140,7 +140,7 @@ def _clean_title(s: str) -> str:
     s = _strip_emoji(normalize(s))
     s = re.sub(r"^\s*(?:\d{1,2}|[٠-٩]{1,2})\s*[-.)]\s*", "", s)  # «11- مدير عام»
     s = re.sub(r"^\s*o\s+(?=[ء-ي])", "", s)
-    s = re.sub(r"^\s*(?:(?:المسم[ىي]|المنصب|الشاغر)\s*الوظيف[يى]|(?:إعلان|اعلان)\s+شاغر|المسمى|مطلوب(?:ة|ون|ين)?|يلزمنا|Position|Job\s*Title|Vacancy)\s*[:：\-–]?\s*", "", s, flags=re.I)
+    s = re.sub(r"^\s*(?:(?:المسم[ىي]|المنصب|الشاغر)\s*الوظيف[يى]|(?:إعلان|اعلان)\s+شاغر|المسمى|مطلوب(?:ة|ون|ين)?|يلزمنا|Position(?:\s*Title)?|Job\s*Title|Vacancy(?:\s*Title)?)\s*[:：\-–]?\s*", "", s, flags=re.I)
     s = re.sub(r"^\s*(?:أولا|اولا|ثانيا|ثالثا|رابعا|خامسا|سادسا)ً?\s*[:\-–]\s*", "", s)
     s = re.sub(r"\s*[-–]\s*غير محدد\s*$", "", s)
     s = re.sub(r"[#@]\S+", " ", s)
@@ -425,7 +425,7 @@ _NOT_TITLE = re.compile(r"^(?:ال)?سلام عليكم|^مرحبا|^من (?:ب�
                         r"^العدد\s*[\d٠-٩]+$|^وصف\s+مختصر\s+ل|^نموذج\s+الأعمال\s+السابقة|"
                         r"^(?:المهام|المسؤوليات|الشروط|المهارات|المؤهلات|المتطلبات|ال[إا]ختصاصات|التعاقد\s+مع\s+الشركات|الرواتب)\b|"
                         r"^(?:(?:أن|ان)\s+يكون\s+(?:سوريا|المتقدم)|وطن$|عربي$|للعم$|حدا$)")
-_LATIN_SENTENCE = re.compile(r"\b(years?|experience|minimum|required|must|apply|send|knowledge|proficiency|familiarity|career move|foundation|understanding|passionate|campaigns)\b", re.I)
+_LATIN_SENTENCE = re.compile(r"\b(years?|experience|minimum|required|must|apply|send|knowledge|proficiency|familiarity|career move|foundation|understanding|passionate|campaigns|to review|responsibilities|click here|for more|job description|job summary)\b", re.I)
 
 
 def _good_title(t: str) -> bool:

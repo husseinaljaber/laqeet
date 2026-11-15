@@ -226,6 +226,17 @@ def test_extract_rejects_section_headings_and_preserves_clean_jobs():
     assert "أخصائي إعداد المناهج والبرامج التعليمية" in titles
     assert not any(bad in t for t in titles for bad in ("المهام والمسؤوليات", "الشروط المطلوبة", "المهارات المطلوبة"))
 
+    cta_post = (
+        "Job Vacancy Announcement\n"
+        "Position Title: Finance Coordinator\n"
+        "Duty Station: Gaziantep, Türkiye\n"
+        "Olive Branch Organization is hiring a Finance Coordinator.\n"
+        "To review the job responsibilities and requirements\n"
+        "https://docs.google.com/forms/d/e/1FAIpQLSfTest/viewform"
+    )
+    cta_res = extract(cta_post, "trsy_jobs", "https://t.me/trsy_jobs/1", country="tr")
+    assert [j.title for j in cta_res] == ["Finance Coordinator"]
+
     # Anti-false-positive spam checks vs real scam detection
     assert not spam.is_spam("مطلوب مراسل لدى وزارة التنمية لضمان سرعة التداول وسلامة المحتوى الرسمي التقديم مباشر")
     assert not spam.is_spam("مطلوب موظفة تنظيف مكتب في صحنايا واعتذري عن أي طلب لدفع مبلغ مقابل التوظيف للتواصل 0933112233")

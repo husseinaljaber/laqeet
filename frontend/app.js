@@ -1388,13 +1388,6 @@
       refresh();
     });
 
-    // Landing Page Theme Toggle (synced with #theme)
-    if ($('lpThemeBtn')) {
-      $('lpThemeBtn').addEventListener('click', () => {
-        if ($('theme')) $('theme').click();
-      });
-    }
-
     // Back to Landing Page buttons inside Board View
     ['backToLandingBtn', 'navHomeLink', 'footerHomeLink'].forEach((id) => {
       if ($(id)) {

@@ -273,28 +273,12 @@ dialog::backdrop{background:rgba(4,12,9,.65);backdrop-filter:blur(2px)}
    STANDALONE ANIMATED LANDING PAGE (الصفحة الرئيسية الأولى)
    ===================================================================== */
 .landing-view{display:flex;flex-direction:column;min-height:100vh}
-.lp-hero{position:relative;overflow:hidden;background:linear-gradient(155deg,#071610 0%,#0D241B 52%,#112C21 100%);color:var(--hero-ink);padding-block:18px 42px;border-bottom:1px solid rgba(60,197,150,.18)}
+.lp-hero{position:relative;overflow:hidden;background:linear-gradient(155deg,#071610 0%,#0D241B 52%,#112C21 100%);color:var(--hero-ink);padding-block:34px 44px;border-bottom:1px solid rgba(60,197,150,.18)}
 .lp-hero::before{content:"";position:absolute;inset:-40px;background-image:radial-gradient(rgba(120,220,180,.14) 1.2px,transparent 1.3px);background-size:24px 24px;pointer-events:none}
 .lp-glow{position:absolute;border-radius:50%;filter:blur(75px);pointer-events:none;z-index:0}
 .lp-glow-1{width:34rem;height:34rem;top:-12rem;right:-8rem;background:radial-gradient(circle,rgba(60,197,150,.22),transparent 70%)}
 .lp-glow-2{width:30rem;height:30rem;bottom:-10rem;left:-8rem;background:radial-gradient(circle,rgba(239,68,68,.15),rgba(245,158,11,.1),transparent 70%)}
 .lp-inner{position:relative;z-index:2;display:flex;flex-direction:column;gap:28px}
-
-/* Top Navbar */
-.lp-topbar{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:14px;padding:10px 16px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:16px;backdrop-filter:blur(10px)}
-.lp-brand-wrap{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
-.lp-logo-mark{width:40px;height:40px;border-radius:11px;background:linear-gradient(135deg,var(--mint),var(--accent));color:#05140E;font-family:var(--font-display);font-weight:700;font-size:1.35rem;display:inline-flex;align-items:center;justify-content:center;box-shadow:0 6px 18px rgba(60,197,150,.35)}
-.lp-brand-text{display:flex;flex-direction:column;line-height:1.25}
-.lp-brand-text b{font-family:var(--font-display);font-size:1.15rem;color:#fff}
-.lp-brand-text small{font-size:.76rem;color:var(--hero-muted)}
-.lp-live-pill{font-size:.78rem}
-.lp-nav-actions{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
-.lp-nav-btn{all:unset;cursor:pointer;padding:6px 13px;border-radius:999px;background:rgba(60,197,150,.13);border:1px solid rgba(60,197,150,.32);color:#fff;font-size:.84rem;font-weight:600;transition:all .18s}
-.lp-nav-btn:hover{background:var(--mint);color:#06140F;transform:translateY(-1px)}
-.lp-nav-link{color:var(--hero-ink);text-decoration:none;font-size:.84rem;padding:5px 9px;border-radius:8px;transition:color .15s,background .15s}
-.lp-nav-link:hover{color:var(--mint);background:rgba(255,255,255,.05)}
-.lp-nav-cta{color:#06140F;background:var(--mint);text-decoration:none;font-size:.84rem;font-weight:700;padding:6px 14px;border-radius:999px;transition:transform .15s,box-shadow .15s}
-.lp-nav-cta:hover{transform:translateY(-1px);box-shadow:0 6px 16px rgba(60,197,150,.35)}
 
 /* Hero Split Layout */
 .lp-hero-grid{display:grid;grid-template-columns:1.18fr .82fr;gap:32px;align-items:center}

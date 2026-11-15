@@ -307,42 +307,57 @@ def report(job_id: int, request: Request, body: dict = Body(default={})):
 _stats_cache: dict[str, tuple[float, dict]] = {}
 
 
+def _country_summary(country_code: str) -> dict:
+    """Compute live/6-month metrics, sector breakdown, and city counts for one market ('sy' | 'tr')."""
+    open_rows = _query(country=country_code)
+    all_rows = _query(expired=True, country=country_code)
+    demand = Counter()
+    city_counts = Counter()
+    field_counts = Counter()
+    no_degree = 0
+    for r in open_rows:
+        demand[r["field"]] += 1
+        field_counts[r["field"]] += 1
+        for c in filter(None, (r["cities"] or "").split("|")):
+            city_counts[c] += 1
+        if r["education"] in ("basic", "none") or r["education"] is None:
+            no_degree += 1
+    today_iso = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
+    return {
+        "open": len(open_rows),
+        "six_months": len(all_rows),
+        "junior": sum(1 for r in open_rows if r["experience"] is not None and r["experience"] <= 2),
+        "employers": len({json.loads(r["data"]).get("employer") for r in all_rows} - {None}),
+        "today": sum(1 for r in open_rows if (r["posted_at"] or "") >= today_iso),
+        "official": sum(1 for r in open_rows if r["official"]),
+        "gov_count": sum(1 for r in open_rows if r["sector"] == "gov"),
+        "ngo_count": sum(1 for r in open_rows if r["sector"] == "ngo"),
+        "private_count": sum(1 for r in open_rows if r["sector"] == "private"),
+        "no_degree_count": no_degree,
+        "industry_count": field_counts.get("industry", 0),
+        "city_counts": dict(city_counts),
+        "demand": [
+            {"field": f, "label": tx.FIELD_LABEL.get(f, f), "count": n}
+            for f, n in ([x for x in demand.most_common() if x[0] != "other"][:8] or demand.most_common(8))
+        ],
+    }
+
+
 @app.get("/api/stats")
 def stats(country: str | None = None):
     """Numbers for the opening screen (cached briefly: they change every 30 minutes at most)."""
     key = f"{country or 'sy'}:{_today()}"
     if (hit := _stats_cache.get(key)) and time.time() - hit[0] < 10 and hit[1].get("updated_at") == db.get_meta(con, "updated_at"):
         return hit[1]
-    open_rows = _query(country=country)
-    all_rows = _query(expired=True, country=country)
-    sy_rows = open_rows if (country or "sy") != "tr" else _query(country="sy")
-    tr_rows = open_rows if country == "tr" else _query(country="tr")
-    demand = Counter()
-    city_counts = Counter()
-    for r in open_rows:
-        demand[r["field"]] += 1
-        for c in filter(None, (r["cities"] or "").split("|")):
-            city_counts[c] += 1
-    city_counts_tr = Counter()
-    for r in tr_rows:
-        for c in filter(None, (r["cities"] or "").split("|")):
-            city_counts_tr[c] += 1
+    sy_sum = _country_summary("sy")
+    tr_sum = _country_summary("tr")
+    active = tr_sum if country == "tr" else sy_sum
     out = {
-        "open": len(open_rows),
-        "open_sy": len(sy_rows),
-        "open_tr": len(tr_rows),
-        "six_months": len(all_rows),
-        "junior": sum(1 for r in open_rows if r["experience"] is not None and r["experience"] <= 2),
-        "employers": len({json.loads(r["data"]).get("employer") for r in all_rows} - {None}),
-        "today": sum(1 for r in open_rows if (r["posted_at"] or "") >= (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()),
-        "official": sum(1 for r in open_rows if r["official"]),
-        "gov_count": sum(1 for r in open_rows if r["sector"] == "gov"),
-        "ngo_count": sum(1 for r in open_rows if r["sector"] == "ngo"),
-        "private_count": sum(1 for r in open_rows if r["sector"] == "private"),
-        "city_counts": dict(city_counts),
-        "city_counts_tr": dict(city_counts_tr),
-        "demand": [{"field": f, "label": tx.FIELD_LABEL.get(f, f), "count": n}
-                   for f, n in ([x for x in demand.most_common() if x[0] != "other"][:8] or demand.most_common(8))],
+        **active,
+        "open_sy": sy_sum["open"],
+        "open_tr": tr_sum["open"],
+        "city_counts_tr": tr_sum["city_counts"],
+        "by_country": {"sy": sy_sum, "tr": tr_sum},
         "updated_at": db.get_meta(con, "updated_at"),
     }
     _stats_cache[key] = (time.time(), out)

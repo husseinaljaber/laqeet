@@ -112,25 +112,26 @@
                 🚀 استعرض الفرص الآن
               </button>
             </div>
+            <div class="lp-wiz-sectors-bar" id="lpWizSectorsBar" aria-live="polite"></div>
           </div>
 
           <!-- Live Counters Strip -->
           <div class="lp-counters rise" style="--d:5">
-            <button type="button" class="lp-counter-card hot" data-enter-country="sy">
+            <button type="button" class="lp-counter-card hot is-focus" id="lpCounterSy" data-enter-country="sy">
               <b data-count="open">0</b>
               <span>شاغر مفتوح في سوريا 🇸🇾</span>
             </button>
-            <button type="button" class="lp-counter-card tr-accent" data-enter-country="tr">
+            <button type="button" class="lp-counter-card tr-accent" id="lpCounterTr" data-enter-country="tr">
               <b data-count="open_tr">0</b>
               <span>فرصة في السوق التركي 🇹🇷</span>
             </button>
-            <button type="button" class="lp-counter-card" data-enter-sector="ngo">
-              <b data-count="ngo_count">0</b>
-              <span>شواغر منظمات دولية NGOs</span>
+            <button type="button" class="lp-counter-card" id="lpCounterNgo" data-enter-country="sy" data-enter-sector="ngo">
+              <b data-lp-country-stat="ngo_count">0</b>
+              <span id="lpNgoLabel">شواغر منظمات في سوريا 🇸🇾</span>
             </button>
-            <button type="button" class="lp-counter-card" data-enter-country="sy">
-              <b data-count="employers">0</b>
-              <span>جهة وشركة موثقة</span>
+            <button type="button" class="lp-counter-card" id="lpCounterPrivate" data-enter-country="sy" data-enter-sector="private">
+              <b data-lp-country-stat="private_count">0</b>
+              <span id="lpPrivateLabel">شركات وقطاع خاص في سوريا 🇸🇾</span>
             </button>
           </div>
         </div>
@@ -278,10 +279,10 @@
           </p>
 
           <div class="lp-portal-sectors">
-            <button type="button" class="lp-sec-pill" data-enter-country="sy" data-enter-sector="gov">🏛️ قطاع حكومي</button>
-            <button type="button" class="lp-sec-pill" data-enter-country="sy" data-enter-sector="ngo">🤝 منظمات دولية NGOs</button>
-            <button type="button" class="lp-sec-pill" data-enter-country="sy" data-enter-sector="private">🏢 شركات وقطاع خاص</button>
-            <button type="button" class="lp-sec-pill" data-enter-country="sy" data-enter-edu="none">🛠️ فرص بدون شهادة</button>
+            <button type="button" class="lp-sec-pill" data-enter-country="sy" data-enter-sector="gov">🏛️ قطاع حكومي <small class="lp-pill-cnt" data-portal-stat="sy:gov_count"></small></button>
+            <button type="button" class="lp-sec-pill" data-enter-country="sy" data-enter-sector="ngo">🤝 منظمات دولية NGOs <small class="lp-pill-cnt" data-portal-stat="sy:ngo_count"></small></button>
+            <button type="button" class="lp-sec-pill" data-enter-country="sy" data-enter-sector="private">🏢 شركات وقطاع خاص <small class="lp-pill-cnt" data-portal-stat="sy:private_count"></small></button>
+            <button type="button" class="lp-sec-pill" data-enter-country="sy" data-enter-edu-group="nodegree">🛠️ فرص بدون شهادة <small class="lp-pill-cnt" data-portal-stat="sy:no_degree_count"></small></button>
           </div>
 
           <div class="lp-portal-cities-wrap">
@@ -316,10 +317,10 @@
           </p>
 
           <div class="lp-portal-sectors">
-            <button type="button" class="lp-sec-pill tr" data-enter-country="tr" data-enter-sector="ngo">🤝 منظمات دولية في تركيا</button>
-            <button type="button" class="lp-sec-pill tr" data-enter-country="tr" data-enter-sector="private">🏢 شركات وتجارة وعقارات</button>
-            <button type="button" class="lp-sec-pill tr" data-enter-country="tr" data-enter-field="industry">🏭 معامل وورشات ألبسة</button>
-            <button type="button" class="lp-sec-pill tr" data-enter-country="tr" data-enter-edu="none">⚡ حرف ومطاعم وبدون شهادة</button>
+            <button type="button" class="lp-sec-pill tr" data-enter-country="tr" data-enter-sector="ngo">🤝 منظمات دولية في تركيا <small class="lp-pill-cnt" data-portal-stat="tr:ngo_count"></small></button>
+            <button type="button" class="lp-sec-pill tr" data-enter-country="tr" data-enter-sector="private">🏢 شركات وتجارة وعقارات <small class="lp-pill-cnt" data-portal-stat="tr:private_count"></small></button>
+            <button type="button" class="lp-sec-pill tr" data-enter-country="tr" data-enter-field="industry">🏭 معامل وورشات ألبسة <small class="lp-pill-cnt" data-portal-stat="tr:industry_count"></small></button>
+            <button type="button" class="lp-sec-pill tr" data-enter-country="tr" data-enter-edu-group="nodegree">⚡ حرف ومطاعم وبدون شهادة <small class="lp-pill-cnt" data-portal-stat="tr:no_degree_count"></small></button>
           </div>
 
           <div class="lp-portal-cities-wrap">
@@ -340,35 +341,39 @@
       <div class="lp-sec-head">
         <span class="lp-sec-eyebrow">⚡ بوابات الفرز الذكي</span>
         <h2 id="lpSectorsHeading">تصفح الوظائف حسب القطاع والمؤهل العلمي</h2>
+        <div class="lp-gw-switch" role="tablist" aria-label="اختر الدولة لعرض أرقام القطاعات">
+          <button type="button" role="tab" class="lp-gw-tab active" data-gw-country="sy" aria-selected="true">🇸🇾 قطاعات سوريا</button>
+          <button type="button" role="tab" class="lp-gw-tab" data-gw-country="tr" aria-selected="false">🇹🇷 قطاعات تركيا</button>
+        </div>
       </div>
 
       <div class="lp-gateway-grid">
-        <button type="button" class="lp-gateway-card" data-enter-country="sy" data-enter-sector="ngo">
-          <span class="gw-icon">🤝</span>
+        <button type="button" class="lp-gateway-card" data-gw-card="ngo_count" data-enter-country="sy" data-enter-sector="ngo">
+          <div class="gw-top"><span class="gw-icon">🤝</span><b class="gw-count">0</b></div>
           <h3>المنظمات الدولية والأممية (NGOs)</h3>
-          <p>شواغر الأمم المتحدة والمنظمات الإنسانية في سوريا وجنوب تركيا برواتب دولية وعقود مشاريع.</p>
-          <span class="gw-link">تصفح شواغر المنظمات ←</span>
+          <p>شواغر الأمم المتحدة والمنظمات الإنسانية برواتب دولية وعقود مشاريع.</p>
+          <span class="gw-link">تصفح شواغر المنظمات في سوريا ←</span>
         </button>
 
-        <button type="button" class="lp-gateway-card" data-enter-country="sy" data-enter-sector="gov">
-          <span class="gw-icon">🏛️</span>
+        <button type="button" class="lp-gateway-card" data-gw-card="gov_count" data-enter-country="sy" data-enter-sector="gov">
+          <div class="gw-top"><span class="gw-icon">🏛️</span><b class="gw-count">0</b></div>
           <h3>القطاع الحكومي والمسابقات</h3>
-          <p>إعلانات الوزارات، المحافظات، الجامعات، والمؤسسات العامة الرسمية مع بطاقات الوصف الوظيفي.</p>
-          <span class="gw-link">تصفح الوظائف الحكومية ←</span>
+          <p>إعلانات الوزارات، المحافظات، الجامعات، والمؤسسات الرسمية مع بطاقات الوصف الوظيفي.</p>
+          <span class="gw-link">تصفح الوظائف الحكومية في سوريا ←</span>
         </button>
 
-        <button type="button" class="lp-gateway-card" data-enter-country="sy" data-enter-sector="private">
-          <span class="gw-icon">🏢</span>
+        <button type="button" class="lp-gateway-card" data-gw-card="private_count" data-enter-country="sy" data-enter-sector="private">
+          <div class="gw-top"><span class="gw-icon">🏢</span><b class="gw-count">0</b></div>
           <h3>الشركات والتخصصات الجامعية</h3>
-          <p>هندسة، برمجة وتقنية، محاسبة وإدارة، طب وصيدلة، تعليم، إعلام، مبيعات وتسويق في سوريا وتركيا.</p>
-          <span class="gw-link">تصفح وظائف الشركات ←</span>
+          <p>هندسة، برمجة وتقنية، محاسبة وإدارة، طب وصيدلة، تعليم، إعلام، مبيعات وتسويق.</p>
+          <span class="gw-link">تصفح وظائف الشركات في سوريا ←</span>
         </button>
 
-        <button type="button" class="lp-gateway-card" data-enter-country="sy" data-enter-edu="none">
-          <span class="gw-icon">🛠️</span>
+        <button type="button" class="lp-gateway-card" data-gw-card="no_degree_count" data-enter-country="sy" data-enter-edu-group="nodegree">
+          <div class="gw-top"><span class="gw-icon">🛠️</span><b class="gw-count">0</b></div>
           <h3>مهن حرة وفرص بدون شهادة</h3>
           <p>معامل، ورش خياطة وصناعة، مطاعم وكافيهات، سائقين، حراسة، ومبيعات بتواصل مباشر عبر واتساب أو الهاتف.</p>
-          <span class="gw-link">تصفح الفرص السريعة ←</span>
+          <span class="gw-link">تصفح الفرص السريعة في سوريا ←</span>
         </button>
       </div>
     </section>
@@ -500,12 +505,13 @@
       </p>
 
       <!-- Live Counters -->
-      <div class="counters rise" style="--d:3">
+      <div class="counters rise" id="boardHeroCounters" style="--d:3">
         <div class="counter hot"><b data-count="board_open">0</b><span id="boardOpenLabel">إعلان مفتوح حالياً</span></div>
-        <div class="counter"><b data-count="today">0</b><span>جديد اليوم</span></div>
-        <div class="counter"><b data-count="official">0</b><span>وظيفة حكومية ورسمية</span></div>
-        <div class="counter"><b data-count="ngo_count">0</b><span>شواغر منظمات وهيئات</span></div>
-        <div class="counter"><b data-count="employers">0</b><span>جهة وصاحب عمل</span></div>
+        <div class="counter"><b data-board-stat="today">0</b><span>جديد اليوم</span></div>
+        <div class="counter"><b data-board-stat="gov_count">0</b><span>وظيفة حكومية ورسمية</span></div>
+        <div class="counter"><b data-board-stat="ngo_count">0</b><span>شواغر منظمات وهيئات</span></div>
+        <div class="counter"><b data-board-stat="private_count">0</b><span>شركات وقطاع خاص</span></div>
+        <div class="counter"><b data-board-stat="employers">0</b><span>جهة وصاحب عمل</span></div>
       </div>
 
       <nav class="toplinks rise" style="--d:5">

@@ -120,3 +120,41 @@ def test_turkey_portals_parsers():
     assert "55,000 TL" in (job.salary or "")
     assert "خبرة 5 سنوات" in job.skills and "إدارة الفريق" in job.tasks
     assert "email" in job.apply_types and "whatsapp" in job.apply_types
+
+
+def test_stats_by_country_returns_isolated_turkey_and_syria_sector_counts(tmp_path):
+    from datetime import datetime, timezone
+    from fastapi.testclient import TestClient
+    from app import api, db
+
+    now_iso = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    tmp_db = db.connect(tmp_path / "stats_isolated.db")
+    old_con = api.con
+    api.con = tmp_db
+    api._stats_cache.clear()
+    try:
+        db.upsert(tmp_db, Job(title="وظيفة حكومية دمشق", source="moad", post_url="https://t.me/s/moad/1", posted_at=now_iso, country="sy", sector="gov", official=True, cities=["دمشق"], education="bachelor"))
+        db.upsert(tmp_db, Job(title="منظمة حلب", source="wazafne", post_url="https://t.me/s/w/1", posted_at=now_iso, country="sy", sector="ngo", cities=["حلب"], education="bachelor"))
+        db.upsert(tmp_db, Job(title="منظمة غازي عنتاب", source="gelbaslacom", post_url="https://t.me/s/g/1", posted_at=now_iso, country="tr", sector="ngo", cities=["غازي عنتاب"], employer="SEVKAR", education="bachelor"))
+        db.upsert(tmp_db, Job(title="خياط إسطنبول", source="salamjobs", post_url="https://salamjobs.com/j/1", posted_at=now_iso, country="tr", sector="private", field="industry", cities=["إسطنبول"], employer="معمل النور", phones=["05343806011"], whatsapp=True, education="none"))
+        db.upsert(tmp_db, Job(title="بائع مرسين", source="adwhit_web", post_url="https://www.adwhit.com/ar/j/2", posted_at=now_iso, country="tr", sector="private", cities=["مرسين"], phones=["05385844484"], whatsapp=True, education=None))
+        tmp_db.commit()
+
+        c = TestClient(api.app)
+        st = c.get("/api/stats").json()
+        assert st["open_sy"] == 2 and st["open_tr"] == 3
+        sy_s = st["by_country"]["sy"]
+        tr_s = st["by_country"]["tr"]
+        assert (sy_s["gov_count"], sy_s["ngo_count"], sy_s["private_count"]) == (1, 1, 0)
+        assert (tr_s["gov_count"], tr_s["ngo_count"], tr_s["private_count"]) == (0, 1, 2)
+        assert tr_s["no_degree_count"] == 2
+        assert tr_s["industry_count"] == 1
+        assert tr_s["employers"] == 2
+        assert tr_s["city_counts"]["غازي عنتاب"] == 1
+
+        st_tr = c.get("/api/stats", params={"country": "tr"}).json()
+        assert st_tr["open"] == 3 and st_tr["ngo_count"] == 1 and st_tr["private_count"] == 2 and st_tr["gov_count"] == 0
+    finally:
+        api._stats_cache.clear()
+        api.con = old_con
+        tmp_db.close()

@@ -56,7 +56,7 @@ _GRADE_WORD = {"الاولي": "1", "الاول": "1", "الثانيه": "2", "�
 _NEED_LINE = re.compile(r"(?:^|\n)[^\w\n]{0,6}\*?\s*(?:مطلوب(?:ة|ون|ين)?|يلزمنا|نبحث\s+عن|تبحث\s+عن|يبحث\s+عن|نطلب|يطلب)\s*[:：]?\s*([^\n]*)")
 _HAJA_RX = re.compile(r"(?:حاجت(?:ها|ه)|بحاجة)\s*(?:إلى|الى|ل|لـ)\s*(?:رفد\s+كوادرها\s+ب(?:منصب\s+)?|تعيين|توظيف|ل?التعاقد\s+مع|لتعاقد\s+مع|ضم|شغل\s+وظيفة|ملء\s+الشاغر\s+التالي)?\s*:?\s*([^\n]+)")
 _TITLE_PATTERNS = [
-    re.compile(r"(?:المسم[ىي]|المنصب|الشاغر)\s*الوظيف[يى]\s*[:：]\s*([^\n]+)"),
+    re.compile(r"(?:(?:المسم[ىي]|المنصب|الشاغر)\s*الوظيف[يى]|المنصب)\s*[:：]\s*([^\n]+)"),
     re.compile(r"إعلان\s+توظيف\s*[|–\-:]\s*([^\n]+)"),
     re.compile(r"(?:إعلان|اعلان)\s+(?:شاغر|توظيف|فرص[ةه]\s+عمل)\s*[:：\-–|]\s*([^\n]+)"),
     re.compile(r"(?:Position(?:\s*Title)?|Job\s*Title|Vacancy(?:\s*Title)?)\s*[:：]\s*([^\n]+)", re.I),
@@ -168,14 +168,14 @@ def normalize_title_display(s: str, keep_matlob: bool = False) -> str:
     for _ in range(3):
         if keep_matlob:
             s = re.sub(
-                r"^\s*(?:(?:إعلان|اعلان)\s+(?:توظيف|شاغر(?:\s+وظيف[يى])?)|(?:المسم[ىي]|المنصب|الشاغر)\s*الوظيف[يى]|فرص[ةه]\s*عمل|نحن\s*نوظ[ّ]?ف|Hiring|Position(?:\s*Title)?|Job\s*Title|Vacancy(?:\s*Title)?)\s*[:：\-–|/|]*\s*",
+                r"^\s*(?:(?:إعلان|اعلان)\s+(?:توظيف|شاغر(?:\s+وظيف[يى])?)|(?:المسم[ىي]|المنصب|الشاغر)\s*الوظيف[يى]|المنصب(?=\s*[:：])|فرص[ةه]\s*عمل|نحن\s*نوظ[ّ]?ف|Hiring|Position(?:\s*Title)?|Job\s*Title|Vacancy(?:\s*Title)?)\s*[:：\-–|/|]*\s*",
                 "",
                 s,
                 flags=re.I,
             )
         else:
             s = re.sub(
-                r"^\s*(?:(?:المسم[ىي]|المنصب|الشاغر)\s*الوظيف[يى]|(?:إعلان|اعلان)\s+(?:توظيف|شاغر(?:\s+وظيف[يى])?)|فرص[ةه]\s*عمل|نحن\s*نوظ[ّ]?ف|المسمى|مطلوب(?:ة|ون|ين)?|يلزمنا|Hiring|Position(?:\s*Title)?|Job\s*Title|Vacancy(?:\s*Title)?)\s*[:：\-–|/|]*\s*",
+                r"^\s*(?:(?:المسم[ىي]|المنصب|الشاغر)\s*الوظيف[يى]|المنصب(?=\s*[:：])|(?:إعلان|اعلان)\s+(?:توظيف|شاغر(?:\s+وظيف[يى])?)|فرص[ةه]\s*عمل|نحن\s*نوظ[ّ]?ف|المسمى|مطلوب(?:ة|ون|ين)?|يلزمنا|Hiring|Position(?:\s*Title)?|Job\s*Title|Vacancy(?:\s*Title)?)\s*[:：\-–|/|]*\s*",
                 "",
                 s,
                 flags=re.I,
@@ -544,7 +544,7 @@ def _good_title(t: str) -> bool:
 
 
 _STRONG = re.compile(
-    r"(?:المسم[ىي]|المنصب|الشاغر)\s*الوظيف|بمسمى|بصف[ةه]\s|(?:إعلان|اعلان|شاغر)\s+(?:شاغر|وظيف[يى])|"
+    r"(?:المسم[ىي]|المنصب|الشاغر)\s*الوظيف|المنصب\s*[:：]|بمسمى|بصف[ةه]\s|(?:إعلان|اعلان|شاغر)\s+(?:شاغر|وظيف[يى])|"
     r"حاجت(?:ها|ه)\s*(?:إلى|الى|ل)|(?:^|\n|[|–\-])[^\w\n]{0,6}\*?\s*(?:مطلوب|يلزمنا)\b[^\n:]{3,}|"
     r"we['’]?re\s+hiring|is\s+hiring|looking\s+for\s+(?:an?\s+)?|\b(?:position|job\s*title|vacancy(?:\s*title)?)\s*[:：]",
     re.I,
@@ -593,14 +593,14 @@ def _single_title(text: str, lines: list[str]) -> tuple[str, str]:
             break  # what follows «المهام:» / «الشروط:» is duties and requirements
         t = _cut_title(l)
         if _good_title(t) and not l.startswith("#") and not _LIST_END.search(F(t)) and not _ANNOUNCE.search(F(t)) \
-                and not re.match(r"^[^:：]{2,25}[:：]", l) and not _NOT_FALLBACK.search(F(t)) and not _only_places(t):
+                and not re.match(r"^[^\w\n:：]{0,4}[^:：\n]{2,55}[:：]", l) and not _NOT_FALLBACK.search(F(t)) and not _only_places(t):
             return t, l
     return "", ""
 
 
 # First lines that name the employer or the place, not the job («لجنة الانقاذ الدولية», «إدلب _ سرمدا»).
 _NOT_FALLBACK = re.compile(F(r"^(لجنه|منظمه|جمعيه|مؤسسه|الاونروا|برنامج|شركه|الهيئه|المجلس|unicef|unhcr|wfp)\b|الصوره|ضمن الشروط|"
-                             r"^كفاءات|^نبحث عن كفاءات"), re.I)
+                             r"المحافظ(?:ات|ه)\s*المطلوب|محافظه العمل|بطاقه الوصف|رابط التقديم|^كفاءات|^نبحث عن كفاءات"), re.I)
 
 
 def _only_places(t: str) -> bool:
@@ -678,9 +678,12 @@ _SOURCE_DEFAULT_EMPLOYER = {
     "srd": "منظمة سوريا للإغاثة والتنمية (SRD)",
     "sened": "منظمة سند (Sened)",
     "bahar": "منظمة بهار (Bahar)",
-    "reliefweb": "منظمات دولية ووكالات أممية (ReliefWeb)",
-    "worklink": "منصة ورك لينك (WorkLink Syria)",
-    "ngosquare": "منصة ساحة المنظمات (NGO Square)",
+    "reliefweb": "منظمة دولية / وكالة أممية",
+    "worklink": "",
+    "ngosquare": "",
+    "unjobnet_sy": "",
+    "syria_jobs": "",
+    "ssf_gov": "الصندوق السيادي السوري",
     "gaziantepis": "شركات ومصانع غازي عنتاب",
     "gelbaslacom": "منظمات ومؤسسات في تركيا",
 }
@@ -775,7 +778,8 @@ def extract(text: str, source: str, post_url: str, posted_at: str | None = None,
     if target_country == "sy":
         if text and _ABROAD.search(F(text)) and not tx.cities_from_text(text):
             return []  # jobs in Turkey and elsewhere: this branch is for work inside Syria
-        if text and _TR_PHONE_IN_TEXT.search(" ".join([text] + (links or []))) and not (
+        tr_check_hay = re.sub(r"https?://(?!(?:wa\.me|api\.whatsapp\.com))\S+", " ", " ".join([text] + (links or [])))
+        if text and _TR_PHONE_IN_TEXT.search(tr_check_hay) and not (
             tx.phones(text) or any(re.search(r"963\s*9\d{8}", l) for l in (links or []))
         ):
             return []  # skip ads whose only contact number is Turkish (+90)
@@ -799,10 +803,20 @@ def extract(text: str, source: str, post_url: str, posted_at: str | None = None,
         cities = tx.tr_cities_from_text(city_text) or (["غازي عنتاب"] if source == "gaziantepis" else ["عدة ولايات في تركيا"])
     else:
         cities = tx.cities_from_text(city_text)
-    all_links = list(dict.fromkeys(tx.urls(text) + [l for l in (links or []) if l.startswith("http")]))
-    valid_links = [u for u in all_links if _is_valid_apply_url(u)]
+    cleaned_extra_links = [da.clean_url(l) for l in (links or []) if l]
+    all_links = list(dict.fromkeys(tx.urls(text) + [u for u in cleaned_extra_links if u.startswith(("http://", "https://"))]))
+    gov_links = da.extract_gov_links(text, extra_links=cleaned_extra_links)
+    details_url = da.strip_tracking(str(gov_links["details_url"])) if gov_links["details_url"] else None
+    hiring_details_set = set(gov_links["all_details_urls"] or ())
+    valid_links = [u for u in all_links if _is_valid_apply_url(u) and u not in hiring_details_set]
     valid_links.sort(key=lambda u: 0 if da.is_direct_form_or_ats(u) else (1 if da.is_shortener(u) else 2))
-    apply_url = da.strip_tracking(valid_links[0]) if valid_links else None
+    best_gov_apply = str(gov_links["best_apply_url"]) if gov_links["best_apply_url"] else None
+    if best_gov_apply and _is_valid_apply_url(best_gov_apply):
+        apply_url = da.strip_tracking(best_gov_apply) or None
+    else:
+        apply_url = da.strip_tracking(valid_links[0]) if valid_links else None
+    if details_url and details_url == apply_url:
+        details_url = None
     phones = tx.phones_tr(body) if target_country == "tr" else tx.phones(body)
     for u in all_links:
         for p in da.extract_phone_from_wa(u, country=target_country):
@@ -815,11 +829,15 @@ def extract(text: str, source: str, post_url: str, posted_at: str | None = None,
     deadline = parse_deadline(body, posted_at)
     tr_pair = re.search(r"💼\s*([^:\n]{2,70}):\s*([^\n📍⏰🔗]{4,110})", text) if target_country == "tr" else None
     employer = tr_pair.group(1).strip() if tr_pair else _employer(body)
-    official = False if target_country == "tr" else (bool(_MOAD_LINK.search(" ".join(all_links))) or bool(employer and _OFFICIAL.search(F(employer)) and "منظمات" not in F(employer)))
+    official = False if target_country == "tr" else (
+        bool(_MOAD_LINK.search(" ".join(all_links)))
+        or any(".gov.sy" in u.lower() for u in all_links)
+        or bool(employer and _OFFICIAL.search(F(employer)) and "منظمات" not in F(employer))
+    )
     employer = resolve_employer(employer, source, official, body, hint=sector)
     tasks, skills = _extract_tasks_and_skills(body)
     base = dict(source=source, post_url=post_url, posted_at=posted_at, employer=employer, deadline=deadline,
-                apply_url=apply_url, phones=phones, whatsapp=tx.whatsapp_only(body) and bool(phones),
+                apply_url=apply_url, details_url=details_url, phones=phones, whatsapp=tx.whatsapp_only(body) and bool(phones),
                 email=emails[0] if emails else None, spam=spam, official=official, tasks=tasks, skills=skills, raw=text[:2500])
 
     items, header = _list_items(lines)

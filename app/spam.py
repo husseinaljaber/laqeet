@@ -113,10 +113,21 @@ def is_tr_citizenship_only(text: str) -> bool:
     return False
 
 
+_SEEKER_AD_RE = re.compile(
+    fold(
+        r"(?:^|\n)\W*(?:انا\s+(?:شاب|بنت|فتاه|مهندس|محاسب|مصمم|سائق|عامل|مقيم)|"
+        r"(?:ا|أ)بحث\s+عن\s+(?:عمل|شغل|وظيفه|فرصه\s+عمل)|ادور\s+على\s+شغل|بدي\s+شغل|محتاج\s+شغل|بحاجه\s+لعمل)"
+    ),
+    re.I,
+)
+
+
 def is_job_post(text: str) -> bool:
-    """A post that announces work (as opposed to greetings, news, tenders, or trainings)."""
+    """A post that announces work (as opposed to greetings, news, tenders, trainings, or seeker CVs)."""
     t = fold(text)
     if _NON_JOB_EXCLUDES.search(t):
+        return False
+    if _SEEKER_AD_RE.search(t) and not re.search(fold(r"مطلوب|تعلن|يعلن|نبحث\s+عن|شواغر|شاغر"), t):
         return False
     if not _JOB_WORDS.search(t):
         return False

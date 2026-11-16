@@ -7,8 +7,10 @@ import logging
 import re
 import threading
 import warnings
+import xml.etree.ElementTree as ET
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, timedelta, timezone
+from email.utils import parsedate_to_datetime
 from urllib.parse import urljoin
 from bs4 import BeautifulSoup, XMLParsedAsHTMLWarning
 import httpx
@@ -16,6 +18,7 @@ import httpx
 from .. import config
 from .. import direct_apply as da
 from .. import extract as ex
+from .. import spam
 from .. import taxonomy as tx
 from ..classify import classify as computer_subfield
 from ..models import Job
@@ -410,7 +413,7 @@ def _parse_worklink_detail(full_url: str, html_text: str, today_str: str) -> Job
 
     org = ld.get("hiringOrganization")
     emp = html.unescape(str(org.get("name") or "")) if isinstance(org, dict) else ""
-    emp = emp.strip() or "جهة توظيف عبر WorkLink"
+    emp = emp.strip()
     date_posted = (ld.get("datePosted") or "").strip()[:10]
     posted_at = (date_posted + "T09:00:00+00:00") if re.fullmatch(r"\d{4}-\d{2}-\d{2}", date_posted) else datetime.now(timezone.utc).isoformat(timespec="seconds")
 
@@ -457,7 +460,7 @@ def _parse_worklink_detail(full_url: str, html_text: str, today_str: str) -> Job
         deadline=valid_through or None,
         apply_types=app_types or ["site"],
         confidence=0.95,
-        tags=["شواغر موثقة", "ورك لينك"],
+        tags=["شواغر موثقة"],
         raw=f"{title} — {emp}\n{desc_txt[:800]}",
     )
 
@@ -530,7 +533,7 @@ def scrape_worklink(client: httpx.Client) -> list[Job]:
                 if not parts:
                     continue
                 title = parts[0]
-                emp = parts[1] if len(parts) > 1 else "منظمة / جهة شريكة عبر ورك لينك"
+                emp = parts[1] if len(parts) > 1 else ""
                 loc = parts[3] if len(parts) > 3 else (parts[2] if len(parts) > 2 else "")
                 cities = tx.cities_from_text(loc or title) or ["عدة محافظات"]
                 edu = tx.education_from_text(title) or tx.education_from_title(title) or "bachelor"
@@ -553,7 +556,7 @@ def scrape_worklink(client: httpx.Client) -> list[Job]:
                     details_url=full_url,
                     apply_types=["site", "form"],
                     confidence=0.95,
-                    tags=["شواغر موثقة", "ورك لينك"],
+                    tags=["شواغر موثقة"],
                     raw=raw_text,
                 )
                 jobs.append(job)
@@ -838,7 +841,7 @@ def _extract_jobinsyria_employer(raw_title: str) -> str:
         first = re.split(r"[،,\-–]", tail)[0].strip()
         if 3 <= len(first) <= 60 and not tx.cities_from_text(first):
             return first
-    return "جهة توظيف عبر Job In Syria"
+    return ""
 
 
 def scrape_jobinsyria(client: httpx.Client) -> list[Job]:
@@ -890,7 +893,7 @@ def scrape_jobinsyria(client: httpx.Client) -> list[Job]:
                     content_html=content_html + extra_html,
                     default_cities=tx.cities_from_text(loc_str) or ["دمشق"],
                     default_field="other",
-                    tags=["شواغر محلية", "Job In Syria"],
+                    tags=["شواغر محلية"],
                     deadline=dl,
                     sector="private",
                 )
@@ -1084,7 +1087,7 @@ def scrape_ngossyria(client: httpx.Client) -> list[Job]:
                     source="ngossyria",
                     post_url=link,
                     posted_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
-                    employer="منظمة أممية / دولية عبر NGOs Syria",
+                    employer="",
                     cities=cities,
                     education=tx.education_from_text(title) or tx.education_from_title(title) or "bachelor",
                     education_from="stated",
@@ -1157,6 +1160,294 @@ def scrape_syria_un(client: httpx.Client) -> list[Job]:
     return jobs
 
 
+_UNJOBNET_ID_RE = re.compile(r"/jobs/detail/.+-(\d+)(?:[/?#]|$)")
+_TENDER_NOTICE_RE = re.compile(r"\b(?:RFP|RFQ|ITB|EOI|IC-\d+)\b|استدراج\s+عروض|مناقصة", re.I)
+_SEEKER_AD_RE = re.compile(r"^\s*(?:أنا\s+|مغتربة\s+|طالبة\s+جامعية\s+|أبحث\s+عن\s+(?:عمل|عقد\s+عمل|شركاء))", re.M)
+
+
+def _extract_ld_job_posting(soup: BeautifulSoup) -> dict | None:
+    """Return the first Schema.org JobPosting dict embedded in HTML."""
+    for sc in soup.find_all("script", type="application/ld+json"):
+        raw = sc.string or sc.get_text()
+        if not raw:
+            continue
+        try:
+            data = json.loads(raw)
+        except Exception:
+            continue
+        items = data if isinstance(data, list) else [data]
+        for obj in items:
+            if isinstance(obj, dict) and obj.get("@type") == "JobPosting" and obj.get("title"):
+                return obj
+    return None
+
+
+def scrape_unjobnet_syria(client: httpx.Client) -> list[Job]:
+    """Scrape UNjobnet Syria listings via JobPosting JSON-LD and /apply/<id> redirect verification."""
+    base = "https://www.unjobnet.org"
+    detail_urls: list[tuple[str, str]] = []
+    seen_ids: set[str] = set()
+    for page_no in (1, 2):
+        page_url = f"{base}/countries/syria" + (f"?page={page_no}" if page_no > 1 else "")
+        try:
+            r = client.get(page_url, timeout=20)
+            if r.status_code != 200:
+                break
+            soup = BeautifulSoup(r.text, "html.parser")
+            found_on_page = 0
+            for a in soup.select("a[href*='/jobs/detail/']"):
+                href = urljoin(base, a["href"].strip())
+                m = _UNJOBNET_ID_RE.search(href)
+                if not m or m.group(1) in seen_ids:
+                    continue
+                seen_ids.add(m.group(1))
+                detail_urls.append((href, m.group(1)))
+                found_on_page += 1
+            if found_on_page == 0:
+                break
+        except Exception as e:
+            log.warning("UNjobnet list %s failed: %s", page_url, e)
+            break
+
+    today_str = datetime.now(timezone.utc).date().isoformat()
+    formal_cutoff = (datetime.now(timezone.utc) - timedelta(days=config.FORMAL_DAYS)).date().isoformat()
+    jobs: list[Job] = []
+
+    for detail_url, job_id in detail_urls[:35]:
+        try:
+            rd = client.get(detail_url, timeout=20)
+            if rd.status_code != 200:
+                continue
+            sd = BeautifulSoup(rd.text, "html.parser")
+            ld = _extract_ld_job_posting(sd)
+            if not ld:
+                continue
+            title = html.unescape(str(ld.get("title") or "")).strip()
+            if not title or _TENDER_NOTICE_RE.search(title):
+                continue
+
+            desc_html = html.unescape(str(ld.get("description") or ""))
+            desc_soup = BeautifulSoup(desc_html, "html.parser")
+            desc_txt = desc_soup.get_text("\n", strip=True)
+            if spam.is_spam(f"{title}\n{desc_txt[:500]}"):
+                continue
+
+            posted_raw = str(ld.get("datePosted") or "").strip()
+            deadline_raw = str(ld.get("validThrough") or "").strip()
+            posted_at = posted_raw if len(posted_raw) >= 10 else None
+            deadline = deadline_raw[:10] if len(deadline_raw) >= 10 and re.match(r"\d{4}-\d{2}-\d{2}", deadline_raw) else None
+            if deadline and deadline < today_str:
+                continue
+            if not deadline and posted_at and posted_at[:10] < formal_cutoff:
+                continue
+
+            org_obj = ld.get("hiringOrganization") or {}
+            employer = html.unescape(str(org_obj.get("name") or "")).strip() if isinstance(org_obj, dict) else ""
+
+            loc_parts: list[str] = []
+            loc_obj = ld.get("jobLocation")
+            locs = loc_obj if isinstance(loc_obj, list) else ([loc_obj] if isinstance(loc_obj, dict) else [])
+            for loc in locs:
+                if not isinstance(loc, dict):
+                    continue
+                addr = loc.get("address") or {}
+                if isinstance(addr, dict):
+                    for k in ("addressLocality", "addressRegion", "addressCountry"):
+                        if addr.get(k):
+                            loc_parts.append(str(addr[k]))
+            cities = tx.cities_from_text(" ".join(loc_parts) + " " + title + " " + desc_txt[:400]) or ["عدة محافظات"]
+
+            emails = [e for e in tx.emails(desc_txt) if da._good_email(e)]
+            for mail_a in desc_soup.select("a[href^='mailto:']"):
+                cand = mail_a["href"][7:].split("?")[0].strip()
+                if da._good_email(cand) and cand not in emails:
+                    emails.append(cand)
+            phones = tx.phones(desc_txt)
+            gov_links = da.extract_gov_links(desc_txt)
+            direct_apply = str(gov_links["best_apply_url"]) if gov_links["best_apply_url"] else f"{base}/apply/{job_id}"
+
+            edu = tx.education_from_text(desc_txt) or tx.education_from_title(title) or "bachelor"
+            fld = tx.field_from_text(title, desc_txt[:600])
+            if fld == "other":
+                fld = "management"
+            sub = computer_subfield(title, desc_txt[:400])
+            if sub:
+                fld = "computer"
+
+            jobs.append(Job(
+                title=title[:120],
+                source="unjobnet_sy",
+                post_url=detail_url,
+                posted_at=posted_at,
+                employer=employer or None,
+                cities=cities,
+                education=edu,
+                education_from="stated" if tx.education_from_text(desc_txt) else "title",
+                field=fld,
+                subfield=sub,
+                kind="formal",
+                official=False,
+                country="sy",
+                sector="ngo",
+                apply_url=direct_apply,
+                details_url=detail_url,
+                email=emails[0] if emails else None,
+                phones=phones,
+                apply_types=tx.infer_apply_types(direct_apply, phones, False, emails[0] if emails else None),
+                deadline=deadline,
+                confidence=0.92,
+                tags=["الأمم المتحدة", "منظمات دولية"],
+                raw=f"{title}\n{employer}\n{desc_txt[:1500]}".strip(),
+            ))
+        except Exception as e:
+            log.warning("UNjobnet detail %s failed: %s", detail_url, e)
+    return jobs
+
+
+def scrape_syria_jobs_com(client: httpx.Client) -> list[Job]:
+    """Scrape active employer vacancies from syria-jobs.com vacancy category RSS feed."""
+    feed_base = "https://syria-jobs.com/category/%d9%88%d8%b8%d9%8a%d9%81%d8%a9-%d8%b4%d8%a7%d8%ba%d8%b1%d8%a9-%d9%88%d9%81%d8%b1%d8%b5-%d8%b9%d9%85%d9%84/feed/"
+    headers = {
+        "User-Agent": USER_AGENT,
+        "Accept": "application/rss+xml, application/xml, text/xml;q=0.9, */*;q=0.8",
+        "Accept-Language": "ar,en-US;q=0.9,en;q=0.8",
+        "Referer": "https://www.google.com/",
+    }
+    today_str = datetime.now(timezone.utc).date().isoformat()
+    formal_cutoff = (datetime.now(timezone.utc) - timedelta(days=config.FORMAL_DAYS)).date().isoformat()
+    jobs: list[Job] = []
+    seen_links: set[str] = set()
+
+    for paged in (1, 2):
+        url = feed_base if paged == 1 else f"{feed_base}?paged={paged}"
+        try:
+            r = client.get(url, headers=headers, timeout=20)
+            if r.status_code != 200 or "<item>" not in r.text:
+                break
+            root = ET.fromstring(r.text)
+            items = root.findall(".//item")
+            if not items:
+                break
+            recent_on_page = 0
+            for it in items:
+                title = html.unescape((it.findtext("title") or "").strip())
+                link = da.strip_tracking(it.findtext("link") or "")
+                pub_raw = (it.findtext("pubDate") or "").strip()
+                if not title or not link or link in seen_links:
+                    continue
+                seen_links.add(link)
+
+                posted_at = None
+                if pub_raw:
+                    try:
+                        dt = parsedate_to_datetime(pub_raw)
+                        if dt.tzinfo is None:
+                            dt = dt.replace(tzinfo=timezone.utc)
+                        posted_at = dt.astimezone(timezone.utc).isoformat()
+                    except Exception:
+                        posted_at = None
+                if posted_at and posted_at[:10] < formal_cutoff:
+                    continue
+                recent_on_page += 1
+
+                body_html = it.findtext("{http://purl.org/rss/1.0/modules/content/}encoded") or it.findtext("description") or ""
+                soup = BeautifulSoup(body_html, "html.parser")
+                lines = [ln.strip() for ln in soup.get_text("\n", strip=True).splitlines() if ln.strip()]
+                txt = "\n".join(lines)
+                if not txt or _SEEKER_AD_RE.search(txt) or spam.is_spam(f"{title}\n{txt[:500]}"):
+                    continue
+                if ex._ABROAD.search(ex.F(txt)) and not tx.cities_from_text(txt):
+                    continue
+
+                deadline = ex.parse_deadline(txt, posted_at)
+                if deadline and deadline < today_str:
+                    continue
+
+                # Extract phones (href tel: + body text), emails, and non-portal direct apply links
+                phones = tx.phones(txt)
+                emails = [e for e in tx.emails(txt) if da._good_email(e)]
+                ext_links: list[str] = []
+                for a in soup.find_all("a", href=True):
+                    href = da.clean_url(a["href"])
+                    if not href:
+                        continue
+                    low = href.lower()
+                    if low.startswith("tel:"):
+                        for p in tx.phones(href[4:]):
+                            if p not in phones:
+                                phones.append(p)
+                    elif low.startswith("mailto:"):
+                        cand = href[7:].split("?")[0].strip()
+                        if da._good_email(cand) and cand not in emails:
+                            emails.append(cand)
+                    elif href.startswith(("http://", "https://")) and "syria-jobs.com" not in da._host(href):
+                        for p in da.extract_phone_from_wa(href, country="sy"):
+                            if p not in phones:
+                                phones.append(p)
+                        if not da.is_disallowed_offline_url(href) and not da.is_strict_portal_wrapper(href):
+                            ext_links.append(href)
+
+                phones = sorted(set(phones))
+                gov_links = da.extract_gov_links(txt, extra_links=ext_links)
+                ext_links.sort(key=lambda u: 0 if da.is_direct_form_or_ats(u) else 1)
+                apply_url = str(gov_links["best_apply_url"]) if gov_links["best_apply_url"] else (ext_links[0] if ext_links else None)
+                if not (apply_url or phones or emails):
+                    continue
+
+                # Extract employer & city cleanly from structured labels in body
+                emp_m = None
+                if len(lines) >= 2 and any("الجن" in ln or "طريقة التقدي" in ln for ln in lines[2:5]):
+                    cand_emp = lines[1]
+                    if (
+                        3 <= len(cand_emp) <= 80
+                        and not re.match(r"^(?:الجنـ?س|طريقة\s+التقديم|مقر\s+المؤسسة|تفاصيل|المؤهلات)", cand_emp)
+                        and "syria-jobs" not in cand_emp.lower()
+                    ):
+                        emp_m = cand_emp
+                city_m = re.search(r"مقر\s+المؤسس[ةه]\s*[:：]\s*([^\n]+)", txt)
+                city_hint = city_m.group(1) if city_m else ""
+                cities = tx.cities_from_text(city_hint) or tx.cities_from_text(txt[:300]) or ["عدة محافظات"]
+                gender = "female" if re.search(r"الجنـ?س\s*[:：]\s*أنثى", txt) else ("male" if re.search(r"الجنـ?س\s*[:：]\s*ذكر", txt) else None)
+                edu = tx.education_from_text(txt) or tx.education_from_title(title) or "none"
+                fld = tx.field_from_text(title, txt[:500])
+                sub = computer_subfield(title, txt[:300])
+                if sub or fld == "computer":
+                    fld, sub = "computer", sub or "DT"
+
+                jobs.append(Job(
+                    title=ex.normalize_title_display(title)[:120],
+                    source="syria_jobs",
+                    post_url=link,
+                    posted_at=posted_at,
+                    employer=emp_m,
+                    cities=cities,
+                    education=edu,
+                    education_from="stated" if tx.education_from_text(txt) else "unknown",
+                    field=fld,
+                    subfield=sub,
+                    kind="formal" if (emails or apply_url or deadline) else "quick",
+                    official=False,
+                    country="sy",
+                    sector=tx.infer_sector(False, fld, emp_m, txt),
+                    apply_url=apply_url,
+                    details_url=link,
+                    phones=phones,
+                    whatsapp=tx.whatsapp_only(txt) and bool(phones),
+                    email=emails[0] if emails else None,
+                    apply_types=tx.infer_apply_types(apply_url, phones, bool(phones and tx.whatsapp_only(txt)), emails[0] if emails else None),
+                    deadline=deadline,
+                    gender=gender,
+                    confidence=0.85,
+                    raw=txt[:1600],
+                ))
+            if recent_on_page == 0:
+                break
+        except Exception as e:
+            log.warning("SyriaJobs RSS %s failed: %s", url, e)
+            break
+    return jobs
+
+
 def _warm_resolve_cache(jobs: list[Job], cache: dict, max_workers: int = 4) -> None:
     """Resolve pending wrapper/shortener URLs concurrently into cache for large batches."""
     today_str = datetime.now(timezone.utc).date().isoformat()
@@ -1223,6 +1514,8 @@ def fetch_all_web_portal_jobs(client: httpx.Client | None = None, cache: dict | 
         scrape_bahar,
         scrape_ngossyria,
         scrape_syria_un,
+        scrape_unjobnet_syria,
+        scrape_syria_jobs_com,
     )
     try:
         for fn in scrapers:

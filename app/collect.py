@@ -76,21 +76,23 @@ def card_to_job(card: Card, ann: moad_announcement.Announcement) -> Job:
 
 
 def portal_job(ann: moad_announcement.Announcement) -> Job:
-    """The newer announcements link to the ministry's jobs portal instead of a PDF: one card that points there."""
+    """The newer announcements link to the ministry's jobs portal or a direct gov form instead of a PDF."""
+    apply_target = ann.apply_url or ann.hiring_url
+    details_target = ann.hiring_url or ann.apply_url
     return Job(title=f"شواغر متعددة لدى {ann.entity}", source="moad", post_url=ann.post_url, posted_at=ann.posted_at,
                employer=ann.entity, cities=tx.cities_from_text(ann.governorates_text or ann.text), deadline=ann.deadline,
-               kind="formal", apply_url=ann.hiring_url, details_url=ann.hiring_url, official=True,
-               country="sy", sector="gov", apply_types=tx.infer_apply_types(ann.hiring_url, [], False, None), confidence=0.7)
+               kind="formal", apply_url=apply_target, details_url=details_target, official=True,
+               country="sy", sector="gov", apply_types=tx.infer_apply_types(apply_target, [], False, None), confidence=0.7)
 
 
 def ministry_jobs(post: Post, client: httpx.Client | None, con) -> list[Job]:
     ann = moad_announcement.parse(post)
     if not ann:
         return []
-    if "moad.gov.sy" in (ann.hiring_url or ""):
-        return [portal_job(ann)]
     name = _PDF_NAME.search(ann.hiring_url or "")
-    if not name:
+    if "moad.gov.sy" in (ann.hiring_url or "") or not name:
+        if ann.apply_url or ann.hiring_url:
+            return [portal_job(ann)]
         return []
     path = config.PDF_DIR / f"{name.group(0)}.pdf"
     if not path.exists():

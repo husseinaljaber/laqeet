@@ -185,13 +185,24 @@
 
   // ---------------------------------------------------------------- cards & links
   function waLink(j) {
+    const msg = `مرحباً، أستفسر عن شاغر «${j.title}» المنشور عبر منصة لقيت. هل الشاغر متاح حالياً؟`;
     const p = (j.phones || []).find(isMobile);
     if (p) {
-      const src = (j.sources && j.sources[0] && j.sources[0].label) || 'لقيت';
-      const msg = `مرحباً، أستفسر عن شاغر «${j.title}» المنشور عبر منصة ${src}. هل الشاغر متاح حالياً؟`;
       return `https://wa.me/${intlPhone(p)}?text=${encodeURIComponent(msg)}`;
     }
-    if (j.apply_url && /^https?:\/\/wa\.me\//i.test(j.apply_url)) return j.apply_url;
+    if (j.apply_url && /^https?:\/\/(?:wa\.me\/|api\.whatsapp\.com\/)/i.test(j.apply_url)) {
+      const m = j.apply_url.match(/wa\.me\/(\d{7,15})/i);
+      if (m) return `https://wa.me/${m[1]}?text=${encodeURIComponent(msg)}`;
+      try {
+        const u = new URL(j.apply_url);
+        const ph = (u.searchParams.get('phone') || '').replace(/\D+/g, '');
+        if (ph.length >= 7) return `https://wa.me/${ph}?text=${encodeURIComponent(msg)}`;
+        u.searchParams.set('text', msg);
+        return u.toString();
+      } catch {
+        return j.apply_url.split('?')[0] + `?text=${encodeURIComponent(msg)}`;
+      }
+    }
     return null;
   }
 
@@ -376,12 +387,37 @@
     document.body.removeChild(ta);
   }
 
-  const PLACEHOLDER_EMP = new Set(['غير معلن', 'اعلانات', 'إعلانات', 'شواغر سوريا', '']);
+  const PLACEHOLDER_EMP = new Set([
+    'غير معلن', 'اعلانات', 'إعلانات', 'شواغر سوريا', '',
+    'منظمات دولية ووكالات أممية (reliefweb)',
+    'منصة ورك لينك (worklink syria)',
+    'منصة ساحة المنظمات (ngo square)',
+    'منصة فرص عمل في سوريا',
+    'موقع فرص عمل في تركيا',
+    'موقع وظائف سوريا (syria jobs)',
+    'منصة سلام جوبز',
+    'منصة وظيفتورك'
+  ]);
+  const PORTAL_EMP_RE = /^(?:جهة\s*توظيف|منظمة\s*أممية\s*\/\s*دولية|فرص\s*عمل|شواغر|وظائف|توظيف)(?:\s+\S+){0,2}\s+عبر\s+.+$/i;
+  const WRAPPER_EMP_RE = /(?:job\s*in\s*syria|worklink|ngos?\s*syria|ngosquare|reliefweb|unjobs|unjobnet|syria-?jobs\.com|shamhr|forsa-?sy|salam\s*jobs|jobsintr|adwhit|ab-ilan|sqrjobs|nsjobs|jobsyria|wazifturk|وظيفتورك)/i;
 
   function cleanEmployer(j) {
     const raw = (j.employer || '').trim();
-    if (!PLACEHOLDER_EMP.has(raw)) return raw;
-    return j.official ? 'جهة حكومية رسمية' : '';
+    if (!raw || PLACEHOLDER_EMP.has(raw.toLowerCase()) || PORTAL_EMP_RE.test(raw) || WRAPPER_EMP_RE.test(raw)) {
+      return j.official ? 'جهة حكومية رسمية' : '';
+    }
+    return raw;
+  }
+
+  function cleanSummary(s) {
+    if (!s) return '';
+    return String(s)
+      .replace(/(?:\s*[·•\-|]\s*|\s+)(?:💎+\s*)?المصدر\s*[:：]\s*[^·\n]+/gi, '')
+      .replace(/\s*لدى\s+(?:جهة\s*توظيف|منظمة\s*أممية(?:\s*\/\s*دولية)?)\s+عبر\s+(?:job\s*in\s*syria|worklink|ngos?\s*syria|ngosquare|reliefweb|[^\s·,،.]+)[^·\n]*/gi, '')
+      .replace(/\s*عبر\s+(?:منصة|موقع|قناة|بوابة)\s+(?:فريلانس\s*سوريا|ورك\s*لينك|ساحة\s*المنظمات|سلام\s*جوبز|وظائف\s*سوريا|فرص\s*عمل(?:\s+في\s+(?:تركيا|سوريا))?(?:\s+الرسمية)?|ngo(?:s)?\s*syria|job\s*in\s*syria|worklink|salam\s*jobs|jobsintr|reliefweb|unjobnet|syria-?jobs)[^·\n]*/gi, '')
+      .replace(/^(?:\s*[·•\-]\s*)+|(?:\s*[·•\-]\s*)+$/g, '')
+      .replace(/\s{2,}/g, ' ')
+      .trim();
   }
 
   function primaryJobLink(j) {
@@ -407,8 +443,9 @@
       j.deadline ? `📅 آخر موعد للتقديم: ${j.deadline}` : null
     ].filter(Boolean);
 
-    if (j.summary) {
-      lines.push('', `📝 وصف وتفاصيل العمل:\n${j.summary}`);
+    const shareSummary = cleanSummary(j.summary);
+    if (shareSummary) {
+      lines.push('', `📝 وصف وتفاصيل العمل:\n${shareSummary}`);
     }
     if (j.tasks && j.tasks.length) {
       lines.push('', `📌 المهام والمسؤوليات:\n${j.tasks.slice(0, 5).map((t) => '• ' + t).join('\n')}`);
@@ -436,6 +473,7 @@
     if (applyLines.length) {
       lines.push('', ...applyLines);
     }
+    lines.push('', `🌐 عبر منصة لقيت: ${location.origin}/j/${j.id}`);
     return lines.join('\n');
   }
 
@@ -562,14 +600,14 @@
       const isForm = (j.apply_types || []).includes('form');
       out.append(el('a', { class: 'apply', href: j.apply_url, target: '_blank', rel: 'noopener' }, isForm ? 'تعبئة استمارة التقديم' : 'التقديم عبر الموقع'));
     }
-    const isWrapperUrl = (u) => /(?:^|\.)(?:worklink\.sy|jobinsyria\.com|reliefweb\.int|unjobs\.org|ngosquare\.com|jobsyria\.org|nsjobs\.net|ngossyria\.com|sqrjobs\.net|jobsintr\.net|salamjobs\.com|adwhit\.com|ab-ilan\.com|spc\.sy)(?:\/|$)/i.test((() => { try { return new URL(u).hostname; } catch { return ''; } })());
+    const isWrapperUrl = (u) => /(?:^|\.)(?:worklink\.sy|jobinsyria\.com|reliefweb\.int|unjobs\.org|unjobnet\.org|ngosquare\.com|jobsyria\.org|nsjobs\.net|ngossyria\.com|sqrjobs\.net|syria-jobs\.com|shamhr\.com|forsa-sy\.com|jobsintr\.net|salamjobs\.com|adwhit\.com|ab-ilan\.com|wazifturk\.com|mahereen\.com|spc\.sy)(?:\/|$)/i.test((() => { try { return new URL(u).hostname; } catch { return ''; } })());
     if (j.details_url && j.details_url !== j.apply_url && !isWrapperUrl(j.details_url)) {
       out.append(el('a', { href: j.details_url, target: '_blank', rel: 'noopener' }, 'تفاصيل الإعلان'));
     }
     if (j.email) {
       out.append(el('a', { href: 'mailto:' + j.email }, 'إرسال CV بالإيميل'));
     }
-    (j.sources || []).slice(0, big ? 9 : 2).forEach((s) => {
+    (j.sources || []).slice(0, big ? 9 : 1).forEach((s) => {
       out.append(el('a', { href: s.post_url, target: '_blank', rel: 'noopener' }, 'المصدر: ' + s.label));
     });
 
@@ -601,13 +639,13 @@
     const emp = cleanEmployer(j);
     const roleLabel = j.field && j.field !== 'other' ? (j.subfield ? subLabel(j.subfield) : fieldLabel(j.field)) : '';
     const where = ['📍 ' + formatCardCities(j), emp ? '🏢 ' + emp : '', roleLabel ? '💼 ' + roleLabel : ''].filter(Boolean).join(' · ');
-    const summaryText = j.summary || (j.tasks && j.tasks.length ? j.tasks.slice(0, 2).join(' · ') : '') || (j.skills && j.skills.length ? j.skills.slice(0, 2).join(' · ') : '');
+    const summaryText = cleanSummary(j.summary || (j.tasks && j.tasks.length ? j.tasks.slice(0, 2).join(' · ') : '') || (j.skills && j.skills.length ? j.skills.slice(0, 2).join(' · ') : ''));
     const desc = summaryText ? el('p', { class: 'card-desc' }, ...highlightNodes(summaryText, state.terms)) : null;
 
     return el('article', { class: 'card in', style },
       el('div', { class: 'top' },
         statusOf(j),
-        j.official ? el('span', { class: 'official' }, 'رسمي ✓ حكومي') : el('span', { class: 'src' }, (j.sources[0] || {}).label || '')
+        j.official ? el('span', { class: 'official' }, 'رسمي ✓ حكومي') : null
       ),
       el('h3', null, el('button', { onclick: () => openDetail(j) }, ...highlightNodes(j.title, state.terms))),
       el('div', { class: 'meta' }, ...highlightNodes(where, state.terms)),
@@ -621,7 +659,7 @@
   function openDetail(j) {
     const m = fit(j);
     const kv = [
-      ['الجهة المشغلة', j.employer],
+      ['الجهة المشغلة', cleanEmployer(j)],
       ['المحافظات والمدن', (j.cities || []).join('، ') || 'سوريا (عام)'],
       ['مجال العمل', j.field && j.field !== 'other' ? fieldLabel(j.field) : null],
       ['المؤهل العلمي', j.education ? (EDU_LABEL[j.education] || j.education) : 'غير مشترط / غير مذكور'],
@@ -634,7 +672,8 @@
     ].filter(([, v]) => v);
 
     const listBlock = (title, items) => (items && items.length) ? [el('h4', null, title), el('ul', null, items.map((x) => el('li', null, x)))] : [];
-    const summaryBlock = j.summary ? [el('h4', null, 'نبذة ووصف الشاغر'), el('p', { style: 'margin:4px 0 10px;line-height:1.6' }, j.summary)] : [];
+    const detSummary = cleanSummary(j.summary);
+    const summaryBlock = detSummary ? [el('h4', null, 'نبذة ووصف الشاغر'), el('p', { style: 'margin:4px 0 10px;line-height:1.6' }, detSummary)] : [];
     const hasDirectLink = Boolean(j.apply_url && !/^https?:\/\/(?:wa\.me\/|api\.whatsapp\.com\/)/i.test(j.apply_url));
     const shareSection = el('div', { class: 'share-box' },
       el('div', { class: 'share-box-title' }, '📤 مشاركة الإعلان أو نسخه مع الوصف وطريقة التقديم:'),
@@ -931,6 +970,7 @@
   }
 
   // ---------------------------------------------------------------- refresh jobs
+  const renderedIds = new Set();
   let requestSeq = 0;
   async function refresh(append) {
     if (state.saved) {
@@ -1001,7 +1041,13 @@
       }
     }
 
-    const cards = data.jobs.map((j, i) => card(j, i));
+    if (!append) renderedIds.clear();
+    const freshJobs = (data.jobs || []).filter((j) => {
+      if (!j || renderedIds.has(j.id)) return false;
+      renderedIds.add(j.id);
+      return true;
+    });
+    const cards = freshJobs.map((j, i) => card(j, i));
     if (append) {
       $('grid').append(...cards);
     } else {
@@ -1019,7 +1065,7 @@
       );
     }
 
-    const shown = Math.min(state.offset + PAGE, data.total);
+    const shown = Math.min(renderedIds.size, data.total);
     const selCities = splitCsv(state.city);
     const countryDefaultLabel = state.country === 'tr' ? 'في كل تركيا 🇹🇷' : 'في كل سوريا 🇸🇾';
     const whereLabel = selCities.length ? `في ${selCities.join(' و ')}` : countryDefaultLabel;
@@ -1031,7 +1077,7 @@
     if (boardOpenNode && !state.city && !state.field && !state.edu && !state.edu_group && !state.q && !state.sector && !state.apply) {
       boardOpenNode.textContent = data.total;
     }
-    $('more').hidden = data.total <= shown;
+    $('more').hidden = data.total <= shown || (state.offset + PAGE >= data.total) || !(data.jobs && data.jobs.length);
 
     if (!append) {
       renderBars(data.facets.field);

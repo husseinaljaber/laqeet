@@ -50,9 +50,13 @@ SOURCE_LABEL = {v["source"]: v["label"] for v in CHANNELS.values()} | {
     "bahar": "منظمة بهار (Bahar)",
     "ngossyria": "بوابة منظمات سوريا (NGOs Syria)",
     "un_syria": "بوابة الأمم المتحدة في سوريا (UN Syria)",
+    "unjobnet_sy": "بوابة UNjobnet (وظائف الأمم المتحدة)",
+    "syria_jobs": "موقع وظائف سوريا (Syria Jobs)",
+    "ssf_gov": "الصندوق السيادي السوري (بوابة التوظيف الرسمية)",
     "jobsintr_web": "موقع فرص عمل في تركيا",
     "adwhit_web": "موقع أدويت للوظائف",
     "salamjobs": "منصة سلام جوبز",
+    "wazifturk": "منصة وظيفتورك",
     "httpOrganizationalExamTemplates": "بنك نماذج امتحانات المنظمات والوظائف",
 }
 

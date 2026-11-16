@@ -253,3 +253,63 @@ def test_extract_rejects_section_headings_and_preserves_clean_jobs():
     assert not spam.is_spam("مطلوب مدرب حلاقة رجالية لتقديم تدريب عملي في القص والتسريح والعناية بالبشرة منظمة شفق hr@shafak.org")
     assert spam.is_spam("مطلوب مسوقين لتداول العملات الرقمية والفوركس على بينانس بربح يومي بدون رأس مال")
     assert spam.is_spam("فرصة ربح يومي بدون ايداع مع شجرة الأعضاء وبونص شهري وتسويق شبكي")
+
+
+def test_expanded_turkey_feeds_dedup_and_direct_apply_only():
+    """Expanded Turkey category/city feeds dedup repeated URLs and wazifturk drops login-walled listings."""
+    from datetime import datetime, timezone
+    import json
+    import httpx
+    from app.sources import turkey_portals as tp
+
+    now_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
+    fut_ms = now_ms + 15 * 86400 * 1000
+
+    jobsintr_list_main = '<a href="https://jobsintr.net/jobs/main1">Job 1</a>'
+    jobsintr_list_gaz = (
+        '<a href="https://jobsintr.net/jobs/main1">Job 1 Dup</a>'
+        '<a href="https://jobsintr.net/jobs/gaz1">Job Gaz</a>'
+    )
+    jobsintr_detail = (
+        '<div class="job-header-content"><h1>فني تشغيل خطوط في غازي عنتاب</h1>منذ يومين</div>'
+        '<div class="job-overview">غازي عنتاب</div>'
+        '<div class="ck-content">مطلوب فني للعمل في معمل تواصل 05317166420</div>'
+    )
+
+    wazif_list = '<main><a href="/job/101-direct-role">A</a><a href="/job/102-login-wall">B</a></main>'
+    wazif_direct = (
+        '<main><h1>مطلوب مترجم فرنسي للعمل في إسطنبول</h1><p>فرصة عمل دوام كامل - إرسال السيرة الذاتية على hr@company.tr</p></main>'
+        f'<script>self.__next_f.push([1,"\\"postedAt\\":\\"{now_ms}\\",\\"expiresAt\\":\\"{fut_ms}\\",\\"city\\":\\"İstanbul\\""])</script>'
+    )
+    wazif_login_only = (
+        '<main><h1>مطلوب محاسب للعمل في إسطنبول</h1><p>فرصة عمل دوام كامل - قدّم عبر الموقع فقط</p></main>'
+        f'<script>self.__next_f.push([1,"\\"postedAt\\":\\"{now_ms}\\",\\"expiresAt\\":\\"{fut_ms}\\",\\"city\\":\\"İstanbul\\""])</script>'
+    )
+
+    def handler(req: httpx.Request) -> httpx.Response:
+        u = str(req.url)
+        if u == "https://jobsintr.net/jobs":
+            return httpx.Response(200, text=jobsintr_list_main)
+        if "jobsintr.net/jobs/state/" in u:
+            return httpx.Response(200, text=jobsintr_list_gaz)
+        if u in ("https://jobsintr.net/jobs/main1", "https://jobsintr.net/jobs/gaz1"):
+            return httpx.Response(200, text=jobsintr_detail)
+        if u == "https://wazifturk.com/search":
+            return httpx.Response(200, text=wazif_list)
+        if "wazifturk.com/job/101-direct-role" in u:
+            return httpx.Response(200, text=wazif_direct)
+        if "wazifturk.com/job/102-login-wall" in u:
+            return httpx.Response(200, text=wazif_login_only)
+        return httpx.Response(404)
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as c:
+        ji_jobs = tp.scrape_jobsintr_web(c, max_pages=1)
+        assert [j.post_url for j in ji_jobs] == [
+            "https://jobsintr.net/jobs/main1",
+            "https://jobsintr.net/jobs/gaz1",
+        ]
+        wt_jobs = tp.scrape_wazifturk_tr(c)
+        assert len(wt_jobs) == 1
+        assert wt_jobs[0].source == "wazifturk"
+        assert wt_jobs[0].email == "hr@company.tr"
+        assert wt_jobs[0].apply_url is None

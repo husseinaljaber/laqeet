@@ -34,7 +34,7 @@ _SOCIAL_HOSTS = {
 _AGGREGATOR_HOSTS = {
     "tawzeefportal.com", "job.sy", "hanwazafak.com", "baaeed.com", "indeed.com",
     "eg.indeed.com", "tr.indeed.com", "jooble.org", "bayt.com", "wuzzuf.net", "forasna.com",
-    "akhtaboot.com", "tanqeeb.com", "unjobnet.org", "unjobs.org", "gulftalent.com",
+    "akhtaboot.com", "tanqeeb.com", "unjobs.org", "gulftalent.com",
     "naukrigulf.com", "linkedin.com", "glassdoor.com", "remotive.com",
     "freelancer.com", "upwork.com", "mostaql.com", "khamsat.com",
     "syrianjobs.net", "jobs.sy", "phoenijobs.sy", "lmo.sy",
@@ -48,9 +48,9 @@ _SHORTENER_HOSTS = {
 }
 
 _STRICT_PORTAL_HOSTS = {
-    "worklink.sy", "jobinsyria.com", "reliefweb.int", "unjobs.org", "ngosquare.com",
+    "worklink.sy", "jobinsyria.com", "reliefweb.int", "unjobs.org", "unjobnet.org", "ngosquare.com",
     "jobsyria.org", "nsjobs.net", "ngossyria.com", "syria.un.org", "sqrjobs.net",
-    "jobsintr.net", "salamjobs.com", "adwhit.com", "ab-ilan.com",
+    "syria-jobs.com", "jobsintr.net", "salamjobs.com", "adwhit.com", "ab-ilan.com",
     "sana.sy", "mohe.gov.sy", "spu.edu.sy", "au.edu.sy", "jude.edu.sy", "spc.sy",
     "mikrotiksyria.com", "lgsprefabsy.com", "almaqala.blog", "arabicline.com",
 }
@@ -64,10 +64,13 @@ _WRAPPER_HOSTS = _STRICT_PORTAL_HOSTS | {
 
 _DIRECT_FORM_OR_ATS_RE = re.compile(
     r"(?:docs\.google\.com/forms|forms\.gle|forms\.office\.com|forms\.cloud\.microsoft|"
-    r"ee(?:-eu)?\.kobotoolbox\.org|ee\.humanitarianresponse\.info|enketo\.ona\.io|"
+    r"(?:ee(?:-eu)?|kf|kc)\.kobotoolbox\.org|(?:ee|kf|kc)\.humanitarianresponse\.info|enketo\.ona\.io|"
     r"(?:form\.)?jotform\.com|typeform\.com|airtable\.com/(?:app|shr)|tally\.so|surveymonkey\.com|"
     r"zfrmz\.com|script\.google\.com/macros/|form\.goldyol\.com|"
-    r"apply\.hiring\.moad\.gov\.sy|moad\.gov\.sy/recruitment/jobs|recruitment\.ssf\.gov\.sy|"
+    r"apply\.hiring\.moad\.gov\.sy|moad\.gov\.sy/recruitment/(?:jobs|main)|"
+    r"cloud\.[a-z0-9-]+\.gov\.sy/(?:index\.php/)?apps/forms|forms\.[a-z0-9-]+\.gov\.sy|"
+    r"hr\.mofaex\.gov\.sy|career\.moenergy\.gov\.sy|"
+    r"solidarites\.org/.+/submit-your-application|"
     r"career\.ihsanrd\.org|jobs\.unicef\.org|careers\.un\.org|careers\.unops\.org|jobs\.oxfam\.org|"
     r"inspira\.un\.org/psp/.+HRS_JOB_OPENING_ID|"
     r"bamboohr\.com|hrpeak\.com|hr-manager\.net|baseilowcloud\.com|emply\.com|jobs\.tdh\.org|jobvite\.com|"
@@ -82,17 +85,20 @@ _DIRECT_FORM_OR_ATS_RE = re.compile(
 _NON_JOB_LANDING_RE = re.compile(
     r"(?:/account/(?:applicants|login|register)|/recruiting-agencies/?$|ab-ilan\.com/ngocareers/?$|"
     r"inspira\.un\.org/psp/[^/]+/\?cmd=login|cibeg\.taleo\.net|jobs\.unicef\.org/jobs/search/?$|"
-    r"mahereen\.com/login|salamjobs\.com/login|jobsintr\.net/(?:account|login|register))",
+    r"mahereen\.com/login|salamjobs\.com/login|jobsintr\.net/(?:account|login|register)|"
+    r"recruitment\.ssf\.gov\.sy/(?:Account|Applications/Apply)|"
+    r"forsa-sy\.com|shamhr\.com)",
     re.I,
 )
 
 _IGNORE_EMAIL_SUBSTRS = (
     "ngosquare.com", "ida-org.com", "worklink.sy", "tawzeefportal", "hanwazafak",
     "contact@jobinsyria.com", "info@phoenitech.", "info@jobsyria.org", "info@ngossyria.com", "info@lmo.sy",
+    "info@syria-jobs.com", "info@ssf.gov.sy", "info@unjobnet.org",
     "info@sarc-sy.org", "info@shafak.org", "info@srd.org.tr", "info@ataarelief.org",
     "info@sema-sy.org", "info@bahar.ngo", "info@sened.ngo",
     "info@jobsintr.net", "info@salamjobs.com", "info@mahereen.com", "info@wazifturk.com",
-    "info@ab-ilan.com", "info@adwhit.com", "employee@gmail.com", "kvkk@",
+    "info@ab-ilan.com", "info@adwhit.com", "employee@gmail.com", "kvkk@", "global.inclusion@wfp.org",
     "noreply@", "no-reply@", "donotreply@", "webmaster@", "wordpress@", "wixpress",
     "sentry.io", "example.com", "domain.com", ".png", ".jpg", ".svg",
 )
@@ -125,18 +131,130 @@ def _matches_domain_set(host: str, domains: set[str]) -> bool:
     return any(host == d or host.endswith("." + d) for d in domains)
 
 
-def strip_tracking(url: str) -> str:
-    """Drop noisy query parameters (fbclid, utm_*, highlightedUpdateUrn) without altering form URLs."""
+_RTL_CONTROL_RE = re.compile(r"[\u200b-\u200f\u202a-\u202e\ufeff]+")
+_URL_TRIM_CHARS = "\u200e\u200f\u202a\u202b\u202c\u202d\u202e\u200b\u200c\u200d.,،؛;:!()[]{}<>«»\"' \t\r\n"
+_SCHEME_LESS_URL_RE = re.compile(r"^(?:[a-z0-9-]+\.)+[a-z]{2,}(?:/[^\s]*)?$", re.I)
+
+_GOV_LINK_PATTERNS: dict[str, re.Pattern[str]] = {
+    "moad_apply": re.compile(
+        r"(?:https?://)?bit\.ly/applying[A-Za-z0-9_-]+",
+        re.I,
+    ),
+    "moad_details": re.compile(
+        r"(?:https?://)?bit\.ly/hiring[A-Za-z0-9_-]+",
+        re.I,
+    ),
+    "kobotoolbox": re.compile(
+        r"https?://(?:ee(?:-eu)?|kf|kc)\.(?:kobotoolbox\.org|humanitarianresponse\.info)/[^\s<>\"'،؛)\]]+",
+        re.I,
+    ),
+    "gov_portal_apply": re.compile(
+        r"https?://(?:"
+        r"cloud\.[a-z0-9-]+\.gov\.sy/(?:index\.php/)?apps/forms/[^\s<>\"'،؛)\]]+|"
+        r"forms\.[a-z0-9-]+\.gov\.sy/[^\s<>\"'،؛)\]]+|"
+        r"apply\.hiring\.moad\.gov\.sy/[^\s<>\"'،؛)\]]*|"
+        r"moad\.gov\.sy/recruitment/(?:jobs|main)[^\s<>\"'،؛)\]]*|"
+        r"recruitment\.ssf\.gov\.sy/Jobs[^\s<>\"'،؛)\]]*|"
+        r"career\.moenergy\.gov\.sy/[^\s<>\"'،؛)\]]*|"
+        r"hr\.mofaex\.gov\.sy/[^\s<>\"'،؛)\]]*"
+        r")",
+        re.I,
+    ),
+    "external_forms": re.compile(
+        r"https?://(?:"
+        r"forms\.gle/[A-Za-z0-9_-]+|"
+        r"docs\.google\.com/forms/d/e/[A-Za-z0-9_-]+/[^\s<>\"'،؛)\]]*|"
+        r"forms\.(?:office\.com|cloud\.microsoft)/[^\s<>\"'،؛)\]]+"
+        r")",
+        re.I,
+    ),
+    "other_shortlinks": re.compile(
+        r"(?:https?://)?(?:bit\.ly|tinyurl\.com|t\.ly)/(?!applying|hiring)[A-Za-z0-9_-]+",
+        re.I,
+    ),
+}
+
+
+def clean_url(url: str) -> str:
+    """Strip hidden bidi/zero-width chars & Arabic punctuation from URL and add https:// if scheme-less."""
+    if not url:
+        return ""
+    cleaned = _RTL_CONTROL_RE.sub("", url).strip(_URL_TRIM_CHARS).strip()
+    cleaned = _RTL_CONTROL_RE.sub("", cleaned)
+    if not cleaned:
+        return ""
+    if not cleaned.lower().startswith(("http://", "https://")) and _SCHEME_LESS_URL_RE.match(cleaned):
+        cleaned = f"https://{cleaned}"
+    return cleaned
+
+
+def extract_gov_links(text: str, extra_links: list[str] | None = None) -> dict[str, object]:
+    """Extract and separate Syrian gov/NGO direct apply forms vs hiring info/PDF cards."""
+    parts = [text or ""]
+    if extra_links:
+        parts.append(" ".join(str(x) for x in extra_links if x))
+    hay = _RTL_CONTROL_RE.sub("", "\n".join(parts))
+
+    found: dict[str, list[str]] = {}
+    for key, pattern in _GOV_LINK_PATTERNS.items():
+        seen: list[str] = []
+        for m in pattern.finditer(hay):
+            u = clean_url(m.group(0))
+            if u and u not in seen:
+                seen.append(u)
+        found[key] = seen
+
+    apply_candidates = (
+        found["moad_apply"]
+        + found["gov_portal_apply"]
+        + found["kobotoolbox"]
+        + found["external_forms"]
+    )
+    all_apply = list(dict.fromkeys(apply_candidates))
+    best_apply = all_apply[0] if all_apply else (found["other_shortlinks"][0] if found["other_shortlinks"] else None)
+    details_url = found["moad_details"][0] if found["moad_details"] else None
+
+    return {
+        "best_apply_url": best_apply,
+        "details_url": details_url,
+        "all_apply_urls": all_apply,
+        "all_details_urls": found["moad_details"],
+        "shortlinks": found["other_shortlinks"],
+        "has_direct_apply": bool(all_apply),
+        "is_details_only": bool(details_url) and not bool(all_apply) and not bool(found["other_shortlinks"]),
+    }
+
+
+async def resolve_short_url(url: str, timeout: float = 5.0) -> str:
+    """Async helper to unwrap shortlinks (bit.ly / tinyurl / t.ly) to their final destination."""
+    u = clean_url(url)
+    if not u:
+        return ""
     try:
-        p = urlparse(url.strip())
+        async with httpx.AsyncClient(follow_redirects=True, headers=_BROWSER_HEADERS, timeout=timeout) as client:
+            resp = await client.head(u)
+            if resp.status_code in (405, 403):
+                resp = await client.get(u)
+            return clean_url(str(resp.url))
+    except Exception:
+        return u
+
+
+def strip_tracking(url: str) -> str:
+    """Drop noisy query parameters (fbclid, utm_*, highlightedUpdateUrn) and invisible RTL marks."""
+    cleaned = clean_url(url)
+    if not cleaned:
+        return ""
+    try:
+        p = urlparse(cleaned)
     except ValueError:
-        return url.strip()
+        return cleaned
     if p.scheme not in ("http", "https") or not p.netloc:
         return ""
     qs = parse_qs(p.query, keep_blank_values=True)
     drop = {k for k in qs if k.lower().startswith("utm_") or k.lower() in {"fbclid", "gclid", "mc_cid", "mc_eid", "rcm"}}
     if not drop:
-        return url.strip()
+        return cleaned
     kept = [(k, v) for k, vals in qs.items() if k not in drop for v in vals]
     return urlunparse(p._replace(query=urlencode(kept)))
 
@@ -471,6 +589,11 @@ def resolve_job_apply(job: Job, client: httpx.Client | None = None, cache: dict 
             job.phones = sorted(set(job.phones))
             if _host(job.apply_url) == "api.whatsapp.com":
                 job.apply_url = None
+            elif _host(job.apply_url) == "wa.me":
+                # Strip pre-filled third-party ?text= query so frontend/share always brands via منصة لقيت
+                parsed_wa = urlparse(job.apply_url)
+                digits = re.sub(r"\D+", "", parsed_wa.path or "")
+                job.apply_url = f"https://wa.me/{digits}" if digits else None
 
     # 2. Enforce static rejections (aggregators, social, channels, folders/maps)
     if job.apply_url and is_disallowed_offline_url(job.apply_url):

@@ -318,3 +318,520 @@ def test_tightened_ttl_and_no_expired_zombie_resurrection(tmp_path):
     jid_dup, is_new = db.upsert(con, j_mirror)
     assert is_new is False and jid_dup == jid_exp
     assert con.execute("SELECT status FROM jobs WHERE id=?", (jid_exp,)).fetchone()[0] == "expired"
+
+
+def test_cross_source_tr_duplicates_and_composite_job_keys(tmp_path):
+    """Cross-source TR blurbs/headlines dedup even when a contact phone holds multiple distinct roles."""
+    from datetime import datetime, timezone
+
+    con = db.connect(tmp_path / "cross_tr.db")
+    now_iso = datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+    # 1. Clinic phone 05339643455 posts two DIFFERENT roles first, then a mirror of role #2 arrives with a truncated blurb title.
+    r1 = Job(
+        title="موظفين مبيعات عقارية (Real Estate Sales Executive)",
+        source="jobsintr",
+        post_url="https://t.me/jobsintr/10",
+        posted_at=now_iso,
+        country="tr",
+        cities=["إسطنبول"],
+        phones=["05339643455"],
+        whatsapp=True,
+    )
+    r2 = Job(
+        title="سيدة متفرغة للعمل في التنظيف والضيافة",
+        source="jobsintr",
+        post_url="https://t.me/jobsintr/11",
+        posted_at=now_iso,
+        country="tr",
+        cities=["إسطنبول"],
+        phones=["05339643455"],
+        whatsapp=True,
+        raw="📢 مطلوب سيدة متفرغة للعمل في التنظيف والضيافة\nتعلن عيادة أسنان راقية عن توفر فرصة عمل",
+    )
+    r2_mirror = Job(
+        title="تعلن عيادة أسنان راقية في إسطنبول عن توفر فرصة عمل لسيدة للانضمام إلى فريقنا، للعمل في مجال",
+        source="jobsintr_web",
+        post_url="https://jobsintr.net/jobs/clean1",
+        posted_at=now_iso,
+        country="tr",
+        cities=["إسطنبول"],
+        phones=["05339643455"],
+        whatsapp=True,
+        raw="📢 مطلوب سيدة متفرغة للعمل في التنظيف والضيافة\nتعلن عيادة أسنان راقية في إسطنبول عن توفر فرصة عمل لسيدة للانضمام إلى فريقنا",
+    )
+    id1, new1 = db.upsert(con, r1)
+    id2, new2 = db.upsert(con, r2)
+    id2m, new2m = db.upsert(con, r2_mirror)
+    assert new1 and new2 and id1 != id2
+    assert not new2m and id2m == id2
+    # Crisp title is preserved instead of overwritten by truncated blurb
+    assert con.execute("SELECT title FROM jobs WHERE id=?", (id2,)).fetchone()[0] == "سيدة متفرغة للعمل في التنظيف والضيافة"
+
+    # 2. Stem normalization merges single-token role equivalence ("محاسب/ة" vs "محاسب / محاسبة")
+    a1 = Job(title="محاسب/ة", source="jobsintr", post_url="https://t.me/jobsintr/20", posted_at=now_iso, country="tr", cities=["إسطنبول"], email="info@tolin-co.com")
+    a2 = Job(title="محاسب / محاسبة", source="jobsintr_web", post_url="https://jobsintr.net/jobs/acc1", posted_at=now_iso, country="tr", cities=["إسطنبول"], email="info@tolin-co.com")
+    aid1, _ = db.upsert(con, a1)
+    aid2, a_new = db.upsert(con, a2)
+    assert not a_new and aid2 == aid1
+
+    # 3. Call Center + Dental Medical Consultant sharing clinic phone & template header stay separate
+    c1 = Job(
+        title="English-speaking Call Center Agent",
+        source="jobsintr",
+        post_url="https://t.me/jobsintr/30",
+        posted_at=now_iso,
+        country="tr",
+        cities=["إسطنبول"],
+        phones=["05521247615"],
+        raw="ESTE PRO Clinic is hiring an English-speaking Call Center Agent\nLocation: Beylikduzu",
+    )
+    c2 = Job(
+        title="Medical Consultant with experience in dentistry",
+        source="jobsintr_web",
+        post_url="https://jobsintr.net/jobs/med1",
+        posted_at=now_iso,
+        country="tr",
+        cities=["إسطنبول"],
+        phones=["05521247615"],
+        raw="ESTE PRO Clinic is hiring an English-speaking Call Center Agent\nLocation: Beylikduzu",
+    )
+    cid1, _ = db.upsert(con, c1)
+    cid2, c_new = db.upsert(con, c2)
+    assert c_new and cid2 != cid1
+
+    # 4. Syndicate/multi-role separation: syrdrugs single-word role, ahcl engineers, bahri managers stay distinct
+    s1 = Job(title="صيدلانية", source="syrdrugs", post_url="https://t.me/syrdrugs/1", posted_at=now_iso, country="sy", cities=["دمشق"], phones=["0934415484"])
+    s2 = Job(title="صيدلاني/ة للعمل في صيدلية في ركن الدين", source="syrdrugs", post_url="https://t.me/syrdrugs/2", posted_at=now_iso, country="sy", cities=["دمشق"], phones=["0934415484"])
+    e1 = Job(title="مهندس تقنية معلومات", source="wazafne", post_url="https://t.me/w/101", posted_at=now_iso, country="sy", cities=["دمشق"], email="admin@ahcl.sy")
+    e2 = Job(title="مهندس كهرباء", source="wazafne", post_url="https://t.me/w/102", posted_at=now_iso, country="sy", cities=["دمشق"], email="admin@ahcl.sy")
+    sid1, _ = db.upsert(con, s1)
+    sid2, s_new = db.upsert(con, s2)
+    eid1, _ = db.upsert(con, e1)
+    eid2, e_new = db.upsert(con, e2)
+    assert s_new and sid1 != sid2
+    assert e_new and eid1 != eid2
+    con.close()
+
+
+def test_laqeet_whatsapp_branding_and_source_scrubbing(tmp_path):
+    """External source strings and third-party ?text= params are scrubbed; WhatsApp uses منصة لقيت."""
+    from datetime import datetime, timezone
+    from urllib.parse import unquote
+    from fastapi.testclient import TestClient
+    from app import api, direct_apply as da
+    from app.sources import turkey_portals as tp
+
+    now_iso = datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+    # 1. direct_apply strips third-party ?text= on wa.me links
+    jw = Job(
+        title="مسؤول دعم تقني",
+        source="jobinsyria",
+        post_url="https://jobinsyria.com/job/99",
+        posted_at=now_iso,
+        apply_url="https://wa.me/963932158719?text=Job+In+Syria+test",
+    )
+    assert da.resolve_job_apply(jw, client=None) is True
+    assert jw.apply_url == "https://wa.me/963932158719"
+    assert "0932158719" in jw.phones
+
+    # 2. turkey_portals._build_tr_job drops duplicate wrapper details_url == post_url
+    trj = tp._build_tr_job(
+        title="مطلوب محاسب في إسطنبول",
+        source="salamjobs",
+        post_url="https://salamjobs.com/job/123",
+        posted_at=now_iso,
+        body_text="مطلوب محاسب للعمل بدوام كامل 05519685915",
+        details_url="https://salamjobs.com/job/123",
+    )
+    assert trj is not None and trj.details_url is None
+
+    # 3. DB row_to_dict and /j/{id} scrub source tails & use منصة لقيت in WhatsApp link
+    tmp_db = db.connect(tmp_path / "scrub.db")
+    old_con = api.con
+    api.con = tmp_db
+    api._stats_cache.clear()
+    try:
+        j = Job(
+            title="موظف دعم تقني",
+            source="jobinsyria",
+            post_url="https://jobinsyria.com/job/77",
+            posted_at=now_iso,
+            country="sy",
+            cities=["دمشق"],
+            employer="جهة توظيف عبر Job In Syria",
+            phones=["0932158719"],
+            whatsapp=True,
+            tags=["شواغر محلية", "Job In Syria"],
+            raw="موظف دعم تقني · 💎💎 المصدر: فريلانس سوريا",
+        )
+        jid, _ = db.upsert(tmp_db, j)
+        row = tmp_db.execute("SELECT * FROM jobs WHERE id=?", (jid,)).fetchone()
+        dto = db.row_to_dict(tmp_db, row)
+        assert not dto.get("employer")
+        assert "المصدر:" not in (dto.get("summary") or "")
+        assert "Job In Syria" not in (dto.get("tags") or [])
+
+        c = TestClient(api.app)
+        share_html = c.get(f"/j/{jid}").text
+        assert "https://wa.me/963932158719?text=" in share_html
+        decoded = unquote(share_html)
+        assert "عبر منصة لقيت" in decoded
+        assert "فريلانس سوريا" not in decoded
+    finally:
+        api._stats_cache.clear()
+        api.con = old_con
+        tmp_db.close()
+
+
+def test_migrate_upgrades_legacy_job_keys_and_backfills_cp(tmp_path):
+    """Opening a pre-migration DB upgrades job_keys PK and populates cp:/ce: keys."""
+    import json
+    import sqlite3
+    from datetime import datetime, timezone
+
+    legacy_path = tmp_path / "legacy.db"
+    raw_con = sqlite3.connect(legacy_path)
+    raw_con.executescript(
+        """
+        CREATE TABLE jobs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, fp TEXT UNIQUE NOT NULL,
+            title TEXT NOT NULL, source TEXT NOT NULL,
+            country TEXT DEFAULT 'sy', sector TEXT DEFAULT 'private', apply_types TEXT DEFAULT '',
+            education TEXT, education_from TEXT, field TEXT NOT NULL, subfield TEXT,
+            kind TEXT NOT NULL, official INTEGER NOT NULL DEFAULT 0, cities TEXT NOT NULL,
+            experience INTEGER, deadline TEXT, posted_at TEXT NOT NULL, expires_on TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'live', reports INTEGER NOT NULL DEFAULT 0,
+            data TEXT NOT NULL, first_seen TEXT NOT NULL, updated_at TEXT NOT NULL
+        );
+        CREATE TABLE job_keys (k TEXT PRIMARY KEY, job_id INTEGER NOT NULL);
+        CREATE TABLE job_sources (job_id INTEGER NOT NULL, source TEXT NOT NULL, post_url TEXT NOT NULL, posted_at TEXT);
+        CREATE TABLE posts (channel TEXT NOT NULL, id INTEGER NOT NULL, date TEXT, text TEXT, links TEXT, jobs INTEGER DEFAULT 0, PRIMARY KEY(channel, id));
+        CREATE TABLE pdfs (name TEXT PRIMARY KEY, status TEXT, cards INTEGER, at TEXT);
+        CREATE TABLE reports (job_id INTEGER, reason TEXT, at TEXT);
+        CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT);
+        CREATE TABLE bot_users (chat_id INTEGER PRIMARY KEY);
+        CREATE TABLE bot_sent (chat_id INTEGER, job_id INTEGER, at TEXT, PRIMARY KEY(chat_id, job_id));
+        CREATE VIRTUAL TABLE jobs_fts USING fts5(job_id UNINDEXED, title_text, employer_text, specs_text, body_text, aux_text, tokenize='unicode61');
+        """
+    )
+    now_iso = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    payload = {
+        "title": "طباخ ماهر", "source": "jobsintr", "post_url": "https://t.me/jobsintr/99",
+        "posted_at": now_iso, "country": "tr", "cities": ["إسطنبول"], "phones": ["05526444888"],
+    }
+    raw_con.execute(
+        "INSERT INTO jobs (fp, title, source, country, sector, apply_types, field, kind, official, cities, posted_at, expires_on, status, data, first_seen, updated_at) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        ("fp1", "طباخ ماهر", "jobsintr", "tr", "private", "", "other", "formal", 0, "|إسطنبول|", now_iso, "2027-01-01", "live", json.dumps(payload), now_iso, now_iso),
+    )
+    raw_con.execute("INSERT INTO jobs_fts (job_id, title_text, employer_text, specs_text, body_text, aux_text) VALUES (1,'طباخ','','','','')")
+    raw_con.commit()
+    raw_con.close()
+
+    migrated = db.connect(legacy_path)
+    ddl = migrated.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='job_keys'").fetchone()[0]
+    assert "PRIMARY KEY (k, job_id)" in ddl
+    keys = {r[0] for r in migrated.execute("SELECT k FROM job_keys WHERE job_id=1").fetchall()}
+    assert any(k.startswith("cp:tr:05526444888|") for k in keys)
+    migrated.close()
+
+
+def test_case_insensitive_norm_title_first_and_single_url_dedup(tmp_path):
+    """Mixed-case EN tokens in raw, long non-blurb titles, and same single-job post_url merge cleanly."""
+    from datetime import datetime, timezone
+
+    con = db.connect(tmp_path / "url_case.db")
+    now_iso = datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+    # 1. Mixed-case English role tokens in raw + single Arabic keyword ("حجوزات")
+    b1 = Job(
+        title="موظفة حجوزات سياحية",
+        source="jobsintr",
+        post_url="https://t.me/jobsintr/501",
+        posted_at=now_iso,
+        country="tr",
+        cities=["إسطنبول"],
+        email="dalya@isaretr.com",
+        raw="مطلوب موظفة حجوزات سياحية – عن بعد Reservations & Sales Specialist",
+    )
+    b2 = Job(
+        title="مطلوب موظفة حجوزات سياحية عن بُعد Reservations & Sales Specialist",
+        source="salamjobs",
+        post_url="https://salamjobs.com/jobs/res-sales-1",
+        posted_at=now_iso,
+        country="tr",
+        cities=["إسطنبول"],
+        email="dalya@isaretr.com",
+        raw="إعلان توظيف | موظفة حجوزات سياحية",
+    )
+    id_b1, new_b1 = db.upsert(con, b1)
+    id_b2, new_b2 = db.upsert(con, b2)
+    assert new_b1 and not new_b2 and id_b2 == id_b1
+
+    # 2. Long >80-char title whose raw starts with company name still matches concise headline
+    t1 = Job(
+        title="مترجمة إدارية",
+        source="jobsintr",
+        post_url="https://t.me/jobsintr/502",
+        posted_at=now_iso,
+        country="tr",
+        cities=["إسطنبول"],
+        phones=["05315243168"],
+    )
+    t2 = Job(
+        title="مطلوب مترجمة إدارية تجيد التركية والإنجليزية والعربية لحملة الجنسية أو الإقامة أو الكيملك",
+        source="salamjobs",
+        post_url="https://salamjobs.com/jobs/trans-admin-1",
+        posted_at=now_iso,
+        country="tr",
+        cities=["إسطنبول"],
+        phones=["05315243168"],
+        raw="مشفى طبي في اسطنبول بحاجة الى مترجمة حصرا للعمل كمترجمة إدارية",
+    )
+    id_t1, _ = db.upsert(con, t1)
+    id_t2, new_t2 = db.upsert(con, t2)
+    assert not new_t2 and id_t2 == id_t1
+
+    # 3. Single-job portal post_url merges even if title wording is slightly edited later
+    w1 = Job(
+        title="تعلن شركة تعمل في مجال الاستيراد عن حاجتها إلى موظفات",
+        source="jobsintr_web",
+        post_url="https://jobsintr.net/jobs/rltgary",
+        posted_at=now_iso,
+        country="tr",
+        cities=["إسطنبول"],
+        phones=["05533675257"],
+    )
+    w2 = Job(
+        title="تعلن شركة تعمل في مجال الاستيراد عن حاجتها إلى موظفات للعمل ضمن القسم",
+        source="jobsintr_web",
+        post_url="https://jobsintr.net/jobs/rltgary",
+        posted_at=now_iso,
+        country="tr",
+        cities=["إسطنبول"],
+        phones=["05533675257"],
+    )
+    id_w1, _ = db.upsert(con, w1)
+    id_w2, new_w2 = db.upsert(con, w2)
+    assert not new_w2 and id_w2 == id_w1
+
+    # 4. Multi-role MOAD ministry posts sharing the exact same post_url never collapse into one row
+    m1 = Job(
+        title="مهندس معلوماتية",
+        source="moad",
+        post_url="https://t.me/SyMOAD/9093",
+        posted_at=now_iso,
+        country="sy",
+        cities=["دمشق"],
+        official=True,
+        apply_url="https://apply.hiring.moad.gov.sy/single/abc",
+    )
+    m2 = Job(
+        title="محاسب رئيسي",
+        source="moad",
+        post_url="https://t.me/SyMOAD/9093",
+        posted_at=now_iso,
+        country="sy",
+        cities=["دمشق"],
+        official=True,
+        apply_url="https://apply.hiring.moad.gov.sy/single/abc",
+    )
+    id_m1, _ = db.upsert(con, m1)
+    id_m2, new_m2 = db.upsert(con, m2)
+    assert new_m2 and id_m2 != id_m1
+    con.close()
+
+
+def test_syrian_gov_link_separation_and_rtl_cleanup():
+    from app import collect
+    from app.sources import moad_announcement
+    from app.sources.telegram import Post
+
+    # 1. Strip hidden RTL/LTR directional marks & trailing punctuation + prepend https://
+    dirty = "\u200fbit.ly/applyingGov2026\u200e،"
+    assert da.clean_url(dirty) == "https://bit.ly/applyingGov2026"
+    found = tx.urls("رابط التقديم: \u200fbit.ly/applyingGov2026\u200e وبطاقة الشاغر https://bit.ly/hiringGov2026.")
+    assert found == ["https://bit.ly/applyingGov2026", "https://bit.ly/hiringGov2026"]
+
+    # 2. Gov link classifier separates direct forms (Nextcloud / Kobo / bit.ly/applying) from bit.ly/hiring info card
+    text_gov = (
+        "تعلن وزارة التنمية الإدارية بالتنسيق مع وزارة الطاقة عن توفر شواغر في دمشق وحمص\n"
+        "بطاقة الوصف الوظيفي: bit.ly/hiringEnergy99\u200f\n"
+        "استمارة التقديم المباشرة: https://cloud.moenergy.gov.sy/index.php/apps/forms/s/xyz987\u200f!\n"
+        "بديل عبر كوبو: https://kf.kobotoolbox.org/x/abc123\u200e\n"
+        "آخر موعد للتقديم 30/11/2026"
+    )
+    gov_res = da.extract_gov_links(text_gov)
+    assert gov_res["best_apply_url"] == "https://cloud.moenergy.gov.sy/index.php/apps/forms/s/xyz987"
+    assert gov_res["details_url"] == "https://bit.ly/hiringEnergy99"
+    assert "https://kf.kobotoolbox.org/x/abc123" in gov_res["all_apply_urls"]
+    assert da.is_direct_form_or_ats("https://cloud.moenergy.gov.sy/index.php/apps/forms/s/xyz987")
+    assert da.is_direct_form_or_ats("https://kf.kobotoolbox.org/x/abc123")
+    assert da.is_direct_form_or_ats("https://hr.mofaex.gov.sy/apply/12")
+
+    # 3. moad_announcement + portal_job preserve apply_url directly without dropping scheme-less/Nextcloud forms
+    post = Post(id=9901, channel="SyMOAD", date="2026-11-16T10:00:00+00:00", text=text_gov, links=[])
+    ann = moad_announcement.parse(post)
+    assert ann is not None
+    assert ann.hiring_url == "https://bit.ly/hiringEnergy99"
+    assert ann.apply_url == "https://cloud.moenergy.gov.sy/index.php/apps/forms/s/xyz987"
+    pj = collect.portal_job(ann)
+    assert pj.apply_url == "https://cloud.moenergy.gov.sy/index.php/apps/forms/s/xyz987"
+    assert pj.details_url == "https://bit.ly/hiringEnergy99"
+
+    # 4. General extractor separates bit.ly/applying -> apply_url, bit.ly/hiring -> details_url, supports «المنصب :»
+    #    and ignores WorkLink numeric slugs like ...790565 in _TR_PHONE_IN_TEXT check
+    sy_text = (
+        "تعلن وزارة الصحة السورية عن شاغر في دمشق\n"
+        "المنصب : منسق لوجستي\n"
+        "بطاقة الشاغر: https://bit.ly/hiringHealth1\n"
+        "رابط التقديم: \u200fbit.ly/applyingHealth1\u200f"
+    )
+    extracted = ex.extract(
+        sy_text,
+        source="syrian_jobb",
+        post_url="https://t.me/syrian_jobb/28191",
+        posted_at="2026-11-15T10:00:00+00:00",
+        links=["https://worklink.sy/job/some-role-790565"],
+    )
+    assert len(extracted) == 1
+    assert extracted[0].title == "منسق لوجستي"
+    assert extracted[0].apply_url == "https://bit.ly/applyingHealth1"
+    assert extracted[0].details_url == "https://bit.ly/hiringHealth1"
+    assert extracted[0].official is True
+
+    # Genuine Turkish WhatsApp number on a Syria channel is still blocked
+    tr_fake = ex.extract(
+        "مطلوب محاسب للعمل في شركة بدمشق للتواصل واتساب wa.me/905551234567",
+        source="syrian_jobb",
+        post_url="https://t.me/syrian_jobb/28192",
+    )
+    assert tr_fake == []
+
+    # SSF login-walled apply route is rejected
+    assert da.is_disallowed_offline_url("https://recruitment.ssf.gov.sy/Applications/Apply/95") is True
+
+    # Governorate header lines like «المحافظات المطلوب العمل فيها: دمشق» are never extracted as job titles
+    moad_repost = (
+        "تعلن وزارة التنمية الإدارية بالتنسيق مع وزارة النقل عن توفر شواغر\n"
+        "🔹 المحافظات المطلوب العمل فيها: دمشق\n"
+        "رابط التقديم: bit.ly/applying999"
+    )
+    assert ex.extract(moad_repost, source="syria110", post_url="https://t.me/syria110/9999") == []
+
+
+def test_unjobnet_and_syria_jobs_scrapers_mocked(monkeypatch):
+    from datetime import datetime, timezone
+    from app.sources import web_portals as wp
+
+    today_rss = datetime.now(timezone.utc).strftime("%a, %d %b %Y %H:%M:%S +0000")
+    today_iso = datetime.now(timezone.utc).date().isoformat()
+
+    class _FakeResp:
+        def __init__(self, status_code: int, text: str, url: str = ""):
+            self.status_code = status_code
+            self.text = text
+            self.url = url
+
+    list_html = '<a href="/jobs/detail/drc-protection-officer-90611122">Protection Officer</a><a href="/jobs/detail/undp-rfp-supply-90611123">RFP-123 Supply of Solar Panels</a>'
+    detail_html = f"""
+    <html><head><script type="application/ld+json">
+    {{
+      "@type": "JobPosting",
+      "title": "Protection Officer",
+      "hiringOrganization": {{"name": "Danish Refugee Council"}},
+      "datePosted": "{today_iso}T09:00:00+00:00",
+      "validThrough": "2026-12-30T23:59:00+00:00",
+      "jobLocation": {{"address": {{"addressLocality": "Aleppo", "addressCountry": "Syria"}}}},
+      "description": "<p>University degree required. Apply online or email hr@drc-syria.example</p>"
+    }}
+    </script></head><body></body></html>
+    """
+    rss_xml = f"""<?xml version="1.0" encoding="UTF-8"?>
+    <rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/">
+      <channel>
+        <item>
+          <title>محاسب مالي</title>
+          <link>https://syria-jobs.com/acc-1/</link>
+          <pubDate>{today_rss}</pubDate>
+          <content:encoded><![CDATA[
+            <p>محاسب مالي</p>
+            <p>شركة النور للتجارة</p>
+            <p>الجنـس : ذكر</p>
+            <p>مقر المؤسسة : دمشق</p>
+            <p>للتواصل <a href="mailto:careers@alnoor-sy.example">careers@alnoor-sy.example</a> او <a href="mailto:info@syria-jobs.com">info</a> وهاتف 0946111729</p>
+          ]]></content:encoded>
+        </item>
+        <item>
+          <title>مهندس مدني يبحث عن عمل</title>
+          <link>https://syria-jobs.com/seeker-1/</link>
+          <pubDate>{today_rss}</pubDate>
+          <content:encoded><![CDATA[
+            <p>أنا مهندس مدني أبحث عن عمل في دمشق هاتف 0933112233</p>
+          ]]></content:encoded>
+        </item>
+      </channel>
+    </rss>"""
+
+    class _FakeClient:
+        def get(self, url, **kw):
+            if "unjobnet.org/countries/syria?page=2" in url:
+                return _FakeResp(200, "<html></html>", url)
+            if "unjobnet.org/countries/syria" in url:
+                return _FakeResp(200, list_html, url)
+            if "90611122" in url:
+                return _FakeResp(200, detail_html, url)
+            if "90611123" in url:
+                return _FakeResp(200, detail_html.replace("Protection Officer", "RFP-123 Supply of Solar Panels"), url)
+            if "syria-jobs.com/category/" in url and "paged=2" in url:
+                return _FakeResp(200, "<rss><channel></channel></rss>", url)
+            if "syria-jobs.com/category/" in url:
+                return _FakeResp(200, rss_xml, url)
+            return _FakeResp(404, "", url)
+
+    fc = _FakeClient()
+    un_jobs = wp.scrape_unjobnet_syria(fc)
+    assert len(un_jobs) == 1
+    assert un_jobs[0].source == "unjobnet_sy"
+    assert un_jobs[0].employer == "Danish Refugee Council"
+    assert "حلب" in un_jobs[0].cities
+    assert un_jobs[0].email == "hr@drc-syria.example"
+    assert un_jobs[0].apply_url == "https://www.unjobnet.org/apply/90611122"
+
+    sj_jobs = wp.scrape_syria_jobs_com(fc)
+    assert len(sj_jobs) == 1
+    assert sj_jobs[0].source == "syria_jobs"
+    assert sj_jobs[0].employer == "شركة النور للتجارة"
+    assert sj_jobs[0].email == "careers@alnoor-sy.example"  # never info@syria-jobs.com
+    assert sj_jobs[0].phones == ["0946111729"]
+    assert "دمشق" in sj_jobs[0].cities
+
+
+def test_turkey_districts_textile_crafts_and_seeker_filter():
+    from app import search
+
+    # 1. Turkish city & Istanbul district Arabic spellings
+    assert tx.tr_cities_from_text("مطلوب عمال في شيرين ايفر قرب زيتون بورنو") == ["إسطنبول"]
+    assert tx.tr_cities_from_text("عمل في ايوب سلطان او قاضي كوي") == ["إسطنبول"]
+    assert tx.tr_cities_from_text("ورشة مفروشات في إينيغول") == ["بورصة"]
+    assert tx.tr_cities_from_text("وظيفة في خطاي") == ["هاتاي (أنطاكيا)"]
+
+    # 2. Textile, restaurant crafts, real-estate, and medical tourism classification
+    assert tx.field_from_text("مطلوب معلم درزة وأورطجي وإمبلاج وكوي") == "industry"
+    assert tx.field_from_text("مطلوب قصاص وموديليست في ورشة ألبسة") == "industry"
+    assert tx.field_from_text("مطلوب كابتن صالة وغرسون لمطعم") == "hospitality"
+    assert tx.field_from_text("مطلوب مستشار عقاري في بيليك دوزو") == "sales"
+    assert tx.field_from_text("مطلوب منسق السياحة العلاجية") == "sales"
+    # Verify "كاديكوي" substring does not falsely match "كوي" as industry
+    assert tx.field_from_text("مطلوب محاسب مالي في كاديكوي") == "business"
+
+    # 3. Search synonyms include textile & restaurant terms
+    groups = search.expand_query_groups("أورطجي")
+    assert any("درزه" in g["variants"] or "خياطه" in g["variants"] for g in groups)
+
+    # 4. Candidate seeker CVs are rejected while employer ads pass
+    assert spam.is_job_post("أنا شاب أبحث عن عمل خياط في إسطنبول") is False
+    assert spam.is_job_post("بدي شغل بمطعم في الفاتح") is False
+    assert spam.is_job_post("مطلوب خياط درزة للعمل في إسطنبول واتساب 05315243168") is True

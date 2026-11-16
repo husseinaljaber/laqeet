@@ -367,6 +367,14 @@
     "country": "tr",
     "sector": "private"
   },
+  "salamjobs": {
+    "source": "salamjobs",
+    "label": "منصة سلام جوبز",
+    "kind": "formal",
+    "official": false,
+    "country": "tr",
+    "sector": "private"
+  },
   "gaziantepis": {
     "source": "gaziantepis",
     "label": "توليب غازي عنتاب لفرص العمل",

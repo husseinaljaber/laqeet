@@ -51,6 +51,7 @@ SOURCE_LABEL = {v["source"]: v["label"] for v in CHANNELS.values()} | {
     "ngossyria": "بوابة منظمات سوريا (NGOs Syria)",
     "un_syria": "بوابة الأمم المتحدة في سوريا (UN Syria)",
     "unjobnet_sy": "بوابة UNjobnet (وظائف الأمم المتحدة)",
+    "unjobnet_tr": "بوابة UNjobnet تركيا (منظمات وأمم متحدة)",
     "syria_jobs": "موقع وظائف سوريا (Syria Jobs)",
     "ssf_gov": "الصندوق السيادي السوري (بوابة التوظيف الرسمية)",
     "jobsintr_web": "موقع فرص عمل في تركيا",
@@ -61,8 +62,8 @@ SOURCE_LABEL = {v["source"]: v["label"] for v in CHANNELS.values()} | {
 }
 
 HISTORY_DAYS = int(os.getenv("HISTORY_DAYS", 183))      # show the last ~6 months
-QUICK_DAYS = int(os.getenv("QUICK_DAYS", 14))           # quick jobs expire 14 days after posting
-FORMAL_DAYS = int(os.getenv("FORMAL_DAYS", 21))         # formal jobs without a deadline: 21 days
+QUICK_DAYS = int(os.getenv("QUICK_DAYS", 21))           # quick jobs expire 21 days after posting
+FORMAL_DAYS = int(os.getenv("FORMAL_DAYS", 30))         # formal jobs without a deadline: 30 days
 UPDATE_MINUTES = int(os.getenv("UPDATE_MINUTES", 20))   # collector interval (every 20 minutes)
 REQUEST_GAP = float(os.getenv("REQUEST_GAP", 1.2))      # seconds between requests to one host (≥1 s, be polite)
 REPORTS_TO_HIDE = int(os.getenv("REPORTS_TO_HIDE", 3))  # «بلّغ عن إعلان»: hide after this many reports

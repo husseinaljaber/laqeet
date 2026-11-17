@@ -831,7 +831,7 @@ def _apply_str(job: Job) -> str:
 
 _SINGLE_POST_URL_SOURCES = frozenset({
     "jobsintr_web", "adwhit_web", "salamjobs", "wazifturk",
-    "unjobnet_sy", "syria_jobs", "ssf_gov",
+    "unjobnet_sy", "unjobnet_tr", "syria_jobs", "ssf_gov",
 })
 
 

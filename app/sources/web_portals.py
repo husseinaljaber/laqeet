@@ -826,12 +826,12 @@ def _scrape_laravel_api_board(
 
 def scrape_jobsyria(client: httpx.Client) -> list[Job]:
     """Scrape active open jobs in Syria from JobSyria REST API."""
-    return _scrape_laravel_api_board(client, "https://api.jobsyria.org/api/jobs", "jobsyria", ["دمشق"], "ngo", max_pages=15)
+    return _scrape_laravel_api_board(client, "https://api.jobsyria.org/api/jobs", "jobsyria", ["دمشق"], "ngo", max_pages=25)
 
 
 def scrape_nsjobs_web(client: httpx.Client) -> list[Job]:
     """Scrape active open jobs in North-East Syria from NSJobs REST API."""
-    return _scrape_laravel_api_board(client, "https://api.nsjobs.net/api/jobs", "nsjobs_web", ["الحسكة", "دير الزور"], "ngo", max_pages=8)
+    return _scrape_laravel_api_board(client, "https://api.nsjobs.net/api/jobs", "nsjobs_web", ["الحسكة", "دير الزور"], "ngo", max_pages=12)
 
 
 def _extract_jobinsyria_employer(raw_title: str) -> str:
@@ -844,12 +844,12 @@ def _extract_jobinsyria_employer(raw_title: str) -> str:
     return ""
 
 
-def scrape_jobinsyria(client: httpx.Client) -> list[Job]:
+def scrape_jobinsyria(client: httpx.Client, max_pages: int = 25) -> list[Job]:
     """Scrape active Syrian jobs across pages via Job In Syria WP REST API."""
     jobs: list[Job] = []
     seen_links: set[str] = set()
     today_str = datetime.now(timezone.utc).date().isoformat()
-    for page in range(1, 26):
+    for page in range(1, max_pages + 1):
         try:
             r = client.get(f"https://jobinsyria.com/wp-json/wp/v2/job_listing?per_page=100&page={page}", timeout=20)
             if r.status_code != 200 or not r.text.lstrip().startswith("["):
@@ -1055,10 +1055,10 @@ def scrape_bahar(client: httpx.Client) -> list[Job]:
 
 
 def scrape_ngossyria(client: httpx.Client) -> list[Job]:
-    """Scrape recent UN & INGO vacancies across pages 1-7 of NGOsSyria.com."""
+    """Scrape recent UN & INGO vacancies across pages 1-12 of NGOsSyria.com."""
     jobs: list[Job] = []
     seen: set[str] = set()
-    for page in range(1, 8):
+    for page in range(1, 13):
         url = "https://ngossyria.com/" if page == 1 else f"https://ngossyria.com/?page={page}"
         try:
             r = client.get(url, timeout=20)
@@ -1182,13 +1182,20 @@ def _extract_ld_job_posting(soup: BeautifulSoup) -> dict | None:
     return None
 
 
-def scrape_unjobnet_syria(client: httpx.Client) -> list[Job]:
-    """Scrape UNjobnet Syria listings via JobPosting JSON-LD and /apply/<id> redirect verification."""
+def scrape_unjobnet_country(
+    client: httpx.Client,
+    slug: str = "syria",
+    country: str = "sy",
+    source: str = "unjobnet_sy",
+    max_pages: int = 3,
+    max_details: int = 55,
+) -> list[Job]:
+    """Scrape UNjobnet country listings via JobPosting JSON-LD and /apply/<id> redirect verification."""
     base = "https://www.unjobnet.org"
     detail_urls: list[tuple[str, str]] = []
     seen_ids: set[str] = set()
-    for page_no in (1, 2):
-        page_url = f"{base}/countries/syria" + (f"?page={page_no}" if page_no > 1 else "")
+    for page_no in range(1, max_pages + 1):
+        page_url = f"{base}/countries/{slug}" + (f"?page={page_no}" if page_no > 1 else "")
         try:
             r = client.get(page_url, timeout=20)
             if r.status_code != 200:
@@ -1206,14 +1213,14 @@ def scrape_unjobnet_syria(client: httpx.Client) -> list[Job]:
             if found_on_page == 0:
                 break
         except Exception as e:
-            log.warning("UNjobnet list %s failed: %s", page_url, e)
+            log.warning("UNjobnet (%s) list %s failed: %s", slug, page_url, e)
             break
 
     today_str = datetime.now(timezone.utc).date().isoformat()
     formal_cutoff = (datetime.now(timezone.utc) - timedelta(days=config.FORMAL_DAYS)).date().isoformat()
     jobs: list[Job] = []
 
-    for detail_url, job_id in detail_urls[:35]:
+    for detail_url, job_id in detail_urls[:max_details]:
         try:
             rd = client.get(detail_url, timeout=20)
             if rd.status_code != 200:
@@ -1230,6 +1237,8 @@ def scrape_unjobnet_syria(client: httpx.Client) -> list[Job]:
             desc_soup = BeautifulSoup(desc_html, "html.parser")
             desc_txt = desc_soup.get_text("\n", strip=True)
             if spam.is_spam(f"{title}\n{desc_txt[:500]}"):
+                continue
+            if country == "tr" and spam.is_tr_citizenship_only(f"{title}\n{desc_txt[:800]}"):
                 continue
 
             posted_raw = str(ld.get("datePosted") or "").strip()
@@ -1255,14 +1264,19 @@ def scrape_unjobnet_syria(client: httpx.Client) -> list[Job]:
                     for k in ("addressLocality", "addressRegion", "addressCountry"):
                         if addr.get(k):
                             loc_parts.append(str(addr[k]))
-            cities = tx.cities_from_text(" ".join(loc_parts) + " " + title + " " + desc_txt[:400]) or ["عدة محافظات"]
+            loc_hay = " ".join(loc_parts) + " " + title + " " + desc_txt[:400]
+            cities = (
+                tx.tr_cities_from_text(loc_hay) or ["عدة ولايات في تركيا"]
+                if country == "tr"
+                else tx.cities_from_text(loc_hay) or ["عدة محافظات"]
+            )
 
             emails = [e for e in tx.emails(desc_txt) if da._good_email(e)]
             for mail_a in desc_soup.select("a[href^='mailto:']"):
                 cand = mail_a["href"][7:].split("?")[0].strip()
                 if da._good_email(cand) and cand not in emails:
                     emails.append(cand)
-            phones = tx.phones(desc_txt)
+            phones = tx.phones_tr(desc_txt) if country == "tr" else tx.phones(desc_txt)
             gov_links = da.extract_gov_links(desc_txt)
             direct_apply = str(gov_links["best_apply_url"]) if gov_links["best_apply_url"] else f"{base}/apply/{job_id}"
 
@@ -1276,7 +1290,7 @@ def scrape_unjobnet_syria(client: httpx.Client) -> list[Job]:
 
             jobs.append(Job(
                 title=title[:120],
-                source="unjobnet_sy",
+                source=source,
                 post_url=detail_url,
                 posted_at=posted_at,
                 employer=employer or None,
@@ -1287,7 +1301,7 @@ def scrape_unjobnet_syria(client: httpx.Client) -> list[Job]:
                 subfield=sub,
                 kind="formal",
                 official=False,
-                country="sy",
+                country=country,
                 sector="ngo",
                 apply_url=direct_apply,
                 details_url=detail_url,
@@ -1296,12 +1310,22 @@ def scrape_unjobnet_syria(client: httpx.Client) -> list[Job]:
                 apply_types=tx.infer_apply_types(direct_apply, phones, False, emails[0] if emails else None),
                 deadline=deadline,
                 confidence=0.92,
-                tags=["الأمم المتحدة", "منظمات دولية"],
+                tags=["الأمم المتحدة", "منظمات دولية"] + (["تركيا"] if country == "tr" else []),
                 raw=f"{title}\n{employer}\n{desc_txt[:1500]}".strip(),
             ))
         except Exception as e:
             log.warning("UNjobnet detail %s failed: %s", detail_url, e)
     return jobs
+
+
+def scrape_unjobnet_syria(client: httpx.Client) -> list[Job]:
+    """Scrape UNjobnet Syria listings via shared JobPosting extractor."""
+    return scrape_unjobnet_country(client, slug="syria", country="sy", source="unjobnet_sy", max_pages=3, max_details=55)
+
+
+def scrape_unjobnet_turkey(client: httpx.Client) -> list[Job]:
+    """Scrape UNjobnet Turkey listings via shared JobPosting extractor."""
+    return scrape_unjobnet_country(client, slug="turkey", country="tr", source="unjobnet_tr", max_pages=3, max_details=55)
 
 
 def scrape_syria_jobs_com(client: httpx.Client) -> list[Job]:
@@ -1448,7 +1472,7 @@ def scrape_syria_jobs_com(client: httpx.Client) -> list[Job]:
     return jobs
 
 
-def _warm_resolve_cache(jobs: list[Job], cache: dict, max_workers: int = 4) -> None:
+def _warm_resolve_cache(jobs: list[Job], cache: dict, max_workers: int = 8) -> None:
     """Resolve pending wrapper/shortener URLs concurrently into cache for large batches."""
     today_str = datetime.now(timezone.utc).date().isoformat()
     formal_cutoff = (datetime.now(timezone.utc) - timedelta(days=config.FORMAL_DAYS)).date().isoformat()
@@ -1493,7 +1517,7 @@ def _warm_resolve_cache(jobs: list[Job], cache: dict, max_workers: int = 4) -> N
             c.close()
 
 
-def fetch_all_web_portal_jobs(client: httpx.Client | None = None, cache: dict | None = None) -> list[Job]:
+def fetch_all_web_portal_jobs(client: httpx.Client | None = None, cache: dict | None = None, quick: bool = False) -> list[Job]:
     """Fetch all verified Syrian web portal jobs and unwrap every link to a direct apply path."""
     own = client is None
     client = client or httpx.Client(headers={"User-Agent": USER_AGENT}, timeout=25, verify=False, follow_redirects=True)
@@ -1508,7 +1532,7 @@ def fetch_all_web_portal_jobs(client: httpx.Client | None = None, cache: dict | 
         scrape_sarc,
         scrape_jobsyria,
         scrape_nsjobs_web,
-        scrape_jobinsyria,
+        (lambda c: scrape_jobinsyria(c, max_pages=4 if quick else 25)),
         scrape_srd,
         scrape_sened,
         scrape_bahar,

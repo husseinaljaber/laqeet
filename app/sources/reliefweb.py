@@ -13,6 +13,7 @@ warnings.filterwarnings("ignore", category=XMLParsedAsHTMLWarning)
 
 from .. import direct_apply as da
 from .. import extract as ex
+from .. import spam
 from .. import taxonomy as tx
 from ..classify import classify as computer_subfield
 from ..models import Job
@@ -20,13 +21,33 @@ from ..models import Job
 log = logging.getLogger("reliefweb")
 
 RELIEFWEB_RSS_URL = "https://reliefweb.int/jobs/rss.xml?country=226"
+RELIEFWEB_TARGETS = (
+    ("sy", 226, 6),
+    ("tr", 236, 3),
+)
 USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
 )
 
 
-def parse_reliefweb_rss(xml_text: str) -> list[Job]:
+def _rw_cities(text: str, country: str) -> list[str]:
+    if country == "tr":
+        return tx.tr_cities_from_text(text) or ["عدة ولايات في تركيا"]
+    cities = tx.cities_from_text(text)
+    if cities:
+        return cities
+    low = (text or "").lower()
+    if "damascus" in low or "دمشق" in low:
+        return ["دمشق"]
+    if "aleppo" in low or "حلب" in low:
+        return ["حلب"]
+    if "homs" in low or "حمص" in low:
+        return ["حمص"]
+    return ["عدة محافظات"]
+
+
+def parse_reliefweb_rss(xml_text: str, country: str = "sy") -> list[Job]:
     soup = BeautifulSoup(xml_text, "html.parser")
     items = soup.find_all("item")
     jobs: list[Job] = []
@@ -54,7 +75,7 @@ def parse_reliefweb_rss(xml_text: str) -> list[Job]:
                 if m:
                     title = m.group(1).strip()
                     loc_or_emp = m.group(2).strip()
-                    if loc_or_emp and "syria" not in loc_or_emp.lower():
+                    if loc_or_emp and not any(x in loc_or_emp.lower() for x in ("syria", "turkey", "türkiye")):
                         employer = loc_or_emp
 
             url = ""
@@ -95,16 +116,9 @@ def parse_reliefweb_rss(xml_text: str) -> list[Job]:
                 except Exception:
                     pass
 
-            cities = tx.cities_from_text(raw_title + " " + desc_clean)
-            if not cities:
-                if "damascus" in (raw_title + " " + desc_clean).lower() or "دمشق" in (raw_title + " " + desc_clean):
-                    cities = ["دمشق"]
-                elif "aleppo" in (raw_title + " " + desc_clean).lower() or "حلب" in (raw_title + " " + desc_clean):
-                    cities = ["حلب"]
-                elif "homs" in (raw_title + " " + desc_clean).lower() or "حمص" in (raw_title + " " + desc_clean):
-                    cities = ["حمص"]
-                else:
-                    cities = ["عدة محافظات"]
+            cities = _rw_cities(raw_title + " " + desc_clean, country)
+            if country == "tr" and spam.is_tr_citizenship_only(f"{title}\n{desc_clean}"):
+                continue
 
             # NGO jobs usually require bachelor's unless stated otherwise
             edu = tx.education_from_text(desc_clean) or tx.education_from_title(title) or "bachelor"
@@ -140,7 +154,7 @@ def parse_reliefweb_rss(xml_text: str) -> list[Job]:
                 subfield=sub,
                 kind="formal",
                 official=False,
-                country="sy",
+                country=country,
                 sector="ngo",
                 apply_url=apply_url,
                 details_url=url,
@@ -161,8 +175,8 @@ def parse_reliefweb_rss(xml_text: str) -> list[Job]:
     return jobs
 
 
-def parse_reliefweb_html(html_text: str) -> list[Job]:
-    """Parse ReliefWeb Syria job cards from paginated HTML search results."""
+def parse_reliefweb_html(html_text: str, country: str = "sy") -> list[Job]:
+    """Parse ReliefWeb job cards from paginated HTML search results."""
     soup = BeautifulSoup(html_text, "html.parser")
     today_str = datetime.now(timezone.utc).date().isoformat()
     jobs: list[Job] = []
@@ -176,10 +190,15 @@ def parse_reliefweb_html(html_text: str) -> list[Job]:
         title = a.get_text(" ", strip=True)
         if not title:
             continue
+        if country == "tr" and spam.is_tr_citizenship_only(title):
+            continue
         country_el = art.select_one(".rw-entity-country-slug")
-        country_txt = country_el.get_text(" ", strip=True) if country_el else "Syria"
-        cities = tx.cities_from_text(title)
-        if "syria" not in country_txt.lower() and not cities:
+        country_txt = country_el.get_text(" ", strip=True) if country_el else ("Türkiye" if country == "tr" else "Syria")
+        cities = _rw_cities(title, country)
+        if country == "sy":
+            if "syria" not in country_txt.lower() and cities == ["عدة محافظات"]:
+                continue
+        elif not any(k in country_txt.lower() for k in ("turkey", "türkiye")) and cities == ["عدة ولايات في تركيا"]:
             continue
         org_el = art.select_one(".rw-entity-meta__tag-value--source")
         employer = org_el.get_text(" ", strip=True) if org_el else "منظمة دولية / وكالة أممية"
@@ -189,16 +208,6 @@ def parse_reliefweb_html(html_text: str) -> list[Job]:
         deadline = close_el["datetime"][:10] if (close_el and close_el.get("datetime")) else None
         if deadline and deadline < today_str:
             continue
-        if not cities:
-            low = title.lower()
-            if "damascus" in low:
-                cities = ["دمشق"]
-            elif "aleppo" in low:
-                cities = ["حلب"]
-            elif "homs" in low:
-                cities = ["حمص"]
-            else:
-                cities = ["عدة محافظات"]
         fld = tx.field_from_text(title)
         sub = computer_subfield(title)
         if sub or fld == "computer":
@@ -218,7 +227,7 @@ def parse_reliefweb_html(html_text: str) -> list[Job]:
             subfield=sub,
             kind="formal",
             official=False,
-            country="sy",
+            country=country,
             sector="ngo",
             apply_url=url,
             details_url=url,
@@ -238,31 +247,35 @@ def fetch_reliefweb_jobs(client: httpx.Client | None = None, cache: dict | None 
     jobs: list[Job] = []
     seen: set[str] = set()
     try:
-        try:
-            r = client.get(RELIEFWEB_RSS_URL, headers={"User-Agent": USER_AGENT, "Accept": "application/rss+xml, application/xml, text/xml"})
-            if r.status_code == 200:
-                for j in parse_reliefweb_rss(r.text):
-                    if j.post_url not in seen:
-                        seen.add(j.post_url)
-                        jobs.append(j)
-        except Exception as e:
-            log.warning("reliefweb RSS failed: %s", e)
-
-        for page in range(0, 5):
+        for country, rw_id, max_pages in RELIEFWEB_TARGETS:
             try:
-                hr = client.get(f"https://reliefweb.int/jobs?advanced-search=%28C226%29&page={page}")
-                if hr.status_code != 200:
-                    break
-                page_jobs = parse_reliefweb_html(hr.text)
-                if not page_jobs:
-                    break
-                for j in page_jobs:
-                    if j.post_url not in seen:
-                        seen.add(j.post_url)
-                        jobs.append(j)
+                r = client.get(
+                    f"https://reliefweb.int/jobs/rss.xml?country={rw_id}",
+                    headers={"User-Agent": USER_AGENT, "Accept": "application/rss+xml, application/xml, text/xml"},
+                )
+                if r.status_code == 200:
+                    for j in parse_reliefweb_rss(r.text, country=country):
+                        if j.post_url not in seen:
+                            seen.add(j.post_url)
+                            jobs.append(j)
             except Exception as e:
-                log.debug("reliefweb page %s failed: %s", page, e)
-                break
+                log.warning("reliefweb RSS (%s) failed: %s", country, e)
+
+            for page in range(0, max_pages):
+                try:
+                    hr = client.get(f"https://reliefweb.int/jobs?advanced-search=%28C{rw_id}%29&page={page}")
+                    if hr.status_code != 200:
+                        break
+                    page_jobs = parse_reliefweb_html(hr.text, country=country)
+                    if not page_jobs:
+                        break
+                    for j in page_jobs:
+                        if j.post_url not in seen:
+                            seen.add(j.post_url)
+                            jobs.append(j)
+                except Exception as e:
+                    log.debug("reliefweb page %s (%s) failed: %s", page, country, e)
+                    break
 
         return [j for j in jobs if da.resolve_job_apply(j, client=client, cache=cache)]
     except Exception as e:

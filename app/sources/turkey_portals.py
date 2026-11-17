@@ -216,26 +216,43 @@ def _build_tr_job(
 
 _JOBSINTR_EXTRA_PATHS = (
     "/jobs/state/" + quote("غازي-عنتاب-gaziantep"),
-    "/job-cat/" + quote("المبيعات-الاستشارات"),
+    "/job-cat/" + quote("خياطة"),
     "/job-cat/" + quote("المطاعم"),
-    "/job-cat/" + quote("التصميم-التصوير"),
-    "/job-cat/" + quote("محاسبة"),
+    "/job-cat/" + quote("عامل"),
+    "/job-cat/" + quote("المبيعات-الاستشارات"),
     "/job-cat/" + quote("السياحة-العلاجية"),
+    "/job-cat/" + quote("محاسبة"),
     "/job-cat/" + quote("التسويق-الالكتروني"),
+    "/job-cat/" + quote("التصميم-التصوير"),
+    "/job-cat/" + quote("سائق"),
+    "/job-cat/" + quote("عامل-توصيل-طلبات"),
+    "/job-cat/" + quote("حلاقة-وتجميل"),
+    "/job-cat/" + quote("خدمات"),
     "/job-cat/" + quote("برمجة"),
+    "/job-cat/" + quote("الطب-الصيدلة"),
+    "/job-cat/" + quote("التدريس"),
+    "/job-cat/" + quote("ترجمة"),
+    "/job-cat/" + quote("سكرتارية"),
+    "/job-cat/" + quote("هندسة"),
+    "/job-cat/" + quote("إدخال-بيانات"),
+    "/job-cat/" + quote("سوشيال-ميديا"),
+    "/job-cat/" + quote("الموارد-البشرية"),
+    "/job-cat/" + quote("قانونية"),
+    "/job-cat/" + quote("سياحة"),
 )
 
 
-def scrape_jobsintr_web(client: httpx.Client, max_pages: int = 4) -> list[Job]:
+def scrape_jobsintr_web(client: httpx.Client, max_pages: int = 4, extra_limit: int | None = None) -> list[Job]:
     """Scrape active Arabic & Turkish listings from jobsintr.net across main pages, Gaziantep, and categories."""
     jobs: list[Job] = []
     seen_urls: set[str] = set()
     now_dt = datetime.now(timezone.utc)
     today_str = now_dt.date().isoformat()
+    extras = _JOBSINTR_EXTRA_PATHS[:extra_limit] if extra_limit else _JOBSINTR_EXTRA_PATHS
     feed_urls = [
         f"https://jobsintr.net/jobs?page={page}" if page > 1 else "https://jobsintr.net/jobs"
         for page in range(1, max_pages + 1)
-    ] + [f"https://jobsintr.net{p}" for p in _JOBSINTR_EXTRA_PATHS]
+    ] + [f"https://jobsintr.net{p}" for p in extras]
 
     for list_url in feed_urls:
         try:
@@ -444,7 +461,7 @@ def scrape_salamjobs_tr(client: httpx.Client, max_pages: int = 4) -> list[Job]:
     feed_urls = (
         [f"https://salamjobs.com/search?country_id=1&page={page}" for page in range(1, max_pages + 1)]
         + [f"https://salamjobs.com/search?country_id=1&city_id=4&page={page}" for page in range(1, city_pages + 1)]
-        + ["https://salamjobs.com/search?country_id=1&city_id=1"]
+        + [f"https://salamjobs.com/search?country_id=1&city_id={cid}" for cid in (8, 2, 10, 3, 11, 1)]
     )
 
     for list_url in feed_urls:
@@ -733,18 +750,22 @@ def fetch_all_tr_portal_jobs(
     client: httpx.Client | None = None,
     cache: dict | None = None,
     max_pages: int = 3,
+    quick: bool = False,
 ) -> list[Job]:
     """Fetch verified active jobs across all reliable Turkey web portals."""
+    from .web_portals import scrape_unjobnet_turkey
+
     close_after = client is None
     cli = client or httpx.Client(timeout=20, follow_redirects=True, headers=_HEADERS)
     jobs: list[Job] = []
     try:
         for name, fn in (
-            ("jobsintr_web", lambda c: scrape_jobsintr_web(c, max_pages=max_pages)),
+            ("jobsintr_web", lambda c: scrape_jobsintr_web(c, max_pages=max_pages, extra_limit=10 if quick else None)),
             ("adwhit_web", lambda c: scrape_adwhit_web(c, max_pages=max_pages)),
             ("salamjobs", lambda c: scrape_salamjobs_tr(c, max_pages=max_pages)),
             ("wazifturk", scrape_wazifturk_tr),
             ("sened_tr", scrape_sened_tr),
+            ("unjobnet_tr", scrape_unjobnet_turkey),
         ):
             try:
                 res = fn(cli)

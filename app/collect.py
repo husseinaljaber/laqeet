@@ -188,7 +188,7 @@ def collect(offline: bool = False, quick: bool = False) -> dict:
         else httpx.Client(timeout=httpx.Timeout(12.0, connect=6.0), verify=False, follow_redirects=True)
     )
     resolve_cache: dict = {}
-    max_pages = 2 if quick else 15
+    max_pages = 4 if quick else 20
     try:
         for channel in config.CHANNELS:
             new = posts = 0
@@ -213,8 +213,8 @@ def collect(offline: bool = False, quick: bool = False) -> dict:
             today = date.today().isoformat()
             for key, fn in (
                 ("reliefweb", fetch_reliefweb_jobs),
-                ("web_portals", fetch_all_web_portal_jobs),
-                ("turkey_portals", lambda c, cache=None: fetch_all_tr_portal_jobs(c, cache=cache, max_pages=1 if quick else 3)),
+                ("web_portals", lambda c, cache=None: fetch_all_web_portal_jobs(c, cache=cache, quick=quick)),
+                ("turkey_portals", lambda c, cache=None: fetch_all_tr_portal_jobs(c, cache=cache, max_pages=2 if quick else 6, quick=quick)),
             ):
                 try:
                     batch = fn(resolve_client, cache=resolve_cache)
@@ -234,7 +234,7 @@ def collect(offline: bool = False, quick: bool = False) -> dict:
                 except Exception as e:
                     log.warning("%s collect failed: %s", key, e)
             try:
-                stats["live_audit"] = verify_live_jobs(con, cache=resolve_cache, max_checks=100 if quick else 250)
+                stats["live_audit"] = verify_live_jobs(con, cache=resolve_cache, max_checks=150 if quick else 350)
             except Exception as e:
                 log.warning("live_audit failed: %s", e)
         pruned = db.prune_old(con, config.HISTORY_DAYS)
@@ -395,5 +395,6 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--offline", action="store_true")
     ap.add_argument("--reprocess", action="store_true")
+    ap.add_argument("--quick", action="store_true")
     a = ap.parse_args()
-    print(reprocess() if a.reprocess else collect(offline=a.offline))
+    print(reprocess() if a.reprocess else collect(offline=a.offline, quick=a.quick))

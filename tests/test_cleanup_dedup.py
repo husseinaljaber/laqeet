@@ -276,16 +276,16 @@ def test_tightened_ttl_and_no_expired_zombie_resurrection(tmp_path):
     from datetime import date, datetime, timedelta, timezone
     from app import config
 
-    assert config.QUICK_DAYS <= 14
-    assert config.FORMAL_DAYS <= 21
+    assert config.QUICK_DAYS <= 21
+    assert config.FORMAL_DAYS <= 30
 
     con = db.connect(tmp_path / "ttl.db")
-    old_26d = (datetime.now(timezone.utc) - timedelta(days=26)).isoformat(timespec="seconds")
+    old_35d = (datetime.now(timezone.utc) - timedelta(days=35)).isoformat(timespec="seconds")
     j_old = Job(
         title="رئيس دائرة الخطط والمتابعة",
         source="sy_jobb",
         post_url="https://t.me/sy_jobb/99",
-        posted_at=old_26d,
+        posted_at=old_35d,
         cities=["دمشق"],
         kind="formal",
         apply_url="https://apply.hiring.moad.gov.sy/single/test123",
@@ -835,3 +835,75 @@ def test_turkey_districts_textile_crafts_and_seeker_filter():
     assert spam.is_job_post("أنا شاب أبحث عن عمل خياط في إسطنبول") is False
     assert spam.is_job_post("بدي شغل بمطعم في الفاتح") is False
     assert spam.is_job_post("مطلوب خياط درزة للعمل في إسطنبول واتساب 05315243168") is True
+
+
+def test_turkey_reliefweb_unjobnet_and_seed_roundtrip(tmp_path):
+    from datetime import datetime, timezone
+    from app import seed
+    from app.sources import reliefweb as rw, web_portals as wp
+
+    today_iso = datetime.now(timezone.utc).date().isoformat()
+    rss_tr = """<?xml version="1.0" encoding="UTF-8"?>
+    <rss version="2.0"><channel>
+      <item>
+        <title>Logistics Officer - IOM (Gaziantep)</title>
+        <link>https://reliefweb.int/job/999001/logistics-officer</link>
+        <description>&lt;p&gt;Duty station: Gaziantep, Türkiye. Apply at https://forms.gle/testtr1&lt;/p&gt;</description>
+        <pubDate>Tue, 17 Nov 2026 08:00:00 +0000</pubDate>
+      </item>
+    </channel></rss>"""
+    rw_jobs = rw.parse_reliefweb_rss(rss_tr, country="tr")
+    assert len(rw_jobs) == 1
+    assert rw_jobs[0].country == "tr"
+    assert rw_jobs[0].sector == "ngo"
+    assert "غازي عنتاب" in rw_jobs[0].cities
+    assert rw_jobs[0].apply_url == "https://forms.gle/testtr1"
+
+    class _FakeResp:
+        def __init__(self, status_code: int, text: str, url: str = ""):
+            self.status_code = status_code
+            self.text = text
+            self.url = url
+
+    list_html = '<a href="/jobs/detail/iom-finance-istanbul-90788899">Finance Associate</a>'
+    detail_html = f"""
+    <html><head><script type="application/ld+json">
+    {{
+      "@type": "JobPosting",
+      "title": "Finance Associate - Istanbul",
+      "hiringOrganization": {{"name": "IOM"}},
+      "datePosted": "{today_iso}T09:00:00+00:00",
+      "validThrough": "2026-12-30T23:59:00+00:00",
+      "jobLocation": {{"address": {{"addressLocality": "Istanbul", "addressCountry": "Türkiye"}}}},
+      "description": "<p>Apply online via IOM portal.</p>"
+    }}
+    </script></head><body></body></html>
+    """
+
+    class _FakeClient:
+        def get(self, url, **kw):
+            if "countries/turkey?page=" in url:
+                return _FakeResp(200, "<html></html>", url)
+            if "countries/turkey" in url:
+                return _FakeResp(200, list_html, url)
+            if "90788899" in url:
+                return _FakeResp(200, detail_html, url)
+            return _FakeResp(404, "", url)
+
+    un_tr = wp.scrape_unjobnet_turkey(_FakeClient())
+    assert len(un_tr) == 1
+    assert un_tr[0].source == "unjobnet_tr"
+    assert un_tr[0].country == "tr"
+    assert "إسطنبول" in un_tr[0].cities
+
+    # Seed export roundtrip preserves job + meta (e.g. updated_at)
+    src_db = tmp_path / "src.db"
+    con_src = db.connect(src_db)
+    db.upsert(con_src, rw_jobs[0])
+    db.set_meta(con_src, "updated_at", "2026-11-18T00:00:00+00:00")
+    con_src.commit()
+    seed_gz = tmp_path / "seed.jsonl.gz"
+    exported = seed.export_seed(con_src, path=seed_gz)
+    con_src.close()
+    assert exported == 1
+    assert seed_gz.exists() and seed_gz.stat().st_size > 0

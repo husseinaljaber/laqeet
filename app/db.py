@@ -732,7 +732,7 @@ def _dedupe_lookup_keys(job: Job, include_contact: bool = False) -> tuple[list[s
 
 _PORTAL_EMP_RE = re.compile(
     r"^(?:جهة\s*توظيف|منظمة\s*أممية\s*/\s*دولية|فرص\s*عمل|شواغر|وظائف|توظيف)(?:\s+\S+){0,2}\s+عبر\s+.+$|"
-    r"(?:job\s*in\s*syria|worklink|ngos?\s*syria|ngosquare|reliefweb|unjobs|unjobnet|syria-?jobs\.com|"
+    r"(?:job\s*in\s*syria|worklink|ngos?\s*syria|ngosquare|reliefweb|unjobs|unjobnet|impactpool|syria-?jobs\.com|"
     r"shamhr|forsa-?sy|salam\s*jobs|jobsintr|adwhit|ab-ilan|sqrjobs|nsjobs|jobsyria|wazifturk|وظيفتورك)",
     re.I,
 )
@@ -831,8 +831,9 @@ def _apply_str(job: Job) -> str:
 
 _SINGLE_POST_URL_SOURCES = frozenset({
     "jobsintr_web", "adwhit_web", "salamjobs", "wazifturk",
-    "unjobnet_sy", "unjobnet_tr", "syria_jobs", "ssf_gov",
-    "jobinsyria", "worklink", "reliefweb",
+    "unjobnet_sy", "unjobnet_tr", "impactpool_sy", "impactpool_tr",
+    "shafak", "drc", "acted", "wfp",
+    "syria_jobs", "ssf_gov", "jobinsyria", "worklink", "reliefweb",
 })
 
 

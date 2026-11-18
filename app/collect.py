@@ -214,7 +214,7 @@ def collect(offline: bool = False, quick: bool = False) -> dict:
             for key, fn in (
                 ("reliefweb", fetch_reliefweb_jobs),
                 ("web_portals", lambda c, cache=None: fetch_all_web_portal_jobs(c, cache=cache, quick=quick)),
-                ("turkey_portals", lambda c, cache=None: fetch_all_tr_portal_jobs(c, cache=cache, max_pages=2 if quick else 6, quick=quick)),
+                ("turkey_portals", lambda c, cache=None: fetch_all_tr_portal_jobs(c, cache=cache, max_pages=2 if quick else 8, quick=quick)),
             ):
                 try:
                     batch = fn(resolve_client, cache=resolve_cache)

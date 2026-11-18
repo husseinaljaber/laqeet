@@ -582,11 +582,11 @@ _NGO_SLUG_EMPLOYER = (
 )
 
 
-def scrape_ngosquare(client: httpx.Client) -> list[Job]:
-    """Scrape humanitarian & UN vacancies from NGO Square across pages 1-4."""
+def scrape_ngosquare(client: httpx.Client, max_pages: int = 15) -> list[Job]:
+    """Scrape humanitarian & UN vacancies from NGO Square across paginated listing pages."""
     jobs: list[Job] = []
     seen: set[str] = set()
-    for page in range(1, 5):
+    for page in range(1, max_pages + 1):
         url = f"https://ngosquare.com/jobs/?page={page}" if page > 1 else "https://ngosquare.com/jobs/"
         try:
             r = client.get(url, timeout=20)
@@ -990,7 +990,7 @@ def scrape_sened(client: httpx.Client) -> list[Job]:
                 tags=["منظمات إنسانية", "سند"],
                 raw=raw_t,
             ))
-            if len(jobs) >= 20:
+            if len(jobs) >= 60:
                 break
     except Exception as e:
         log.warning("Sened scrape failed: %s", e)
@@ -1187,8 +1187,8 @@ def scrape_unjobnet_country(
     slug: str = "syria",
     country: str = "sy",
     source: str = "unjobnet_sy",
-    max_pages: int = 3,
-    max_details: int = 55,
+    max_pages: int = 6,
+    max_details: int = 120,
 ) -> list[Job]:
     """Scrape UNjobnet country listings via JobPosting JSON-LD and /apply/<id> redirect verification."""
     base = "https://www.unjobnet.org"
@@ -1218,37 +1218,38 @@ def scrape_unjobnet_country(
 
     today_str = datetime.now(timezone.utc).date().isoformat()
     formal_cutoff = (datetime.now(timezone.utc) - timedelta(days=config.FORMAL_DAYS)).date().isoformat()
-    jobs: list[Job] = []
+    targets = detail_urls[:max_details]
 
-    for detail_url, job_id in detail_urls[:max_details]:
+    def _parse_detail(pair: tuple[str, str], http_c: httpx.Client) -> Job | None:
+        detail_url, job_id = pair
         try:
-            rd = client.get(detail_url, timeout=20)
+            rd = http_c.get(detail_url, timeout=20)
             if rd.status_code != 200:
-                continue
+                return None
             sd = BeautifulSoup(rd.text, "html.parser")
             ld = _extract_ld_job_posting(sd)
             if not ld:
-                continue
+                return None
             title = html.unescape(str(ld.get("title") or "")).strip()
             if not title or _TENDER_NOTICE_RE.search(title):
-                continue
+                return None
 
             desc_html = html.unescape(str(ld.get("description") or ""))
             desc_soup = BeautifulSoup(desc_html, "html.parser")
             desc_txt = desc_soup.get_text("\n", strip=True)
             if spam.is_spam(f"{title}\n{desc_txt[:500]}"):
-                continue
+                return None
             if country == "tr" and spam.is_tr_citizenship_only(f"{title}\n{desc_txt[:800]}"):
-                continue
+                return None
 
             posted_raw = str(ld.get("datePosted") or "").strip()
             deadline_raw = str(ld.get("validThrough") or "").strip()
             posted_at = posted_raw if len(posted_raw) >= 10 else None
             deadline = deadline_raw[:10] if len(deadline_raw) >= 10 and re.match(r"\d{4}-\d{2}-\d{2}", deadline_raw) else None
             if deadline and deadline < today_str:
-                continue
+                return None
             if not deadline and posted_at and posted_at[:10] < formal_cutoff:
-                continue
+                return None
 
             org_obj = ld.get("hiringOrganization") or {}
             employer = html.unescape(str(org_obj.get("name") or "")).strip() if isinstance(org_obj, dict) else ""
@@ -1288,7 +1289,7 @@ def scrape_unjobnet_country(
             if sub:
                 fld = "computer"
 
-            jobs.append(Job(
+            return Job(
                 title=title[:120],
                 source=source,
                 post_url=detail_url,
@@ -1312,20 +1313,532 @@ def scrape_unjobnet_country(
                 confidence=0.92,
                 tags=["الأمم المتحدة", "منظمات دولية"] + (["تركيا"] if country == "tr" else []),
                 raw=f"{title}\n{employer}\n{desc_txt[:1500]}".strip(),
-            ))
+            )
         except Exception as e:
             log.warning("UNjobnet detail %s failed: %s", detail_url, e)
+            return None
+
+    jobs: list[Job] = []
+    if isinstance(client, httpx.Client) and len(targets) > 4:
+        tl = threading.local()
+        lock = threading.Lock()
+        pool_clients: list[httpx.Client] = []
+
+        def _worker(pair: tuple[str, str]) -> Job | None:
+            c = getattr(tl, "client", None)
+            if c is None:
+                c = httpx.Client(headers={"User-Agent": USER_AGENT}, timeout=18, verify=False, follow_redirects=True)
+                tl.client = c
+                with lock:
+                    pool_clients.append(c)
+            return _parse_detail(pair, c)
+
+        try:
+            with ThreadPoolExecutor(max_workers=6) as pool:
+                for j in pool.map(_worker, targets):
+                    if j is not None:
+                        jobs.append(j)
+        finally:
+            for c in pool_clients:
+                c.close()
+    else:
+        for pair in targets:
+            j = _parse_detail(pair, client)
+            if j is not None:
+                jobs.append(j)
     return jobs
 
 
 def scrape_unjobnet_syria(client: httpx.Client) -> list[Job]:
     """Scrape UNjobnet Syria listings via shared JobPosting extractor."""
-    return scrape_unjobnet_country(client, slug="syria", country="sy", source="unjobnet_sy", max_pages=3, max_details=55)
+    return scrape_unjobnet_country(client, slug="syria", country="sy", source="unjobnet_sy", max_pages=6, max_details=120)
 
 
 def scrape_unjobnet_turkey(client: httpx.Client) -> list[Job]:
     """Scrape UNjobnet Turkey listings via shared JobPosting extractor."""
-    return scrape_unjobnet_country(client, slug="turkey", country="tr", source="unjobnet_tr", max_pages=3, max_details=55)
+    return scrape_unjobnet_country(client, slug="turkey", country="tr", source="unjobnet_tr", max_pages=6, max_details=120)
+
+
+def scrape_shafak(client: httpx.Client) -> list[Job]:
+    """Scrape active Syria NGO vacancies from Shafak Organization WP REST API (category 65)."""
+    api_url = "https://shafak.org/wp-json/wp/v2/posts?categories=65&per_page=100"
+    jobs: list[Job] = []
+    seen: set[str] = set()
+    today_str = datetime.now(timezone.utc).date().isoformat()
+    try:
+        r = client.get(api_url, timeout=20)
+        if r.status_code != 200 or not r.text.lstrip().startswith("["):
+            return []
+        for it in r.json():
+            posted = (it.get("date_gmt") or it.get("date") or "")[:19]
+            posted_iso = (posted + "+00:00") if posted else None
+            if not _is_recent_iso(posted_iso):
+                continue
+            link = (it.get("link") or "").strip()
+            if not link or link in seen:
+                continue
+            seen.add(link)
+            raw_t = html.unescape(re.sub(r"<[^>]+>", " ", (it.get("title") or {}).get("rendered") or "")).strip()
+            if not raw_t or _TENDER_NOTICE_RE.search(raw_t) or re.search(r"متطوع|تطوع|volunteer", raw_t, re.I):
+                continue
+            content_html = (it.get("content") or {}).get("rendered") or ""
+            content_html = re.sub(
+                r"(https?://docs\.google\.com/forms/d/[A-Za-z0-9_-]+)/preview\b",
+                r"\1/viewform",
+                content_html,
+            )
+            plain = html.unescape(re.sub(r"<[^>]+>", " ", content_html))
+            deadline = ex.parse_deadline(plain, posted_iso)
+            if deadline and deadline < today_str:
+                continue
+            job = _make_wp_job(
+                title=raw_t,
+                source="shafak",
+                link=link,
+                posted_iso=posted_iso,
+                employer="منظمة شفق الإنسانية (Shafak)",
+                content_html=content_html,
+                default_cities=["حلب", "إدلب"],
+                default_field="ngo",
+                tags=["منظمات إنسانية", "شفق"],
+                deadline=deadline,
+                sector="ngo",
+            )
+            if job and (job.apply_url != link or job.email or job.phones):
+                jobs.append(job)
+    except Exception as e:
+        log.warning("Shafak scrape failed: %s", e)
+    return jobs
+
+
+def _parse_drc_date(raw: str) -> str | None:
+    s = (raw or "").strip()
+    if not s:
+        return None
+    for fmt in ("%m/%d/%Y %I:%M:%S %p", "%m/%d/%Y", "%d %b %Y", "%Y-%m-%d"):
+        try:
+            return datetime.strptime(s, fmt).date().isoformat()
+        except ValueError:
+            continue
+    return None
+
+
+def scrape_drc(client: httpx.Client, country: str = "sy") -> list[Job]:
+    """Scrape active direct-apply vacancies from Danish Refugee Council (job.drc.ngo) for Syria or Turkey."""
+    base = "https://job.drc.ngo"
+    today_str = datetime.now(timezone.utc).date().isoformat()
+    jobs: list[Job] = []
+    try:
+        r = client.get(f"{base}/jobs/", timeout=20)
+        if r.status_code != 200:
+            return []
+        soup = BeautifulSoup(r.text, "html.parser")
+        matches: list[tuple[str, str, str | None, str | None]] = []
+        seen: set[str] = set()
+        for art in soup.select("article.jobList__item"):
+            ctry = (art.get("data-country") or "").strip().lower()
+            if country == "sy":
+                if "syria" not in ctry:
+                    continue
+            else:
+                if not any(k in ctry for k in ("turkey", "turkiye", "türkiye")):
+                    continue
+            title = html.unescape((art.get("data-title") or "").strip())
+            if not title or _TENDER_NOTICE_RE.search(title) or re.search(r"\b(?:volunteer|intern(?:ship)?)\b", title, re.I):
+                continue
+            dl = _parse_drc_date(art.get("data-deadline") or "")
+            if dl and dl < today_str:
+                continue
+            pub_d = _parse_drc_date(art.get("data-published") or "")
+            posted_iso = (pub_d + "T09:00:00+00:00") if pub_d else datetime.now(timezone.utc).isoformat(timespec="seconds")
+            a = art.find("a", href=True)
+            if not a:
+                continue
+            detail_url = urljoin(base, a["href"].strip())
+            if detail_url in seen:
+                continue
+            seen.add(detail_url)
+            matches.append((title, detail_url, posted_iso, dl))
+
+        for title, detail_url, posted_iso, dl in matches:
+            try:
+                rd = client.get(detail_url, timeout=18)
+                if rd.status_code != 200:
+                    continue
+                ds = BeautifulSoup(rd.text, "html.parser")
+                body_txt = ds.get_text("\n", strip=True)
+                if country == "tr" and spam.is_tr_citizenship_only(f"{title}\n{body_txt[:1000]}"):
+                    continue
+                apply_u = None
+                for a in ds.find_all("a", href=True):
+                    href = da.strip_tracking(a["href"].strip())
+                    if href and ("hr-manager.net" in href.lower() or da.is_direct_form_or_ats(href)):
+                        apply_u = href
+                        break
+                if not apply_u:
+                    continue
+                cities = (
+                    tx.tr_cities_from_text(f"{title} {body_txt[:600]}") or ["عدة ولايات في تركيا"]
+                    if country == "tr"
+                    else tx.cities_from_text(f"{title} {body_txt[:600]}") or ["دمشق"]
+                )
+                fld = tx.field_from_text(title, body_txt[:400])
+                sub = computer_subfield(title, body_txt[:400])
+                if sub or fld == "computer":
+                    fld, sub = "computer", sub or "DT"
+                elif fld == "other":
+                    fld = "ngo"
+                jobs.append(Job(
+                    title=title[:120],
+                    source="drc",
+                    post_url=detail_url,
+                    posted_at=posted_iso,
+                    employer="المجلس الدنماركي للاجئين (DRC)",
+                    cities=cities,
+                    education=tx.education_from_text(body_txt[:1200]) or tx.education_from_title(title) or "bachelor",
+                    education_from="stated",
+                    field=fld,
+                    subfield=sub,
+                    kind="formal",
+                    official=False,
+                    country=country,
+                    sector="ngo",
+                    apply_url=apply_u,
+                    details_url=detail_url,
+                    deadline=dl,
+                    apply_types=["form", "site"],
+                    confidence=0.95,
+                    tags=["منظمات دولية", "DRC"] + (["تركيا"] if country == "tr" else []),
+                    raw=f"{title}\n{body_txt[:1200]}",
+                ))
+            except Exception as e:
+                log.debug("DRC detail %s failed: %s", detail_url, e)
+    except Exception as e:
+        log.warning("DRC (%s) scrape failed: %s", country, e)
+    return jobs
+
+
+def scrape_acted(client: httpx.Client, country: str = "sy") -> list[Job]:
+    """Scrape active direct-apply vacancies from ACTED official vacancies board."""
+    slugs = ("syria",) if country == "sy" else ("turkey", "turkiye")
+    jobs: list[Job] = []
+    seen: set[str] = set()
+    today_str = datetime.now(timezone.utc).date().isoformat()
+    for slug in slugs:
+        list_url = f"https://www.acted.org/en/get-involved/join-us/vacancies/?tax-country[]={slug}"
+        try:
+            r = client.get(list_url, timeout=20)
+            if r.status_code != 200:
+                continue
+            detail_urls = sorted(set(re.findall(r"https://www\.acted\.org/en/jobs/[a-z0-9-]+/", r.text)))
+            for du in detail_urls:
+                if du in seen:
+                    continue
+                seen.add(du)
+                try:
+                    rd = client.get(du, timeout=18)
+                    if rd.status_code != 200:
+                        continue
+                    ds = BeautifulSoup(rd.text, "html.parser")
+                    h1 = ds.select_one("h1")
+                    title = html.unescape(h1.get_text(" ", strip=True)) if h1 else du.rstrip("/").split("/")[-1].replace("-", " ").title()
+                    if not title or len(title) < 4 or re.search(r"\b(?:volunteer|intern(?:ship)?)\b", title, re.I):
+                        continue
+                    body_txt = (ds.select_one("main") or ds).get_text("\n", strip=True)
+                    if country == "tr" and spam.is_tr_citizenship_only(f"{title}\n{body_txt[:800]}"):
+                        continue
+                    dl = ex.parse_deadline(body_txt)
+                    if dl and dl < today_str:
+                        continue
+                    apply_u = du.rstrip("/") + "/#form"
+                    cities = (
+                        tx.tr_cities_from_text(f"{title} {body_txt[:500]}") or ["عدة ولايات في تركيا"]
+                        if country == "tr"
+                        else tx.cities_from_text(f"{title} {body_txt[:500]}") or ["دمشق"]
+                    )
+                    fld = tx.field_from_text(title, body_txt[:400])
+                    sub = computer_subfield(title, body_txt[:400])
+                    if sub or fld == "computer":
+                        fld, sub = "computer", sub or "DT"
+                    elif fld == "other":
+                        fld = "ngo"
+                    jobs.append(Job(
+                        title=title[:120],
+                        source="acted",
+                        post_url=du,
+                        posted_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                        employer="منظمة أكتيد الدولية (ACTED)",
+                        cities=cities,
+                        education=tx.education_from_text(body_txt[:1000]) or tx.education_from_title(title) or "bachelor",
+                        education_from="stated",
+                        field=fld,
+                        subfield=sub,
+                        kind="formal",
+                        official=False,
+                        country=country,
+                        sector="ngo",
+                        apply_url=apply_u,
+                        details_url=du,
+                        deadline=dl,
+                        apply_types=["form", "site"],
+                        confidence=0.93,
+                        tags=["منظمات دولية", "ACTED"] + (["تركيا"] if country == "tr" else []),
+                        raw=f"{title}\n{body_txt[:1200]}",
+                    ))
+                except Exception as e:
+                    log.debug("ACTED detail %s failed: %s", du, e)
+        except Exception as e:
+            log.warning("ACTED (%s) scrape failed: %s", slug, e)
+    return jobs
+
+
+def scrape_wfp(client: httpx.Client, country: str = "sy") -> list[Job]:
+    """Scrape active World Food Programme (WFP) official Workday openings strictly inside Syria or Turkey."""
+    api_url = "https://wd3.myworkdaysite.com/wday/cxs/wfp/job_openings/jobs"
+    base_apply = "https://wd3.myworkdaysite.com/recruiting/wfp/job_openings"
+    kw = "Syria" if country == "sy" else "Turkiye"
+    jobs: list[Job] = []
+    try:
+        r = client.post(
+            api_url,
+            json={"limit": 40, "offset": 0, "searchText": kw},
+            headers={"User-Agent": USER_AGENT, "Content-Type": "application/json", "Accept": "application/json"},
+            timeout=18,
+        )
+        if r.status_code != 200:
+            return []
+        for it in (r.json().get("jobPostings") or []):
+            title = html.unescape(str(it.get("title") or "")).strip()
+            ext_path = str(it.get("externalPath") or "").strip()
+            loc_txt = str(it.get("locationsText") or "").strip()
+            if not title or not ext_path:
+                continue
+            if re.search(r"\b(?:volunteer|intern(?:ship)?)\b", title, re.I):
+                continue
+            low_loc = loc_txt.lower()
+            if country == "sy":
+                if "syria" not in low_loc and not tx.cities_from_text(loc_txt):
+                    continue
+                cities = tx.cities_from_text(f"{loc_txt} {title}") or ["دمشق"]
+            else:
+                if not any(k in low_loc for k in ("turkiye", "türkiye", "turkey")) and not tx.tr_cities_from_text(loc_txt):
+                    continue
+                if spam.is_tr_citizenship_only(f"{title} {loc_txt}"):
+                    continue
+                cities = tx.tr_cities_from_text(f"{loc_txt} {title}") or ["أنقرة"]
+            apply_u = base_apply + ext_path
+            fld = tx.field_from_text(title, loc_txt)
+            sub = computer_subfield(title)
+            if sub or fld == "computer":
+                fld, sub = "computer", sub or "DT"
+            elif fld == "other":
+                fld = "ngo"
+            jobs.append(Job(
+                title=title[:120],
+                source="wfp",
+                post_url=apply_u,
+                posted_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                employer="برنامج الأغذية العالمي (WFP)",
+                cities=cities,
+                education=tx.education_from_title(title) or "bachelor",
+                education_from="title",
+                field=fld,
+                subfield=sub,
+                kind="formal",
+                official=False,
+                country=country,
+                sector="ngo",
+                apply_url=apply_u,
+                details_url=apply_u,
+                apply_types=["form", "site"],
+                confidence=0.95,
+                tags=["الأمم المتحدة", "WFP"] + (["تركيا"] if country == "tr" else []),
+                raw=f"{title}\n{loc_txt}",
+            ))
+    except Exception as e:
+        log.warning("WFP (%s) scrape failed: %s", country, e)
+    return jobs
+
+
+_IMPACTPOOL_DL_RE = re.compile(
+    r"(?:Application\s+deadline|Closing\s+date)\s*:\s*([A-Za-z]{3,9}\s+\d{1,2},?\s+\d{4}|\d{1,2}\s+[A-Za-z]{3,9}\s+\d{4})",
+    re.I,
+)
+
+
+def _parse_impactpool_deadline(text: str) -> str | None:
+    m = _IMPACTPOOL_DL_RE.search(text or "")
+    if not m:
+        return None
+    val = m.group(1).replace(",", "").strip()
+    for fmt in ("%B %d %Y", "%b %d %Y", "%d %B %Y", "%d %b %Y"):
+        try:
+            return datetime.strptime(val, fmt).date().isoformat()
+        except ValueError:
+            continue
+    return None
+
+
+def scrape_impactpool_country(
+    client: httpx.Client,
+    country_param: str = "Syria",
+    country: str = "sy",
+    source: str = "impactpool_sy",
+    max_details: int = 80,
+) -> list[Job]:
+    """Scrape active UN/INGO vacancies via Impactpool and resolve /apply HTTP 301 straight to the official ATS."""
+    base = "https://www.impactpool.org"
+    search_url = f"{base}/search?countries%5B%5D={country_param}"
+    job_paths: list[str] = []
+    seen_ids: set[str] = set()
+    try:
+        r = client.get(search_url, timeout=20)
+        if r.status_code != 200:
+            return []
+        for path in re.findall(r'href="(/jobs/(\d+))"', r.text):
+            full_path, jid = path
+            if jid not in seen_ids:
+                seen_ids.add(jid)
+                job_paths.append(full_path)
+    except Exception as e:
+        log.warning("Impactpool (%s) list failed: %s", country_param, e)
+        return []
+
+    today_str = datetime.now(timezone.utc).date().isoformat()
+    targets = job_paths[:max_details]
+
+    def _fetch_one(jpath: str, http_c: httpx.Client) -> Job | None:
+        detail_url = base + jpath
+        try:
+            # 1. Resolve /apply 301 redirect straight to official UN/INGO ATS without login
+            ra = http_c.get(detail_url + "/apply", timeout=15, follow_redirects=False)
+            raw_loc = (ra.headers.get("location") or "").strip() if ra.status_code in (301, 302, 303, 307, 308) else ""
+            if not raw_loc:
+                return None
+            apply_u = da.strip_tracking(urljoin(base, raw_loc))
+            if not apply_u or "impactpool.org" in da._host(apply_u) or "app.unv.org" in apply_u.lower():
+                return None
+            if da.is_disallowed_offline_url(apply_u) or da.is_strict_portal_wrapper(apply_u):
+                return None
+
+            # 2. Parse detail page metadata (title, org, city, deadline, description)
+            rd = http_c.get(detail_url, timeout=18)
+            if rd.status_code != 200:
+                return None
+            ds = BeautifulSoup(rd.text, "html.parser")
+            main = ds.select_one("main") or ds
+            lines = [ln.strip() for ln in main.get_text("\n", strip=True).splitlines() if ln.strip()]
+            h1 = ds.select_one("h1")
+            title = html.unescape(h1.get_text(" ", strip=True)) if h1 else (lines[0] if lines else "")
+            if not title or len(title) < 3 or _TENDER_NOTICE_RE.search(title):
+                return None
+            if re.search(r"\b(?:volunteer|unv|intern(?:ship)?)\b", title, re.I):
+                return None
+
+            employer = ""
+            city_line = ""
+            if lines:
+                idx = 0
+                for i, ln in enumerate(lines[:5]):
+                    if ln == title:
+                        idx = i
+                        break
+                if idx + 1 < len(lines) and len(lines[idx + 1]) <= 90:
+                    employer = lines[idx + 1]
+                if idx + 2 < len(lines) and len(lines[idx + 2]) <= 60:
+                    city_line = lines[idx + 2]
+            if re.search(r"\b(?:unv|united nations volunteers)\b", employer, re.I):
+                return None
+
+            body_txt = "\n".join(lines[:60])
+            if spam.is_spam(f"{title}\n{body_txt[:500]}"):
+                return None
+            if country == "tr" and spam.is_tr_citizenship_only(f"{title}\n{body_txt[:1200]}"):
+                return None
+
+            deadline = _parse_impactpool_deadline(body_txt)
+            if deadline and deadline < today_str:
+                return None
+
+            loc_hay = f"{city_line} {title} {body_txt[:500]}"
+            cities = (
+                tx.tr_cities_from_text(loc_hay) or ["عدة ولايات في تركيا"]
+                if country == "tr"
+                else tx.cities_from_text(loc_hay) or ["عدة محافظات"]
+            )
+            fld = tx.field_from_text(title, body_txt[:600])
+            sub = computer_subfield(title, body_txt[:400])
+            if sub or fld == "computer":
+                fld, sub = "computer", sub or "DT"
+            elif fld == "other":
+                fld = "ngo"
+
+            return Job(
+                title=title[:120],
+                source=source,
+                post_url=detail_url,
+                posted_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                employer=employer[:100] if employer else None,
+                cities=cities,
+                education=tx.education_from_text(body_txt) or tx.education_from_title(title) or "bachelor",
+                education_from="stated",
+                field=fld,
+                subfield=sub,
+                kind="formal",
+                official=False,
+                country=country,
+                sector="ngo",
+                apply_url=apply_u,
+                details_url=detail_url,
+                deadline=deadline,
+                apply_types=["form", "site"],
+                confidence=0.93,
+                tags=["الأمم المتحدة", "منظمات دولية"] + (["تركيا"] if country == "tr" else []),
+                raw=f"{title}\n{employer}\n{body_txt[:1400]}".strip(),
+            )
+        except Exception as e:
+            log.debug("Impactpool detail %s failed: %s", detail_url, e)
+            return None
+
+    jobs: list[Job] = []
+    if isinstance(client, httpx.Client) and len(targets) > 4:
+        tl = threading.local()
+        lock = threading.Lock()
+        pool_clients: list[httpx.Client] = []
+
+        def _worker(jpath: str) -> Job | None:
+            c = getattr(tl, "client", None)
+            if c is None:
+                c = httpx.Client(headers={"User-Agent": USER_AGENT}, timeout=18, verify=False, follow_redirects=True)
+                tl.client = c
+                with lock:
+                    pool_clients.append(c)
+            return _fetch_one(jpath, c)
+
+        try:
+            with ThreadPoolExecutor(max_workers=6) as pool:
+                for j in pool.map(_worker, targets):
+                    if j is not None:
+                        jobs.append(j)
+        finally:
+            for c in pool_clients:
+                c.close()
+    else:
+        for jpath in targets:
+            j = _fetch_one(jpath, client)
+            if j is not None:
+                jobs.append(j)
+    return jobs
+
+
+def scrape_impactpool_syria(client: httpx.Client) -> list[Job]:
+    """Scrape active Syria UN/INGO jobs via Impactpool direct ATS redirects."""
+    return scrape_impactpool_country(client, country_param="Syria", country="sy", source="impactpool_sy", max_details=80)
+
+
+def scrape_impactpool_turkey(client: httpx.Client) -> list[Job]:
+    """Scrape active Turkey UN/INGO jobs via Impactpool direct ATS redirects."""
+    return scrape_impactpool_country(client, country_param="Turkey", country="tr", source="impactpool_tr", max_details=80)
 
 
 def scrape_syria_jobs_com(client: httpx.Client) -> list[Job]:
@@ -1527,8 +2040,9 @@ def fetch_all_web_portal_jobs(client: httpx.Client | None = None, cache: dict | 
         scrape_sema,
         scrape_ataa,
         scrape_ida,
+        scrape_shafak,
         scrape_worklink,
-        scrape_ngosquare,
+        (lambda c: scrape_ngosquare(c, max_pages=5 if quick else 15)),
         scrape_sarc,
         scrape_jobsyria,
         scrape_nsjobs_web,
@@ -1539,6 +2053,10 @@ def fetch_all_web_portal_jobs(client: httpx.Client | None = None, cache: dict | 
         scrape_ngossyria,
         scrape_syria_un,
         scrape_unjobnet_syria,
+        scrape_drc,
+        scrape_acted,
+        scrape_wfp,
+        scrape_impactpool_syria,
         scrape_syria_jobs_com,
     )
     try:

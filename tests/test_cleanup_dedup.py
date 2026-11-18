@@ -1008,3 +1008,130 @@ def test_recover_falsely_dropped_jobs_with_strict_rules(tmp_path):
     assert jid2 == jid and not is_new
     assert con.execute("SELECT status FROM jobs WHERE id=?", (jid,)).fetchone()[0] == "live"
     con.close()
+
+
+def test_step2_new_direct_apply_sources_and_depth():
+    from datetime import datetime, timezone
+    from app.sources import web_portals as wp
+
+    today_iso = datetime.now(timezone.utc).date().isoformat()
+
+    class _Resp:
+        def __init__(self, status_code: int, text: str = "", headers: dict | None = None, json_data=None):
+            self.status_code = status_code
+            self.text = text
+            self.headers = headers or {}
+            self._json = json_data
+
+        def json(self):
+            return self._json
+
+    class _FakeClient:
+        def get(self, url, **kw):
+            # 1. Shafak WP API (rewrites /preview -> /viewform)
+            if "shafak.org/wp-json" in url:
+                return _Resp(
+                    200,
+                    "[{}]",
+                    json_data=[
+                        {
+                            "date_gmt": f"{today_iso}T09:00:00",
+                            "link": "https://shafak.org/job-finance-dz/",
+                            "title": {"rendered": "مسؤول/ة مالي/ة ميداني/ة | سوريا – دير الزور"},
+                            "content": {"rendered": '<p><a href="https://docs.google.com/forms/d/1MEjht1mtJnoqbpnRxDmn/preview">Apply</a></p>'},
+                        },
+                        {
+                            "date_gmt": f"{today_iso}T09:00:00",
+                            "link": "https://shafak.org/tender-1/",
+                            "title": {"rendered": "مناقصة توريد أدوية"},
+                            "content": {"rendered": '<p><a href="https://forms.gle/abc">Apply</a></p>'},
+                        },
+                    ],
+                )
+            # 2. DRC jobs list + detail
+            if url == "https://job.drc.ngo/jobs/":
+                html = (
+                    '<article class="jobList__item" data-country="Syria" data-deadline="12/20/2026 10:59:59 PM" '
+                    'data-published="11/18/2026 5:44:27 PM" data-title="Finance Coordinator">'
+                    '<a href="/jobs/job?id=177225">Read more</a></article>'
+                    '<article class="jobList__item" data-country="Cameroon" data-deadline="12/20/2026 10:59:59 PM" '
+                    'data-published="11/18/2026 5:44:27 PM" data-title="Other Job">'
+                    '<a href="/jobs/job?id=999999">Read more</a></article>'
+                )
+                return _Resp(200, html)
+            if "job.drc.ngo/jobs/job?id=177225" in url:
+                return _Resp(
+                    200,
+                    '<html><body><h1>Finance Coordinator - Damascus</h1>'
+                    '<a href="https://candidate.hr-manager.net/ApplicationInit.aspx?cid=1036&ProjectId=177225">Apply</a></body></html>',
+                )
+            # 3. Impactpool Turkey (keeps WFP paid job, drops UNV volunteer job)
+            if "impactpool.org/search?countries%5B%5D=Turkey" in url:
+                return _Resp(200, '<a href="/jobs/1248365">WFP</a><a href="/jobs/1248672">UNV</a>')
+            if url.endswith("/jobs/1248365/apply"):
+                return _Resp(301, headers={"location": "https://wd3.myworkdaysite.com/recruiting/wfp/job_openings/job/Ankara-Turkiye-PM"})
+            if url.endswith("/jobs/1248672/apply"):
+                return _Resp(301, headers={"location": "https://app.unv.org/opportunities/1784888021274141"})
+            if url.endswith("/jobs/1248365"):
+                return _Resp(
+                    200,
+                    "<main><h1>Logistics Capacity Strengthening Project Manager</h1>"
+                    "<p>WFP - World Food Programme</p><p>Ankara</p>"
+                    "<p>Application deadline: December 20, 2026</p></main>",
+                )
+            # 4. ACTED Syria
+            if "acted.org/en/get-involved/join-us/vacancies/" in url:
+                return _Resp(200, '<a href="https://www.acted.org/en/jobs/syria-country-security-manager-damascus/">Job</a>')
+            if "acted.org/en/jobs/syria-country-security-manager-damascus/" in url:
+                return _Resp(200, "<main><h1>Syria Country Security Manager - Damascus</h1><p>Damascus, Syria</p></main>")
+            return _Resp(404, "")
+
+        def post(self, url, **kw):
+            if "myworkdaysite.com/wday/cxs/wfp" in url:
+                return _Resp(
+                    200,
+                    "{}",
+                    json_data={
+                        "jobPostings": [
+                            {
+                                "title": "Programme Officer",
+                                "externalPath": "/job/Beirut-Lebanon/Programme-Officer",
+                                "locationsText": "Beirut, Lebanon",
+                            },
+                            {
+                                "title": "Logistics Project Manager",
+                                "externalPath": "/job/Ankara-Turkiye/Logistics-PM",
+                                "locationsText": "Ankara, Turkiye",
+                            },
+                        ]
+                    },
+                )
+            return _Resp(404, "")
+
+    cli = _FakeClient()
+    sh = wp.scrape_shafak(cli)
+    assert len(sh) == 1
+    assert "دير الزور" in sh[0].cities
+    assert sh[0].apply_url == "https://docs.google.com/forms/d/1MEjht1mtJnoqbpnRxDmn/viewform"
+
+    drc = wp.scrape_drc(cli, country="sy")
+    assert len(drc) == 1
+    assert drc[0].deadline == "2026-12-20"
+    assert "hr-manager.net" in (drc[0].apply_url or "")
+
+    imp_tr = wp.scrape_impactpool_turkey(cli)
+    assert len(imp_tr) == 1
+    assert imp_tr[0].country == "tr"
+    assert "أنقرة" in imp_tr[0].cities
+    assert "myworkdaysite.com" in (imp_tr[0].apply_url or "")
+    assert imp_tr[0].deadline == "2026-12-20"
+
+    act = wp.scrape_acted(cli, country="sy")
+    assert len(act) == 1
+    assert act[0].apply_url == "https://www.acted.org/en/jobs/syria-country-security-manager-damascus/#form"
+
+    # WFP strictly excludes Lebanon when scraping Syria, and includes Ankara when scraping Turkey
+    assert wp.scrape_wfp(cli, country="sy") == []
+    wfp_tr = wp.scrape_wfp(cli, country="tr")
+    assert len(wfp_tr) == 1
+    assert "أنقرة" in wfp_tr[0].cities

@@ -1,11 +1,13 @@
 """Verified job-portal scrapers for Arabic-friendly & international jobs in Turkey."""
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 import html
 import json
 import logging
 import re
+import threading
 from urllib.parse import quote, urljoin
 
 from bs4 import BeautifulSoup
@@ -242,18 +244,35 @@ _JOBSINTR_EXTRA_PATHS = (
 )
 
 
-def scrape_jobsintr_web(client: httpx.Client, max_pages: int = 4, extra_limit: int | None = None) -> list[Job]:
+_JOBSINTR_TOP_CATS = (
+    "/job-cat/" + quote("المبيعات-الاستشارات"),
+    "/job-cat/" + quote("المطاعم"),
+    "/job-cat/" + quote("خياطة"),
+    "/job-cat/" + quote("عامل"),
+    "/job-cat/" + quote("السياحة-العلاجية"),
+    "/job-cat/" + quote("محاسبة"),
+    "/job-cat/" + quote("التسويق-الالكتروني"),
+    "/job-cat/" + quote("خدمات"),
+    "/job-cat/" + quote("سائق"),
+)
+
+
+def scrape_jobsintr_web(client: httpx.Client, max_pages: int = 5, extra_limit: int | None = None) -> list[Job]:
     """Scrape active Arabic & Turkish listings from jobsintr.net across main pages, Gaziantep, and categories."""
     jobs: list[Job] = []
     seen_urls: set[str] = set()
     now_dt = datetime.now(timezone.utc)
     today_str = now_dt.date().isoformat()
+    main_pages = min(max_pages, 5)
     extras = _JOBSINTR_EXTRA_PATHS[:extra_limit] if extra_limit else _JOBSINTR_EXTRA_PATHS
     feed_urls = [
         f"https://jobsintr.net/jobs?page={page}" if page > 1 else "https://jobsintr.net/jobs"
-        for page in range(1, max_pages + 1)
+        for page in range(1, main_pages + 1)
     ] + [f"https://jobsintr.net{p}" for p in extras]
+    if not extra_limit and max_pages >= 4:
+        feed_urls += [f"https://jobsintr.net{p}?page=2" for p in _JOBSINTR_TOP_CATS]
 
+    all_detail_urls: list[str] = []
     for list_url in feed_urls:
         try:
             r = client.get(list_url, headers=_HEADERS, timeout=20, follow_redirects=True)
@@ -264,67 +283,94 @@ def scrape_jobsintr_web(client: httpx.Client, max_pages: int = 4, extra_limit: i
             continue
 
         soup = BeautifulSoup(_decode_html(r), "html.parser")
-        page_links = []
         for a in soup.select('a[href*="/jobs/"]'):
             href = (a.get("href") or "").split("?", 1)[0].rstrip("/")
             if not re.fullmatch(r"https?://(?:www\.)?jobsintr\.net/jobs/[A-Za-z0-9_-]+", href):
                 continue
             if href not in seen_urls:
                 seen_urls.add(href)
-                page_links.append(href)
-        if not page_links:
-            continue
+                all_detail_urls.append(href)
 
-        for u in page_links:
-            try:
-                dr = client.get(u, headers=_HEADERS, timeout=18, follow_redirects=True)
-                if dr.status_code != 200:
-                    continue
-                dhtml = _decode_html(dr)
-                ds = BeautifulSoup(dhtml, "html.parser")
-                header_el = ds.select_one(".job-header-content")
-                header_txt = header_el.get_text(" ", strip=True) if header_el else ""
-                posted_at, is_recent = _parse_relative_ar_date(header_txt, now_dt=now_dt)
-                if not is_recent:
-                    continue
+    def _fetch_detail(u: str, http_c: httpx.Client) -> Job | None:
+        try:
+            dr = http_c.get(u, headers=_HEADERS, timeout=18, follow_redirects=True)
+            if dr.status_code != 200:
+                return None
+            dhtml = _decode_html(dr)
+            ds = BeautifulSoup(dhtml, "html.parser")
+            header_el = ds.select_one(".job-header-content")
+            header_txt = header_el.get_text(" ", strip=True) if header_el else ""
+            posted_at, is_recent = _parse_relative_ar_date(header_txt, now_dt=now_dt)
+            if not is_recent:
+                return None
 
-                h1_el = header_el.select_one("h1, h2") if header_el else None
-                raw_title = (h1_el.get_text(" ", strip=True) if h1_el else re.sub(r"\s*منذ\s+.+$", "", header_txt)).strip()
-                if not raw_title:
-                    og = ds.select_one('meta[property="og:title"]')
-                    raw_title = og.get("content", "") if og else ""
+            h1_el = header_el.select_one("h1, h2") if header_el else None
+            raw_title = (h1_el.get_text(" ", strip=True) if h1_el else re.sub(r"\s*منذ\s+.+$", "", header_txt)).strip()
+            if not raw_title:
+                og = ds.select_one('meta[property="og:title"]')
+                raw_title = og.get("content", "") if og else ""
 
-                content_node = ds.select_one(".ck-content") or ds.select_one(".content-single")
-                if not content_node:
-                    continue
-                overview_node = ds.select_one(".job-overview")
-                overview_txt = overview_node.get_text("\n", strip=True) if overview_node else ""
-                body_lines = content_node.get_text("\n", strip=True)
+            content_node = ds.select_one(".ck-content") or ds.select_one(".content-single")
+            if not content_node:
+                return None
+            overview_node = ds.select_one(".job-overview")
+            overview_txt = overview_node.get_text("\n", strip=True) if overview_node else ""
+            body_lines = content_node.get_text("\n", strip=True)
 
-                main_scope = ds.find("main") or ds.find("article") or ds
-                info = da.extract_apply_from_html(str(main_scope), u, country="tr")
-                apply_u = info.get("apply_url")
-                if info.get("closed"):
-                    continue
+            main_scope = ds.find("main") or ds.find("article") or ds
+            info = da.extract_apply_from_html(str(main_scope), u, country="tr")
+            apply_u = info.get("apply_url")
+            if info.get("closed"):
+                return None
 
-                job = _build_tr_job(
-                    title=raw_title,
-                    source="jobsintr_web",
-                    post_url=u,
-                    posted_at=posted_at,
-                    body_text=body_lines,
-                    city_hint=overview_txt,
-                    salary_hint=tx.salary(overview_txt + "\n" + body_lines),
-                    apply_url=apply_u,
-                    details_url=u,
-                    phones=info.get("phones") or [],
-                    email=info.get("email"),
-                    tags=["تركيا"],
-                )
-                if job and ex.expires_on(job) >= today_str:
-                    jobs.append(job)
-            except Exception as e:
-                log.debug("jobsintr detail %s failed: %s", u, e)
+            job = _build_tr_job(
+                title=raw_title,
+                source="jobsintr_web",
+                post_url=u,
+                posted_at=posted_at,
+                body_text=body_lines,
+                city_hint=overview_txt,
+                salary_hint=tx.salary(overview_txt + "\n" + body_lines),
+                apply_url=apply_u,
+                details_url=u,
+                phones=info.get("phones") or [],
+                email=info.get("email"),
+                tags=["تركيا"],
+            )
+            if job and ex.expires_on(job) >= today_str:
+                return job
+            return None
+        except Exception as e:
+            log.debug("jobsintr detail %s failed: %s", u, e)
+            return None
+
+    if isinstance(client, httpx.Client) and len(all_detail_urls) > 6:
+        tl = threading.local()
+        lock = threading.Lock()
+        pool_clients: list[httpx.Client] = []
+
+        def _worker(u: str) -> Job | None:
+            c = getattr(tl, "client", None)
+            if c is None:
+                c = httpx.Client(headers=_HEADERS, timeout=18, verify=False, follow_redirects=True)
+                tl.client = c
+                with lock:
+                    pool_clients.append(c)
+            return _fetch_detail(u, c)
+
+        try:
+            with ThreadPoolExecutor(max_workers=6) as pool:
+                for j in pool.map(_worker, all_detail_urls):
+                    if j is not None:
+                        jobs.append(j)
+        finally:
+            for c in pool_clients:
+                c.close()
+    else:
+        for u in all_detail_urls:
+            j = _fetch_detail(u, client)
+            if j is not None:
+                jobs.append(j)
     return jobs
 
 
@@ -360,11 +406,13 @@ def scrape_adwhit_web(client: httpx.Client, max_pages: int = 4) -> list[Job]:
     seen_ids: set[str] = set()
     shift_map = {"fulltime": "دوام كامل", "parttime": "دوام جزئي", "freelance": "عمل حر"}
     today_str = datetime.now(timezone.utc).date().isoformat()
+    main_pages = min(max_pages, 4)
     feed_urls = [
         f"https://www.adwhit.com/ar/jobs?page={page}" if page > 1 else "https://www.adwhit.com/ar/jobs"
-        for page in range(1, max_pages + 1)
+        for page in range(1, main_pages + 1)
     ] + [f"https://www.adwhit.com/ar/{quote(slug)}" for slug in _ADWHIT_EXTRA_CATS]
 
+    pending_items: list[tuple[dict, str, str]] = []
     for list_url in feed_urls:
         try:
             r = client.get(list_url, headers=_HEADERS, timeout=20, follow_redirects=True)
@@ -396,48 +444,81 @@ def scrape_adwhit_web(client: httpx.Client, max_pages: int = 4) -> list[Job]:
             if spam.is_spam(preview_text) or spam.is_tr_citizenship_only(preview_text):
                 continue
 
-            detail_url = f"https://www.adwhit.com/ar/{slug}"
-            try:
-                dr = client.get(detail_url, headers=_HEADERS, timeout=18, follow_redirects=True)
-                if dr.status_code != 200:
-                    continue
-                jdata = _extract_next_data(_decode_html(dr)).get("props", {}).get("pageProps", {}).get("data", {}).get("job") or {}
-                dsc_html = jdata.get("dsc") or it.get("summary") or ""
-                dsc_soup = BeautifulSoup(dsc_html, "html.parser")
-                dsc_txt = dsc_soup.get_text("\n", strip=True)
+            pending_items.append((it, posted_at, f"https://www.adwhit.com/ar/{slug}"))
 
-                wa_phones: list[str] = []
-                if jdata.get("contactPhone"):
-                    wa_phones.extend(tx.phones_tr(str(jdata["contactPhone"])))
-                for a in dsc_soup.select("a[href*='whatsapp'], a[href*='wa.me'], a[href^='tel:']"):
-                    href = a.get("href") or ""
-                    if href.lower().startswith("tel:"):
-                        wa_phones.extend(tx.phones_tr(href[4:]))
-                    else:
-                        wa_phones.extend(da.extract_phone_from_wa(href, country="tr"))
+    def _fetch_detail(entry: tuple[dict, str, str], http_c: httpx.Client) -> Job | None:
+        it, posted_at, detail_url = entry
+        try:
+            dr = http_c.get(detail_url, headers=_HEADERS, timeout=18, follow_redirects=True)
+            if dr.status_code != 200:
+                return None
+            jdata = _extract_next_data(_decode_html(dr)).get("props", {}).get("pageProps", {}).get("data", {}).get("job") or {}
+            dsc_html = jdata.get("dsc") or it.get("summary") or ""
+            dsc_soup = BeautifulSoup(dsc_html, "html.parser")
+            dsc_txt = dsc_soup.get_text("\n", strip=True)
 
-                c_name = (jdata.get("city") or it.get("city") or {}).get("name") or ""
-                a_name = (jdata.get("area") or it.get("area") or {}).get("name") or ""
-                cat_name = (jdata.get("cat") or it.get("cat") or {}).get("name") or ""
-                extra_tags = ["عن بعد"] if (jdata.get("jobLocation") == "remote" or it.get("jobLocation") == "remote") else []
+            wa_phones: list[str] = []
+            if jdata.get("contactPhone"):
+                wa_phones.extend(tx.phones_tr(str(jdata["contactPhone"])))
+            for a in dsc_soup.select("a[href*='whatsapp'], a[href*='wa.me'], a[href^='tel:']"):
+                href = a.get("href") or ""
+                if href.lower().startswith("tel:"):
+                    wa_phones.extend(tx.phones_tr(href[4:]))
+                else:
+                    wa_phones.extend(da.extract_phone_from_wa(href, country="tr"))
 
-                job = _build_tr_job(
-                    title=jdata.get("title") or it.get("title") or "",
-                    source="adwhit_web",
-                    post_url=detail_url,
-                    posted_at=posted_at,
-                    body_text=dsc_txt,
-                    city_hint=f"{c_name} {a_name}",
-                    shift_hint=shift_map.get(jdata.get("jobType") or it.get("jobType") or ""),
-                    details_url=detail_url,
-                    phones=wa_phones,
-                    email=jdata.get("contactEmail"),
-                    tags=extra_tags + ([cat_name] if cat_name and cat_name != "متنوعة" else []),
-                )
-                if job and ex.expires_on(job) >= today_str:
-                    jobs.append(job)
-            except Exception as e:
-                log.debug("adwhit detail %s failed: %s", detail_url, e)
+            c_name = (jdata.get("city") or it.get("city") or {}).get("name") or ""
+            a_name = (jdata.get("area") or it.get("area") or {}).get("name") or ""
+            cat_name = (jdata.get("cat") or it.get("cat") or {}).get("name") or ""
+            extra_tags = ["عن بعد"] if (jdata.get("jobLocation") == "remote" or it.get("jobLocation") == "remote") else []
+
+            job = _build_tr_job(
+                title=jdata.get("title") or it.get("title") or "",
+                source="adwhit_web",
+                post_url=detail_url,
+                posted_at=posted_at,
+                body_text=dsc_txt,
+                city_hint=f"{c_name} {a_name}",
+                shift_hint=shift_map.get(jdata.get("jobType") or it.get("jobType") or ""),
+                details_url=detail_url,
+                phones=wa_phones,
+                email=jdata.get("contactEmail"),
+                tags=extra_tags + ([cat_name] if cat_name and cat_name != "متنوعة" else []),
+            )
+            if job and ex.expires_on(job) >= today_str:
+                return job
+            return None
+        except Exception as e:
+            log.debug("adwhit detail %s failed: %s", detail_url, e)
+            return None
+
+    if isinstance(client, httpx.Client) and len(pending_items) > 6:
+        tl = threading.local()
+        lock = threading.Lock()
+        pool_clients: list[httpx.Client] = []
+
+        def _worker(entry: tuple[dict, str, str]) -> Job | None:
+            c = getattr(tl, "client", None)
+            if c is None:
+                c = httpx.Client(headers=_HEADERS, timeout=18, verify=False, follow_redirects=True)
+                tl.client = c
+                with lock:
+                    pool_clients.append(c)
+            return _fetch_detail(entry, c)
+
+        try:
+            with ThreadPoolExecutor(max_workers=6) as pool:
+                for j in pool.map(_worker, pending_items):
+                    if j is not None:
+                        jobs.append(j)
+        finally:
+            for c in pool_clients:
+                c.close()
+    else:
+        for entry in pending_items:
+            j = _fetch_detail(entry, client)
+            if j is not None:
+                jobs.append(j)
     return jobs
 
 
@@ -452,18 +533,21 @@ def _salam_jsonld(soup: BeautifulSoup) -> dict:
     return {}
 
 
-def scrape_salamjobs_tr(client: httpx.Client, max_pages: int = 4) -> list[Job]:
-    """Scrape Turkey jobs from salamjobs.com across country and key Turkey cities with strict dedup."""
+def scrape_salamjobs_tr(client: httpx.Client, max_pages: int = 8) -> list[Job]:
+    """Scrape Turkey jobs from salamjobs.com across country and all 10 Turkey cities with parallel detail fetching."""
     jobs: list[Job] = []
     seen_urls: set[str] = set()
     today_str = datetime.now(timezone.utc).date().isoformat()
-    city_pages = min(2, max_pages)
+    ist_pages = min(3, max_pages)
+    gaz_pages = min(2, max_pages)
     feed_urls = (
         [f"https://salamjobs.com/search?country_id=1&page={page}" for page in range(1, max_pages + 1)]
-        + [f"https://salamjobs.com/search?country_id=1&city_id=4&page={page}" for page in range(1, city_pages + 1)]
-        + [f"https://salamjobs.com/search?country_id=1&city_id={cid}" for cid in (8, 2, 10, 3, 11, 1)]
+        + [f"https://salamjobs.com/search?country_id=1&city_id=4&page={page}" for page in range(1, ist_pages + 1)]
+        + [f"https://salamjobs.com/search?country_id=1&city_id=8&page={page}" for page in range(1, gaz_pages + 1)]
+        + [f"https://salamjobs.com/search?country_id=1&city_id={cid}" for cid in (2, 10, 3, 11, 1, 6, 7, 9)]
     )
 
+    all_links: list[str] = []
     for list_url in feed_urls:
         try:
             r = client.get(list_url, headers=_HEADERS, timeout=20, follow_redirects=True)
@@ -474,107 +558,134 @@ def scrape_salamjobs_tr(client: httpx.Client, max_pages: int = 4) -> list[Job]:
             continue
 
         soup = BeautifulSoup(_decode_html(r), "html.parser")
-        links = []
         for a in soup.select('a[href*="/jobs/"]'):
             u = urljoin("https://salamjobs.com", (a.get("href") or "").split("?", 1)[0])
             if re.search(r"/jobs/[^/]+-\d+$", u) and u not in seen_urls:
                 seen_urls.add(u)
-                links.append(u)
-        if not links:
-            continue
+                all_links.append(u)
 
-        for u in links:
-            try:
-                dr = client.get(u, headers=_HEADERS, timeout=18, follow_redirects=True)
-                if dr.status_code != 200:
-                    continue
-                ds = BeautifulSoup(_decode_html(dr), "html.parser")
-                ld = _salam_jsonld(ds)
-                posted_raw = str(ld.get("datePosted") or "")
-                posted_at = posted_raw[:19] + "+00:00" if len(posted_raw) >= 19 else datetime.now(timezone.utc).isoformat(timespec="seconds")
-                if not _is_recent_iso(posted_at):
-                    continue
+    def _fetch_detail(u: str, http_c: httpx.Client) -> Job | None:
+        try:
+            dr = http_c.get(u, headers=_HEADERS, timeout=18, follow_redirects=True)
+            if dr.status_code != 200:
+                return None
+            ds = BeautifulSoup(_decode_html(dr), "html.parser")
+            ld = _salam_jsonld(ds)
+            posted_raw = str(ld.get("datePosted") or "")
+            posted_at = posted_raw[:19] + "+00:00" if len(posted_raw) >= 19 else datetime.now(timezone.utc).isoformat(timespec="seconds")
+            if not _is_recent_iso(posted_at):
+                return None
 
-                # Strip similar-jobs cards & nav before reading contact info
-                art = ds.select_one("article.min-w-0")
-                if not art:
-                    continue
-                for noise in art.select(".sj-card, .similar-jobs, .related-jobs, header, footer, nav"):
-                    noise.decompose()
+            # Strip similar-jobs cards & nav before reading contact info
+            art = ds.select_one("article.min-w-0")
+            if not art:
+                return None
+            for noise in art.select(".sj-card, .similar-jobs, .related-jobs, header, footer, nav"):
+                noise.decompose()
 
-                desc_el = art.select_one(".job-description")
-                desc_txt = desc_el.get_text("\n", strip=True) if desc_el else BeautifulSoup(str(ld.get("description") or ""), "html.parser").get_text("\n", strip=True)
-                title = ld.get("title") or (art.select_one("h1").get_text(" ", strip=True) if art.select_one("h1") else "")
+            desc_el = art.select_one(".job-description")
+            desc_txt = desc_el.get_text("\n", strip=True) if desc_el else BeautifulSoup(str(ld.get("description") or ""), "html.parser").get_text("\n", strip=True)
+            title = ld.get("title") or (art.select_one("h1").get_text(" ", strip=True) if art.select_one("h1") else "")
 
-                if spam.is_tr_citizenship_only(f"{title}\n{desc_txt}") or spam.is_spam(f"{title}\n{desc_txt}"):
-                    continue
+            if spam.is_tr_citizenship_only(f"{title}\n{desc_txt}") or spam.is_spam(f"{title}\n{desc_txt}"):
+                return None
 
-                phones: list[str] = []
-                emails: list[str] = []
-                out_url = None
-                apply_url = None
-                for a in art.select("a[href]"):
-                    href = (a.get("href") or "").strip()
-                    low = href.lower()
-                    if low.startswith("tel:"):
-                        phones.extend(tx.phones_tr(href[4:]))
-                    elif "whatsapp" in low or "wa.me/" in low:
-                        phones.extend(da.extract_phone_from_wa(href, country="tr"))
-                    elif low.startswith("mailto:"):
-                        em = href[7:].split("?", 1)[0].strip()
-                        if da._good_email(em):
-                            emails.append(em)
-                    elif "/out/jobs/" in low and not out_url:
-                        out_url = urljoin("https://salamjobs.com", href)
+            phones: list[str] = []
+            emails: list[str] = []
+            out_url = None
+            apply_url = None
+            for a in art.select("a[href]"):
+                href = (a.get("href") or "").strip()
+                low = href.lower()
+                if low.startswith("tel:"):
+                    phones.extend(tx.phones_tr(href[4:]))
+                elif "whatsapp" in low or "wa.me/" in low:
+                    phones.extend(da.extract_phone_from_wa(href, country="tr"))
+                elif low.startswith("mailto:"):
+                    em = href[7:].split("?", 1)[0].strip()
+                    if da._good_email(em):
+                        emails.append(em)
+                elif "/out/jobs/" in low and not out_url:
+                    out_url = urljoin("https://salamjobs.com", href)
 
-                # Only follow /out/jobs/ if no direct phone/email was already found inside the card
-                if not phones and not emails and out_url:
-                    try:
-                        ro = client.get(out_url, headers=_HEADERS, timeout=10, follow_redirects=True)
-                        final_u = da.strip_tracking(str(ro.url))
-                        if da.is_disallowed_offline_url(final_u):
-                            continue
-                        if ro.status_code == 200:
-                            info = da.extract_apply_from_html(_decode_html(ro), final_u, country="tr")
-                            phones.extend(info.get("phones") or [])
-                            if info.get("email"):
-                                emails.append(info["email"])
-                            apply_url = info.get("apply_url") or (final_u if (info.get("has_internal_form") or da.is_direct_form_or_ats(final_u)) else None)
-                    except Exception:
-                        pass
+            # Only follow /out/jobs/ if no direct phone/email was already found inside the card
+            if not phones and not emails and out_url:
+                try:
+                    ro = http_c.get(out_url, headers=_HEADERS, timeout=10, follow_redirects=True)
+                    final_u = da.strip_tracking(str(ro.url))
+                    if da.is_disallowed_offline_url(final_u):
+                        return None
+                    if ro.status_code == 200:
+                        info = da.extract_apply_from_html(_decode_html(ro), final_u, country="tr")
+                        phones.extend(info.get("phones") or [])
+                        if info.get("email"):
+                            emails.append(info["email"])
+                        apply_url = info.get("apply_url") or (final_u if (info.get("has_internal_form") or da.is_direct_form_or_ats(final_u)) else None)
+                except Exception:
+                    pass
 
-                org_name = ((ld.get("hiringOrganization") or {}).get("name") if isinstance(ld.get("hiringOrganization"), dict) else None) or None
-                loc = ""
-                if isinstance(ld.get("jobLocation"), dict):
-                    addr = ld["jobLocation"].get("address") or {}
-                    loc = f"{ld['jobLocation'].get('name', '')} {addr.get('addressLocality', '')}"
-                sal = None
-                if isinstance(ld.get("baseSalary"), dict):
-                    val = (ld["baseSalary"].get("value") or {})
-                    if isinstance(val, dict) and (val.get("value") or val.get("minValue")):
-                        amt = val.get("value") or f"{val.get('minValue')}-{val.get('maxValue', '')}"
-                        sal = f"{amt} {ld['baseSalary'].get('currency', 'TL')}".strip()
+            org_name = ((ld.get("hiringOrganization") or {}).get("name") if isinstance(ld.get("hiringOrganization"), dict) else None) or None
+            loc = ""
+            if isinstance(ld.get("jobLocation"), dict):
+                addr = ld["jobLocation"].get("address") or {}
+                loc = f"{ld['jobLocation'].get('name', '')} {addr.get('addressLocality', '')}"
+            sal = None
+            if isinstance(ld.get("baseSalary"), dict):
+                val = (ld["baseSalary"].get("value") or {})
+                if isinstance(val, dict) and (val.get("value") or val.get("minValue")):
+                    amt = val.get("value") or f"{val.get('minValue')}-{val.get('maxValue', '')}"
+                    sal = f"{amt} {ld['baseSalary'].get('currency', 'TL')}".strip()
 
-                job = _build_tr_job(
-                    title=title,
-                    source="salamjobs",
-                    post_url=u,
-                    posted_at=posted_at,
-                    body_text=desc_txt,
-                    employer=org_name,
-                    city_hint=loc,
-                    salary_hint=sal,
-                    deadline=str(ld.get("validThrough") or "")[:10] or None,
-                    apply_url=apply_url,
-                    details_url=u,
-                    phones=phones,
-                    email=emails[0] if emails else None,
-                    tags=["تركيا"],
-                )
-                if job and ex.expires_on(job) >= today_str:
-                    jobs.append(job)
-            except Exception as e:
-                log.debug("salamjobs detail %s failed: %s", u, e)
+            job = _build_tr_job(
+                title=title,
+                source="salamjobs",
+                post_url=u,
+                posted_at=posted_at,
+                body_text=desc_txt,
+                employer=org_name,
+                city_hint=loc,
+                salary_hint=sal,
+                deadline=str(ld.get("validThrough") or "")[:10] or None,
+                apply_url=apply_url,
+                details_url=u,
+                phones=phones,
+                email=emails[0] if emails else None,
+                tags=["تركيا"],
+            )
+            if job and ex.expires_on(job) >= today_str:
+                return job
+            return None
+        except Exception as e:
+            log.debug("salamjobs detail %s failed: %s", u, e)
+            return None
+
+    if isinstance(client, httpx.Client) and len(all_links) > 6:
+        tl = threading.local()
+        lock = threading.Lock()
+        pool_clients: list[httpx.Client] = []
+
+        def _worker(u: str) -> Job | None:
+            c = getattr(tl, "client", None)
+            if c is None:
+                c = httpx.Client(headers=_HEADERS, timeout=18, verify=False, follow_redirects=True)
+                tl.client = c
+                with lock:
+                    pool_clients.append(c)
+            return _fetch_detail(u, c)
+
+        try:
+            with ThreadPoolExecutor(max_workers=6) as pool:
+                for j in pool.map(_worker, all_links):
+                    if j is not None:
+                        jobs.append(j)
+        finally:
+            for c in pool_clients:
+                c.close()
+    else:
+        for u in all_links:
+            j = _fetch_detail(u, client)
+            if j is not None:
+                jobs.append(j)
     return jobs
 
 
@@ -749,23 +860,33 @@ def scrape_sened_tr(client: httpx.Client) -> list[Job]:
 def fetch_all_tr_portal_jobs(
     client: httpx.Client | None = None,
     cache: dict | None = None,
-    max_pages: int = 3,
+    max_pages: int = 8,
     quick: bool = False,
 ) -> list[Job]:
     """Fetch verified active jobs across all reliable Turkey web portals."""
-    from .web_portals import scrape_unjobnet_turkey
+    from .web_portals import (
+        scrape_acted,
+        scrape_drc,
+        scrape_impactpool_turkey,
+        scrape_unjobnet_turkey,
+        scrape_wfp,
+    )
 
     close_after = client is None
     cli = client or httpx.Client(timeout=20, follow_redirects=True, headers=_HEADERS)
     jobs: list[Job] = []
     try:
         for name, fn in (
-            ("jobsintr_web", lambda c: scrape_jobsintr_web(c, max_pages=max_pages, extra_limit=10 if quick else None)),
-            ("adwhit_web", lambda c: scrape_adwhit_web(c, max_pages=max_pages)),
+            ("jobsintr_web", lambda c: scrape_jobsintr_web(c, max_pages=min(max_pages, 5), extra_limit=10 if quick else None)),
+            ("adwhit_web", lambda c: scrape_adwhit_web(c, max_pages=min(max_pages, 4))),
             ("salamjobs", lambda c: scrape_salamjobs_tr(c, max_pages=max_pages)),
             ("wazifturk", scrape_wazifturk_tr),
             ("sened_tr", scrape_sened_tr),
             ("unjobnet_tr", scrape_unjobnet_turkey),
+            ("impactpool_tr", scrape_impactpool_turkey),
+            ("drc_tr", lambda c: scrape_drc(c, country="tr")),
+            ("acted_tr", lambda c: scrape_acted(c, country="tr")),
+            ("wfp_tr", lambda c: scrape_wfp(c, country="tr")),
         ):
             try:
                 res = fn(cli)

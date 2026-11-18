@@ -53,20 +53,22 @@ _NOISE_LINE = re.compile(F(
 _GRADE_LINE = re.compile(F(r"^\s*(?:ال)?فئه\s*(الاولي|الاول|الثانيه|الثالثه|الرابعه|الخامسه)\s*:?\s*"))
 _GRADE_WORD = {"الاولي": "1", "الاول": "1", "الثانيه": "2", "الثالثه": "3", "الرابعه": "4", "الخامسه": "5"}
 
-_NEED_LINE = re.compile(r"(?:^|\n)[^\w\n]{0,6}\*?\s*(?:مطلوب(?:ة|ون|ين)?|يلزمنا|نبحث\s+عن|تبحث\s+عن|يبحث\s+عن|نطلب|يطلب)\s*[:：]?\s*([^\n]*)")
-_HAJA_RX = re.compile(r"(?:حاجت(?:ها|ه)|بحاجة)\s*(?:إلى|الى|ل|لـ)\s*(?:رفد\s+كوادرها\s+ب(?:منصب\s+)?|تعيين|توظيف|ل?التعاقد\s+مع|لتعاقد\s+مع|ضم|شغل\s+وظيفة|ملء\s+الشاغر\s+التالي)?\s*:?\s*([^\n]+)")
+_NEED_LINE = re.compile(r"(?:^|\n)[^\w\n]{0,6}\*?\s*(?:(?:\d+|[٠-٩]+)[.)\-–]\s*)?(?:(?:ال)?مطلوب(?:ة|ون|ين)?|يلزمنا|نبحث\s+عن|تبحث\s+عن|يبحث\s+عن|نطلب|يطلب)\s*[:：]?\s*([^\n]*)")
+_HAJA_RX = re.compile(r"(?:حاجت(?:ها|ه)|بحاجة|رغبت(?:ها|ه))\s*(?:إلى|الى|ل|لـ|في|بـ?)?\s*(?:رفد\s+كوادرها\s+ب(?:منصب\s+)?|تعيين|توظيف|استقطاب|ل?التعاقد\s+مع|لتعاقد\s+مع|ضم|شغل\s+وظيفة|ملء\s+الشاغر\s+التالي)?\s*[:：(]?\s*([^\n)]+)")
 _TITLE_PATTERNS = [
     re.compile(r"(?:(?:المسم[ىي]|المنصب|الشاغر)\s*الوظيف[يى]|المنصب)\s*[:：]\s*([^\n]+)"),
     re.compile(r"إعلان\s+توظيف\s*[|–\-:]\s*([^\n]+)"),
     re.compile(r"(?:إعلان|اعلان)\s+(?:شاغر|توظيف|فرص[ةه]\s+عمل)\s*[:：\-–|]\s*([^\n]+)"),
     re.compile(r"(?:Position(?:\s*Title)?|Job\s*Title|Vacancy(?:\s*Title)?)\s*[:：]\s*([^\n]+)", re.I),
+    re.compile(r"(?:توفر|توافر)\s+شاغر(?:\s+وظيف[يى])?\s*(?:[:：]\s*[\"«']?|[\"«])(?!\s*بمسمى)([^\n\"»']+)"),
     re.compile(r"فرص[ةه]\s+عمل\s+لدى\s+[^\n:：]+[:：]\s*(?:\n\s*)+([^\n]+)"),
     re.compile(r"\bبمسمى\s+([^\n،,.]+)"),
     re.compile(r"شاغر[^\n]{0,60}[:：]\s*\n([^\n]+)"),
     _HAJA_RX,
-    re.compile(r"(?:^|\n)\s*\*?\s*(?:مطلوب(?:ة|ون|ين)?|يلزمنا|نبحث\s+عن|تبحث\s+عن|يبحث\s+عن|نطلب|يطلب)\s*[:：]?\s*([^\n]*)"),
+    re.compile(r"(?:^|\n)\s*\*?\s*(?:(?:\d+|[٠-٩]+)[.)\-–]\s*)?(?:(?:ال)?مطلوب(?:ة|ون|ين)?|يلزمنا|نبحث\s+عن|تبحث\s+عن|يبحث\s+عن|نطلب|يطلب)\s*[:：]?\s*([^\n]*)"),
     re.compile(r"(?:التعاقد\s+مع|بالتعاقد\s+مع)\s*:?\s*([^\n]+)"),
     re.compile(r"(?:فرصة\s+عمل|فرصة|شاغر)\s*(?:[–\-:|]\s*)([^\n]+)"),
+    re.compile(r"(?:we\s+are\s+hiring|we['’]?re\s+hiring|\bhiring)\s*[:：\-–|]\s*([^\n]+)", re.I),
     re.compile(r"\b(?:is hiring|looking for)\s+(?:an?\s+)?([^\n]+)", re.I),
     re.compile(r"\bبصف[ةه]\s+([^\n،,.]+)"),
     re.compile(r"\bلوظيف[ةه]\s+([^\n،,.]+)"),
@@ -119,8 +121,12 @@ _WEEKDAYS = {
     "الاحد": 6, "احد": 6,
 }
 _WEEKDAY_RX = re.compile(r"(?:يوم\s+)?(" + "|".join(_WEEKDAYS.keys()) + r")")
-_NOT_JOB = re.compile(F(r"مطلوب (غرفه|بيت|شقه|منزل)|للايجار|للبيع|^\W*تنويه|نتائج الاختبار|اسماؤهم|تدعو .{0,30}(المتقدمين|الاشخاص)|خدمه جديده علي|متطوعين|متطوع|تطوع|volunteer|فرص تطوعيه|منصتها التطوعيه|تدريب مجاني|دوره تدريبيه|#تدريب_|شهاده دوليه|منحه دراسيه|مناقصه|استدراج عروض|ورشه عمل حول|"
-                        r"تعلن عن بدء التسجيل في|سجل الان في|اكاديميه .{0,20}للتدريب|الدوره (التاصيليه|التدريبيه)|رسوم (رمزيه|الدوره|الاشتراك)|الرسوم رمزيه|للانضمام (الى|الي) (الدوره|المجموعه)"))
+_NOT_JOB = re.compile(F(r"مطلوب (غرفه|بيت|شقه|منزل)|(?:شقه|منزل|بيت|محل|عقار|اراض[يى]|سياره|حساب|صفحه|قناه) (?:للايجار|للبيع)|^\W*(?:تنويه|للايجار|للبيع)|(?:اعلان|صدور) نتائج الاختبار|اسماؤهم|تدعو .{0,30}(المتقدمين|الاشخاص)|خدمه جديده علي|"
+                        r"(?:مطلوب|نبحث عن|باب|فرص[هة]?|حمله|استماره|اعلان|استقطاب) (?:ال)?(?:متطوعين|متطوع|تطوع)|عمل تطوعي|فرص تطوعيه|منصتها التطوعيه|\bvolunteer(?:s|ing)?\b|"
+                        r"تدريب مجاني|دوره تدريبيه|#تدريب_|شهاده دوليه|منحه دراسيه|(?:اعلان|طرح|دعوه|تمديد|ملف) (?:مناقصه|استدراج عروض)|(?:مناقصه|استدراج عروض) (?:رقم|عامه|بالظرف)|ورشه عمل حول|"
+                        r"تعلن عن بدء التسجيل في|سجل الان في|الدوره (التاصيليه|التدريبيه)|رسوم (رمزيه|الدوره|الاشتراك)|الرسوم رمزيه|للانضمام (الى|الي) (الدوره|المجموعه)"))
+_SOFT_NOT_JOB = re.compile(F(r"\b(?:للايجار|للبيع|متطوعين|متطوع|تطوع|مناقصه|نتائج الاختبار)\b|اكاديميه .{0,20}للتدريب"))
+_EXPLICIT_VACANCY_HDR = re.compile(F(r"وظيفه شاغره|شاغر وظيفي|فرصه عمل|اعلان توظيف|اعلان شاغر|المسمي الوظيفي|المنصب الوظيفي|مطلوب للعمل|مطلوب موظف|مطلوب مندوب|مطلوب شغيل|تعلن .{0,60}عن (?:حاجتها|توفر شاغر|توافر شاغر|رغبتها في)"))
 _OFFICIAL = re.compile(F(r"وزاره|مديريه|محافظه (دمشق|حلب|حمص|حماه|اللاذقيه|طرطوس|ادلب|درعا|السويداء|القنيطره|دير الزور|الحسكه|الرقه|ريف دمشق)|"
                          r"الهيئه العامه|هيئه عامه|المؤسسه العامه|الشركه العامه|الصندوق السيادي|مجلس مدينه|الامانه العامه"))
 _ABROAD = re.compile(F(r"تركيا|\bturkey\b|türkiye|اسطنبول|استانبول|\bistanbul\b|غازي عنتاب|\bgaziantep\b|مرسين|\bmersin\b|"
@@ -577,6 +583,12 @@ def _single_title(text: str, lines: list[str]) -> tuple[str, str]:
             if re.match(r"\s*https?://", raw) or re.match(r"\s*(?:منظمة|شركة|مؤسسة|جمعية|لدى|في)\s", _strip_emoji(raw)):
                 continue
             raw = re.sub(r"\s(?:ذو|ذات|ذوي)\s+(?:منظر|مظهر)\s+لائق", "", raw)
+            raw = re.sub(
+                r"^\s*(?:شاب|شباب|صبي[ةه]|صبايا|آنس[ةه]|انسه|سيد[ةه]|شخص|موظف[ةه]?|عامل[ةه]?)\s+"
+                r"(?:لديه[ا]?|يمتلك|تمتلك|ذو|ذات)\s+(?:خبر[ةه](?:\s+\S+)?\s+)?(?:في\s+مجال|بمجال|في)\s+",
+                "",
+                raw,
+            )
             title = _cut_title(raw)
             if re.search(r"التالي|الآتي|الاتي|ما يلي", title):
                 continue
@@ -772,15 +784,22 @@ def extract(text: str, source: str, post_url: str, posted_at: str | None = None,
     if not text or len(re.sub(r"https?://\S+|\s+", "", text)) < 15:
         return []
     target_country = _resolve_target_country(text, links, country)
-    # «نبحث عن :» or «في وظيفة:» with the title as a hashtag on the next line («#مشرف_تعبئة_وتغليف») → one line
-    text = re.sub(r"((?:نبحث|تبحث|يبحث)\s+عن|في\s+وظيف[ةه]|بمسمى|مطلوب|يلزمنا)\s*[:：]?\s*(?:\n\s*)+[^\w\n#]{0,4}#(\S+)",
+    # «نبحث عن :» or «في وظيفة:» with the title as a hashtag on the same or next line («#مشرف_تعبئة_وتغليف») → one line
+    text = re.sub(r"#فرص[ةه]_عمل\s*[–\-:|]\s*#(\S+)",
+                  lambda m: f"فرصة عمل - {m.group(1).replace('_', ' ')}", text or "")
+    text = re.sub(r"((?:نبحث|تبحث|يبحث)\s+عن|في\s+وظيف[ةه]|بمسمى|مطلوب|يلزمنا)\s*[:：]?\s*(?:(?:\n\s*)+[^\w\n#]{0,4}|\s+)#(\S+)",
                   lambda m: f"\n{m.group(1)} {m.group(2).replace('_', ' ')}", text or "")
     if target_country == "sy":
         if text and _ABROAD.search(F(text)) and not tx.cities_from_text(text):
             return []  # jobs in Turkey and elsewhere: this branch is for work inside Syria
         tr_check_hay = re.sub(r"https?://(?!(?:wa\.me|api\.whatsapp\.com))\S+", " ", " ".join([text] + (links or [])))
         if text and _TR_PHONE_IN_TEXT.search(tr_check_hay) and not (
-            tx.phones(text) or any(re.search(r"963\s*9\d{8}", l) for l in (links or []))
+            tx.phones(text)
+            or any(re.search(r"963\s*9\d{8}", l) for l in (links or []))
+            or (tx.cities_from_text(text) and (
+                any(da._good_email(e) for e in tx.emails(text))
+                or any(da.is_direct_form_or_ats(u) for u in (tx.urls(text) + (links or [])))
+            ))
         ):
             return []  # skip ads whose only contact number is Turkish (+90)
     else:
@@ -797,6 +816,8 @@ def extract(text: str, source: str, post_url: str, posted_at: str | None = None,
     lines = _clean_lines(text)
     body = "\n".join(lines)
     if not body or _NOT_JOB.search(F(body)):
+        return []
+    if _SOFT_NOT_JOB.search(F(body)) and not _EXPLICIT_VACANCY_HDR.search(F(body)):
         return []
     city_text = "\n".join(l for l in text.splitlines() if not _NOISE_LINE.search(F(l)))
     if target_country == "tr":
@@ -828,6 +849,11 @@ def extract(text: str, source: str, post_url: str, posted_at: str | None = None,
         return []
     deadline = parse_deadline(body, posted_at)
     tr_pair = re.search(r"💼\s*([^:\n]{2,70}):\s*([^\n📍⏰🔗]{4,110})", text) if target_country == "tr" else None
+    if tr_pair and (
+        re.search(F(r"مزايا|مميزات|شروط|متطلبات|تفاصيل|ملاحظ|ساعات|اوقات|عنوان|موقع|راتب|طبيعه|المهام"), F(tr_pair.group(1)))
+        or not _good_title(_clean_title(tr_pair.group(2)))
+    ):
+        tr_pair = None
     employer = tr_pair.group(1).strip() if tr_pair else _employer(body)
     official = False if target_country == "tr" else (
         bool(_MOAD_LINK.search(" ".join(all_links)))
@@ -873,7 +899,10 @@ def extract(text: str, source: str, post_url: str, posted_at: str | None = None,
                 title = "طبيب " + title  # «أطباء من الاختصاصات التالية: الجراحة العامة»
             i_url = item_urls[idx] if idx < len(item_urls) else None
             titles.append((title, item, item_cities, grade, i_url))
-    else:
+        if not any(_good_title(t) and not _only_places(t) and t not in tx.CITIES and t not in tx.TR_CITIES for t, *_ in titles):
+            titles.clear()
+            single = True
+    if single:
         if tr_pair:
             title = _clean_title(tr_pair.group(2))
             src = tr_pair.group(0)

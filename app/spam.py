@@ -40,8 +40,8 @@ _ANTI_SCAM_WARNING_RE = re.compile(
     re.I,
 )
 THRESHOLD = 3
-_JOB_WORDS = re.compile(fold(r"مطلوب|شواغر|شاغر|وظيف|توظيف|بحاجه (الى|ل)|حاجت(ها|ه) (الى|الي|ل)|نبحث عن|فرصه عمل|فرص عمل|للعمل|يلزمنا|"
-                               r"بالانضمام (الى|ل)|الانضمام (الى|ل)(فريق|كادر|اسره)|يرغب بالانضمام|التعاقد مع|closing date|vacancy|job|hiring|position|"
+_JOB_WORDS = re.compile(fold(r"مطلوب|شواغر|شاغر|وظيف|توظيف|بحاجه (الى|الي|ل)|حاجت(ها|ه)|رغبت(ها|ه) (في|ب)|ترغب .{0,40}ب(رفد|تعيين|توظيف|استقطاب)|نبحث عن|فرصه عمل|فرص عمل|للعمل|يلزمنا|"
+                               r"بالانضمام (الى|ل)|الانضمام (الى|ل)(فريق|كادر|اسره)|يرغب بالانضمام|التعاقد مع|اعاده اعلان|استقطاب|المسمي الوظيفي|المنصب\s*:|closing date|vacancy|job|hiring|position|"
                                r"iş ilanı|is ilani|personel alımı|\b(?:officer|coordinator|manager|advisor|assistant|specialist)\b"), re.I)
 
 

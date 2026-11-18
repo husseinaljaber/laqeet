@@ -465,6 +465,8 @@ def extract_apply_from_html(html_text: str, page_url: str, country: str = "sy") 
     # Prefer career/hr/job emails first
     emails.sort(key=lambda e: 0 if re.search(r"career|hr|job|recruit|apply|cv|talent|وظ|توظيف", e, re.I) else 1)
     phones = sorted(set(phone_fn(main_text) + wa_phones))
+    if "adwhit.com" in (page_url or "").lower():
+        phones = [p for p in phones if p != "05385844484"]
 
     # Also catch raw form URLs pasted as plain text without <a>
     if not best_url:
@@ -654,6 +656,10 @@ def resolve_job_apply(job: Job, client: httpx.Client | None = None, cache: dict 
                 job.apply_url = None
 
     # 4. Final strict guarantee: apply_url must NEVER remain a shortener or intermediary wrapper portal
+    if "adwhit" in (getattr(job, "source", "") or "").lower() or "adwhit.com" in (getattr(job, "post_url", "") or "").lower():
+        job.phones = [p for p in (job.phones or []) if p != "05385844484"]
+        if job.apply_url and "5385844484" in job.apply_url:
+            job.apply_url = None
     if job.apply_url and is_disallowed_offline_url(job.apply_url):
         job.apply_url = None
     if strict and job.apply_url:

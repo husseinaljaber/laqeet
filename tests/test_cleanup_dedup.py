@@ -907,3 +907,104 @@ def test_turkey_reliefweb_unjobnet_and_seed_roundtrip(tmp_path):
     con_src.close()
     assert exported == 1
     assert seed_gz.exists() and seed_gz.stat().st_size > 0
+
+
+def test_recover_falsely_dropped_jobs_with_strict_rules(tmp_path):
+    from datetime import datetime, timezone
+    from app import extract as ex
+
+    now_iso = datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+    # 1. Turkey job where 💼 مزايا العمل: appears in body does not hijack title
+    t_93730 = (
+        "📢 مطلوب موظفين وموظفات كول سنتر أسنان 🇹🇷 (اسطنبول – باشاك شهير)\n"
+        "💼 مزايا العمل: * راتب شهري عالي. * عمولات مجزية.\n"
+        "📞 للتقديم عبر واتساب: https://wa.me/905497122233"
+    )
+    j_93730 = ex.extract(t_93730, "jobsintr", "https://t.me/jobsintr/93730", now_iso, country="tr")
+    assert len(j_93730) == 1
+    assert "كول سنتر" in j_93730[0].title
+    assert "05497122233" in j_93730[0].phones
+
+    # 2. Training academy hiring a real employee (not a training course ad)
+    t_93734 = (
+        "📢 وظيفة شاغرة | أكاديمية المسار الدولية للتدريب (MITA)\n"
+        "مطلوب: مسؤول/ة إدارة صفحات التواصل الاجتماعي\n"
+        "📍 إسطنبول\n"
+        "للتقديم: https://forms.gle/uNixK8k5NgJzJAz9A"
+    )
+    j_93734 = ex.extract(t_93734, "jobsintr", "https://t.me/jobsintr/93734", now_iso, country="tr")
+    assert len(j_93734) == 1
+    assert "التواصل الاجتماعي" in j_93734[0].title
+    assert j_93734[0].apply_url == "https://forms.gle/uNixK8k5NgJzJAz9A"
+
+    # 3. Damascus clinic with valid email + a +90 number stays a Syria job via email
+    t_14366 = (
+        "فرصة عمل\n"
+        "مطلوب موظفة استقبال لعيادة تجميل\n"
+        "📍 دمشق – المزة - Kristal Clinic\n"
+        "📧 Leen@kristalclinic.com\n"
+        "📞 0905491697588"
+    )
+    j_14366 = ex.extract(t_14366, "higher_steps", "https://t.me/higher_steps/14366", now_iso, country="sy")
+    assert len(j_14366) == 1
+    assert j_14366[0].country == "sy"
+    assert j_14366[0].email == "Leen@kristalclinic.com"
+    assert j_14366[0].phones == []
+
+    # 4. Generic person + experience prefix stripped cleanly
+    t_8437 = "مطلوب شاب لديه خبرة جيدة في مجال تنظيف غرف السيارات في دمشق للتواصل 0933112233"
+    j_8437 = ex.extract(t_8437, "syrianjobs2", "https://t.me/syrianjobs2/8437", now_iso, country="sy")
+    assert len(j_8437) == 1
+    assert "تنظيف غرف السيارات" in j_8437[0].title
+
+    # 5. Paid NGO vacancy mentioning volunteers in intro passes, while volunteer call is blocked
+    t_ngo = (
+        "تعلن منظمة الهلال الأحمر التي تعتمد على كوادرها ومتطوعيها عن حاجتها لتعيين منسق مشاريع في دمشق\n"
+        "للتقديم: hr@sarc-sy.org"
+    )
+    j_ngo = ex.extract(t_ngo, "wazafne175", "https://t.me/wazafne175/69542", now_iso, country="sy")
+    assert len(j_ngo) == 1
+    assert "منسق مشاريع" in j_ngo[0].title
+
+    t_vol = "إعلان تطوع: مطلوب متطوعين للمشاركة في حملة النظافة في دمشق للتواصل 0933112233"
+    assert ex.extract(t_vol, "wazafne175", "https://t.me/wazafne175/69999", now_iso, country="sy") == []
+
+    # 6. Adwhit support phone 05385844484 is blocked; previously rejected jobinsyria row promotes to live on valid phone
+    from app import direct_apply as da
+    j_adw = Job(
+        title="موظف مبيعات",
+        source="adwhit_web",
+        post_url="https://www.adwhit.com/job/123",
+        posted_at=now_iso,
+        country="tr",
+        cities=["إسطنبول"],
+        phones=["05385844484"],
+    )
+    assert da.resolve_job_apply(j_adw, client=None, strict=True) is False
+    assert j_adw.phones == []
+    con = db.connect(tmp_path / "promote.db")
+    j_rej = Job(
+        title="محاسب مالي",
+        source="jobinsyria",
+        post_url="https://jobinsyria.com/jobs_details/view/555",
+        posted_at=now_iso,
+        country="sy",
+        cities=["دمشق"],
+    )
+    jid, _ = db.upsert(con, j_rej, status="rejected")
+    assert con.execute("SELECT status FROM jobs WHERE id=?", (jid,)).fetchone()[0] == "rejected"
+
+    j_with_phone = Job(
+        title="محاسب مالي",
+        source="jobinsyria",
+        post_url="https://jobinsyria.com/jobs_details/view/555",
+        posted_at=now_iso,
+        country="sy",
+        cities=["دمشق"],
+        phones=["0944112233"],
+    )
+    jid2, is_new = db.upsert(con, j_with_phone)
+    assert jid2 == jid and not is_new
+    assert con.execute("SELECT status FROM jobs WHERE id=?", (jid,)).fetchone()[0] == "live"
+    con.close()

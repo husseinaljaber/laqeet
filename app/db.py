@@ -832,6 +832,7 @@ def _apply_str(job: Job) -> str:
 _SINGLE_POST_URL_SOURCES = frozenset({
     "jobsintr_web", "adwhit_web", "salamjobs", "wazifturk",
     "unjobnet_sy", "unjobnet_tr", "syria_jobs", "ssf_gov",
+    "jobinsyria", "worklink", "reliefweb",
 })
 
 
@@ -959,9 +960,13 @@ def upsert(con: sqlite3.Connection, job: Job, status: str | None = None) -> tupl
             if eff_dl:
                 new_exp = min(new_exp, eff_dl)
             still_open = new_exp >= today_str and not (eff_dl and eff_dl < today_str)
+            has_merged_contact = bool(merged.get("apply_url") or merged.get("phones") or merged.get("email"))
             new_status = status if status is not None else (
                 "live" if row["status"] == "expired" and still_open else (
-                    "expired" if row["status"] == "live" and not still_open else row["status"]
+                    ("review" if job.confidence < config.REVIEW_BELOW else "live")
+                    if row["status"] == "rejected" and still_open and has_merged_contact and not job.spam else (
+                        "expired" if row["status"] == "live" and not still_open else row["status"]
+                    )
                 )
             )
         merged_cities_str = "|" + "|".join(merged.get("cities") or []) + "|" if merged.get("cities") else ""

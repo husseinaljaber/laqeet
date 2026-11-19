@@ -3,15 +3,60 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>انشر إعلان شغل · لقيت</title>
+<title>بوابة أصحاب العمل الموثّقين · لقيت</title>
 <meta name="theme-color" content="#0B1C16">
 <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Alexandria:wght@500;600;700;800&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="app.css?v=31">
-<link rel="stylesheet" href="page.css?v=31">
-<script src="ui.js?v=31"></script>
+<link rel="stylesheet" href="app.css?v=32">
+<link rel="stylesheet" href="page.css?v=32">
+<script src="ui.js?v=32"></script>
+<style>
+.emp-tabs{display:inline-flex;gap:4px;padding:4px;border-radius:999px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);margin-top:6px;align-self:flex-start}
+.emp-tab{all:unset;cursor:pointer;display:inline-flex;align-items:center;gap:6px;padding:7px 16px;border-radius:999px;font-size:.86rem;font-weight:700;color:var(--hero-muted);transition:all .2s var(--ease)}
+.emp-tab:hover{color:#fff}
+.emp-tab[aria-selected="true"]{background:var(--mint);color:#051711;box-shadow:0 4px 12px -3px rgba(45,184,138,.45)}
+
+.emp-layout{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(0,.95fr);gap:18px;align-items:start}
+@media (max-width:920px){.emp-layout{grid-template-columns:1fr}}
+.emp-preview-sticky{position:sticky;top:78px;display:flex;flex-direction:column;gap:12px}
+.emp-country-row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.emp-cbtn{
+  all:unset;cursor:pointer;text-align:center;padding:10px 12px;border-radius:11px;font-weight:700;font-size:.9rem;
+  background:var(--surface-subtle);border:1.5px solid var(--line-strong);color:var(--ink);
+  transition:all .18s var(--ease);
+}
+.emp-cbtn[aria-pressed="true"][data-emp-country="sy"]{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
+.emp-cbtn[aria-pressed="true"][data-emp-country="tr"]{background:var(--tr-soft);border-color:var(--tr);color:var(--tr)}
+
+.verify-box{
+  background:var(--amber-bg);border:1px solid rgba(200,138,43,.28);border-radius:12px;
+  padding:13px 15px;display:flex;flex-direction:column;gap:10px;
+}
+.verify-box-head{display:flex;align-items:center;gap:7px;font-weight:700;font-size:.9rem;color:var(--amber)}
+.verify-box p{margin:0;font-size:.83rem;color:var(--ink);line-height:1.6}
+
+.token-result{
+  background:var(--accent-soft);border:1.5px solid var(--accent);border-radius:14px;
+  padding:16px 18px;display:flex;flex-direction:column;gap:10px;
+}
+.token-code-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.token-code{
+  flex:1;min-width:12rem;padding:9px 12px;border-radius:9px;border:1px solid var(--line-strong);
+  background:var(--surface);color:var(--ink);font-family:monospace;font-size:.88rem;direction:ltr;text-align:left;
+}
+
+.manage-status-card{
+  background:var(--surface-subtle);border:1px solid var(--line);border-radius:14px;
+  padding:16px;display:flex;flex-direction:column;gap:10px;
+}
+.saved-tokens-list{display:flex;flex-direction:column;gap:8px}
+.saved-token-item{
+  display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;
+  background:var(--surface-subtle);border:1px solid var(--line);border-radius:11px;padding:10px 13px;
+}
+</style>
 </head>
 <body>
 <nav class="site-nav" aria-label="التنقل الرئيسي">
@@ -42,60 +87,329 @@
 </nav>
 
 <section class="hero slim"><div class="inner">
-  <div class="eyebrow"><a class="link" href="./?view=jobs"><i data-ico="arrow-left" data-ico-cls="ico-sm"></i><span>رجوع للوظائف</span></a></div>
-  <h1>عندك شغل؟ <span class="brand">انشره ببلاش</span></h1>
-  <p class="sub">إعلانك بيوصل للناس يلي شهادتهم ومدينتهم بتناسبه، وبيوصلهم كمان على بوت التلغرام. منراجع كل إعلان قبل ما ينزل (عادة خلال يوم).</p>
+  <div class="eyebrow">
+    <a class="link" href="./?view=jobs"><i data-ico="arrow-left" data-ico-cls="ico-sm"></i><span>رجوع للوظائف</span></a>
+    <span class="trust-pill verified"><i data-ico="badge-check" data-ico-cls="ico-sm"></i><span>شارة صاحب عمل موثّق مجاناً</span></span>
+  </div>
+  <h1>عندك شاغر في سوريا أو تركيا؟ <span class="brand">انشره مجاناً</span></h1>
+  <p class="sub">الإعلانات الموثّقة تحصل على شارة «صاحب عمل موثّق على لقيت» وتصل للباحثين المناسبين حسب المدينة والمؤهل، مع رمز خاص يتيح لك إغلاق الشاغر بضغطة زر فور إتمام التوظيف.</p>
+  <div class="emp-tabs" role="tablist">
+    <button type="button" class="emp-tab" id="tabPost" role="tab" aria-selected="true"><i data-ico="megaphone" data-ico-cls="ico-sm"></i><span>نشر شاغر جديد</span></button>
+    <button type="button" class="emp-tab" id="tabManage" role="tab" aria-selected="false"><i data-ico="clipboard-check" data-ico-cls="ico-sm"></i><span>متابعة وإغلاق إعلاني</span></button>
+  </div>
 </div></section>
+
 <main class="inner page">
-<form class="box" id="f">
-  <h2>تفاصيل الشغل</h2>
-  <div class="cols">
-    <label>المسمى الوظيفي * <input name="title" required maxlength="120" placeholder="مثلاً: كاشير، محاسب، عامل حبكة"></label>
-    <label>اسم المحل أو الشركة * <input name="employer" required maxlength="120"></label>
-    <label>المدينة <select name="city" id="city"><option value="">اختار</option></select></label>
-    <label>الشهادة المطلوبة <select name="education"><option value="">مو مهمة</option><option value="none">بدون شهادة</option><option value="basic">تعليم أساسي</option><option value="secondary">بكالوريا</option><option value="institute">معهد</option><option value="bachelor">جامعة</option><option value="master">ماجستير</option></select></label>
-    <label>نوع الشغل <select name="kind"><option value="quick">سريع (اتصل أو واتساب)</option><option value="formal">رسمي (تقديم وسيرة ذاتية)</option></select></label>
-    <label>سنين الخبرة <input name="experience" inputmode="numeric" placeholder="0"></label>
-    <label>الجنس <select name="gender"><option value="">الجنسين</option><option value="male">شباب</option><option value="female">صبايا</option></select></label>
-    <label>الدوام <input name="shift" placeholder="مثلاً: صباحي 8–4"></label>
-    <label>الراتب <input name="salary" placeholder="اختياري، بس الإعلانات يلي فيها راتب بتجيب ناس أكتر"></label>
-    <label>آخر موعد للتقديم <input name="deadline" type="date"></label>
-  </div>
-  <label>شو المطلوب وشو الشغل (كل نقطة بسطر) <textarea name="details" maxlength="3000"></textarea></label>
-  <h2>كيف الناس بتتواصل معك</h2>
-  <div class="cols">
-    <label>رقم التلفون <input name="phone" inputmode="tel" placeholder="09xxxxxxxx"></label>
-    <label style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" name="whatsapp" checked> واتساب بس</label>
-    <label>أو رابط التقديم <input name="apply_url" type="url" placeholder="https://"></label>
-    <label>أو إيميل <input name="email" type="email"></label>
-  </div>
-  <input class="hp" name="website" tabindex="-1" autocomplete="off" aria-hidden="true">
-  <p class="note" style="color:var(--muted)">ممنوع تطلب مصاري من المتقدمين. أي إعلان بيطلب رسوم أو اشتراك بينرفض.</p>
-  <button class="btn primary" style="align-self:flex-start"><i data-ico="send" data-ico-cls="ico-sm"></i><span>ابعت للمراجعة</span></button>
-  <div id="msg" role="status"></div>
-</form>
+  <!-- PANEL 1: POST NEW JOB -->
+  <section id="panelPost" class="emp-layout">
+    <form class="box" id="f">
+      <h2>1. الدولة والقطاع وتفاصيل الشاغر</h2>
+      <div class="emp-country-row" role="group" aria-label="الدولة">
+        <button type="button" class="emp-cbtn" data-emp-country="sy" aria-pressed="true">🇸🇾 شاغر في سوريا</button>
+        <button type="button" class="emp-cbtn" data-emp-country="tr" aria-pressed="false">🇹🇷 شاغر في تركيا</button>
+      </div>
+      <input type="hidden" name="country" id="countryInput" value="sy">
+
+      <div class="cols">
+        <label>المسمى الوظيفي * <input name="title" required maxlength="120" placeholder="مثلاً: محاسب، كاشير، مصمم غرافيك، عامل حبكة"></label>
+        <label>اسم الشركة / المنظمة / المحل * <input name="employer" required maxlength="120" placeholder="الاسم الرسمي للجهة المعلنة"></label>
+        <label>المدينة / الولاية * <select name="city" id="city"><option value="">اختار المدينة</option></select></label>
+        <label>القطاع <select name="sector" id="sectorSelect">
+          <option value="private">شركات وقطاع خاص</option>
+          <option value="ngo">منظمة دولية / جمعية إنسانية</option>
+          <option value="gov" data-sy-only="1">جهة حكومية / رسمية</option>
+        </select></label>
+        <label>الشهادة المطلوبة <select name="education">
+          <option value="">غير مشترطة / مو مهمة</option>
+          <option value="none">بدون شهادة</option>
+          <option value="basic">تعليم أساسي</option>
+          <option value="secondary">بكالوريا (ثانوي)</option>
+          <option value="institute">معهد تقاني / متوسط</option>
+          <option value="bachelor">إجازة جامعية (بكالوريوس)</option>
+          <option value="master">ماجستير</option>
+        </select></label>
+        <label>طبيعة التقديم <select name="kind">
+          <option value="quick">سريع (تواصل واتساب أو اتصال)</option>
+          <option value="formal">رسمي (سيرة ذاتية / استمارة)</option>
+        </select></label>
+        <label>سنوات الخبرة <input name="experience" inputmode="numeric" placeholder="0"></label>
+        <label>الجنس <select name="gender"><option value="">للجنسين</option><option value="male">ذكور</option><option value="female">إناث</option></select></label>
+        <label>الدوام <input name="shift" placeholder="مثلاً: دوام كامل 9–5"></label>
+        <label>الراتب / الأجر <input name="salary" placeholder="اختياري (الإعلانات براتب واضح تجذب متقدمين أدق)"></label>
+        <label>آخر موعد للتقديم <input name="deadline" type="date"></label>
+      </div>
+      <label>الوصف والمهام والشروط المطلوبة (كل نقطة بسطر) <textarea name="details" maxlength="3000" placeholder="- خبرة عملية في المجال&#10;- الالتزام بمواعيد الدوام&#10;- مقر العمل ومزايا الوظيفة..."></textarea></label>
+
+      <h2>2. طريقة التواصل والتقديم المباشر</h2>
+      <div class="cols">
+        <label>رقم الهاتف / واتساب <input name="phone" id="phoneInput" inputmode="tel" placeholder="09xxxxxxxx"></label>
+        <label style="flex-direction:row;align-items:center;gap:8px;align-self:end;padding-bottom:8px"><input type="checkbox" name="whatsapp" checked> التواصل عبر واتساب</label>
+        <label>أو رابط استمارة / موقع التقديم <input name="apply_url" type="url" placeholder="https://forms.gle/..."></label>
+        <label>أو البريد الإلكتروني لاستلام الـ CV <input name="email" type="email" placeholder="hr@company.com"></label>
+      </div>
+
+      <div class="verify-box">
+        <div class="verify-box-head"><i data-ico="badge-check" data-ico-cls="ico-sm"></i><span>توثيق الجهة — الحصول على شارة «صاحب عمل موثّق على لقيت»</span></div>
+        <p>إضافة رابط الموقع الرسمي للشركة أو صفحتها الموثقة يسرّع مراجعة الإعلان ويمنحه شارة التوثيق الذهبية لزيادة ثقة المتقدمين. (لا يُنشر رقمك الخاص أو ملاحظتك الداخلية للعلن).</p>
+        <div class="cols">
+          <label>الموقع الرسمي أو رابط الشركة (اختياري) <input name="company_url" type="url" placeholder="https://company.com"></label>
+          <label>ملاحظة لفريق المراجعة (اختياري) <input name="contact_note" maxlength="250" placeholder="مثلاً: اسم مسؤول الموارد البشرية"></label>
+        </div>
+      </div>
+
+      <input class="hp" name="website" tabindex="-1" autocomplete="off" aria-hidden="true">
+      <p class="note" style="color:var(--muted)">ممنوع منعاً باتاً طلب أي رسوم أو مبالغ من المتقدمين. أي إعلان مخالف يُرفض تلقائياً.</p>
+      <button class="btn primary" style="align-self:flex-start"><i data-ico="send" data-ico-cls="ico-sm"></i><span>إرسال للمراجعة والحصول على رمز الإدارة</span></button>
+      <div id="msg" role="status"></div>
+      <div id="tokenResult" class="token-result" hidden></div>
+    </form>
+
+    <!-- Live Preview Column -->
+    <aside class="emp-preview-sticky" aria-label="معاينة بطاقة الإعلان">
+      <div class="box" style="gap:10px">
+        <h2 style="display:flex;align-items:center;gap:7px;font-size:1rem"><i data-ico="eye" data-ico-cls="ico-sm"></i><span>معاينة حية لبطاقة إعلانك على لقيت</span></h2>
+        <article class="card" id="livePreviewCard" style="--edge:var(--exp-low);margin:0"></article>
+        <p style="margin:0;font-size:.78rem;color:var(--muted);line-height:1.6">بعد اعتماد الإعلان سيظهر بهذه البطاقة الأنيقة مع شارة <b>«صاحب عمل موثّق على لقيت»</b>.</p>
+      </div>
+    </aside>
+  </section>
+
+  <!-- PANEL 2: MANAGE / CLOSE EXISTING JOB -->
+  <section id="panelManage" hidden>
+    <div class="box">
+      <h2 style="display:flex;align-items:center;gap:7px"><i data-ico="clipboard-check" data-ico-cls="ico-sm"></i><span>متابعة حالة شاغرك أو إغلاقه فور التوظيف</span></h2>
+      <p style="margin:0;color:var(--muted);font-size:.9rem">أدخل رمز الإدارة الخاص الذي حصلت عليه عند نشر الإعلان لتعرف حالته فوراً أو تغلقه بضغطة زر بمجرد العثور على الموظف المناسب.</p>
+      <div class="row">
+        <input id="manageTokenInput" type="text" placeholder="أدخل رمز المتابعة والإدارة هنا..." style="flex:1;min-width:14rem;direction:ltr;text-align:left">
+        <button type="button" class="btn primary" id="checkTokenBtn"><i data-ico="search" data-ico-cls="ico-sm"></i><span>فحص حالة الشاغر</span></button>
+      </div>
+      <div id="manageOut" hidden></div>
+    </div>
+
+    <div class="box" id="savedTokensBox" hidden>
+      <h2>إعلاناتك المحفوظة على هذا الجهاز</h2>
+      <div class="saved-tokens-list" id="savedTokensList"></div>
+    </div>
+  </section>
 </main>
+
 <script>
-const f = document.getElementById('f'), msg = document.getElementById('msg');
-fetch('/api/meta').then(r => r.json()).then(m => {
-  const sel = document.getElementById('city');
-  (m.cities || []).forEach(c => sel.append(new Option(c, c)));
-});
-f.addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const body = Object.fromEntries(new FormData(f)); body.whatsapp = f.whatsapp.checked;
-  const r = await fetch('/api/employer/jobs', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)});
-  const d = await r.json().catch(() => ({}));
-  if (r.ok) {
-    msg.className = 'ok';
-    const checkIco = (window.LaqeetUI && window.LaqeetUI.iconHtml) ? window.LaqeetUI.iconHtml('check-circle', 'ico-sm') : '';
-    msg.innerHTML = `<span style="display:inline-flex;align-items:center;gap:6px">${checkIco}<span>وصل إعلانك بنجاح، منراجعه وبينزل خلال يوم. شكراً!</span></span>`;
-    f.reset();
-  } else {
-    msg.className = 'err';
-    msg.textContent = d.detail || 'ما زبط، جرّب كمان مرة';
+(function () {
+  const SY_CITIES = ['دمشق','ريف دمشق','حلب','حمص','حماة','اللاذقية','طرطوس','إدلب','درعا','السويداء','القنيطرة','دير الزور','الحسكة','الرقة'];
+  const TR_CITIES = ['إسطنبول','غازي عنتاب','مرسين','أنقرة','بورصة','هاتاي (أنطاكيا)','إزمير','قونيا','شانلي أورفا','أضنة','قيصري','كليس','طرابزون','أنطاليا','قوجه إيلي','ساكاريا','سامسون'];
+  const TOKENS_KEY = 'laqeet.employer_tokens';
+  const f = document.getElementById('f');
+  const msg = document.getElementById('msg');
+  const tokenResult = document.getElementById('tokenResult');
+  const citySel = document.getElementById('city');
+  const countryIn = document.getElementById('countryInput');
+  const phoneIn = document.getElementById('phoneInput');
+  const secSel = document.getElementById('sectorSelect');
+  const previewCard = document.getElementById('livePreviewCard');
+  let syCities = SY_CITIES.slice();
+  const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  const icoHtml = (name) => (window.LaqeetUI && window.LaqeetUI.iconHtml) ? window.LaqeetUI.iconHtml(name, 'ico-sm') : '';
+
+  function loadTokens() {
+    try { return JSON.parse(localStorage.getItem(TOKENS_KEY) || '[]') || []; } catch (_) { return []; }
   }
-});
+  function saveTokenItem(item) {
+    const arr = loadTokens().filter((x) => x.token !== item.token);
+    arr.unshift(item);
+    try { localStorage.setItem(TOKENS_KEY, JSON.stringify(arr.slice(0, 15))); } catch (_) {}
+    renderSavedTokens();
+  }
+
+  function setCountry(c) {
+    const isTr = c === 'tr';
+    countryIn.value = isTr ? 'tr' : 'sy';
+    document.querySelectorAll('[data-emp-country]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.empCountry === countryIn.value)));
+    const list = isTr ? TR_CITIES : syCities;
+    citySel.replaceChildren(new Option(isTr ? 'اختار الولاية التركية' : 'اختار المحافظة السورية', ''), ...list.map((x) => new Option(x, x)));
+    phoneIn.placeholder = isTr ? '05xxxxxxxxx' : '09xxxxxxxx';
+    secSel.querySelectorAll('[data-sy-only]').forEach((opt) => { opt.hidden = isTr; });
+    if (isTr && secSel.value === 'gov') secSel.value = 'private';
+    renderPreview();
+  }
+
+  document.querySelectorAll('[data-emp-country]').forEach((b) => {
+    b.addEventListener('click', () => setCountry(b.dataset.empCountry));
+  });
+
+  function renderPreview() {
+    const fd = new FormData(f);
+    const title = (fd.get('title') || '').trim() || 'مسمى الشاغر الوظيفي';
+    const emp = (fd.get('employer') || '').trim() || 'اسم شركتك أو جهتك';
+    const city = (fd.get('city') || '').trim() || (countryIn.value === 'tr' ? 'إسطنبول' : 'دمشق');
+    const sec = fd.get('sector') || 'private';
+    const secLbl = sec === 'gov' ? 'قطاع حكومي' : sec === 'ngo' ? 'منظمات وهيئات' : 'قطاع خاص';
+    const secIco = sec === 'gov' ? 'landmark' : sec === 'ngo' ? 'handshake' : 'building';
+    const salary = (fd.get('salary') || '').trim();
+    const details = (fd.get('details') || '').trim().split('\n').filter(Boolean).slice(0, 2).join(' · ');
+    const dl = (fd.get('deadline') || '').trim();
+    const today = new Date().toISOString().slice(0, 10);
+    previewCard.innerHTML = `
+      <div class="top">
+        <span class="sec-tag sec-${sec}">${icoHtml(secIco)}<span>${secLbl}</span></span>
+        <span class="status new">جديد اليوم</span>
+      </div>
+      <span class="card-verified-chip">${icoHtml('badge-check')}<span>صاحب عمل موثّق على لقيت</span></span>
+      <div class="card-dates">
+        <span class="card-date-item">${icoHtml('calendar')}<span>تاريخ النشر: ${today}</span></span>
+        ${dl ? `<span class="card-date-item is-dl">${icoHtml('hourglass')}<span>آخر موعد: ${esc(dl)}</span></span>` : ''}
+      </div>
+      <h3 style="margin:0;font-family:var(--font-display);font-size:1.05rem">${esc(title)}</h3>
+      <div class="card-org-loc">
+        <span class="card-org">${icoHtml(secIco)}<span>الجهة: ${esc(emp)}</span></span>
+        <span class="card-loc">${icoHtml('map-pin')}<span>المدينة: ${esc(city)}</span></span>
+      </div>
+      ${details ? `<p class="card-desc">${esc(details)}</p>` : ''}
+      ${salary ? `<div class="badges"><span class="b">${icoHtml('coins')}<span>الأجر: ${esc(salary)}</span></span></div>` : ''}
+    `;
+  }
+
+  f.addEventListener('input', renderPreview);
+  f.addEventListener('change', renderPreview);
+
+  setCountry('sy');
+  fetch('/api/meta').then((r) => r.json()).then((m) => {
+    if (m && m.cities && m.cities.length) {
+      syCities = m.cities;
+      if (countryIn.value === 'sy' && !citySel.value) setCountry('sy');
+    }
+  }).catch(() => {});
+
+  f.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    msg.textContent = '';
+    tokenResult.hidden = true;
+    const body = Object.fromEntries(new FormData(f));
+    body.whatsapp = f.whatsapp.checked;
+    const r = await fetch('/api/employer/jobs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const d = await r.json().catch(() => ({}));
+    if (r.ok && d.manage_token) {
+      const manageUrl = `${location.origin}${location.pathname}?token=${encodeURIComponent(d.manage_token)}`;
+      saveTokenItem({ token: d.manage_token, title: body.title, employer: body.employer, created: new Date().toISOString().slice(0, 10) });
+      tokenResult.hidden = false;
+      tokenResult.innerHTML = `
+        <div style="display:flex;align-items:center;gap:8px;font-weight:700;color:var(--accent)">${icoHtml('check-circle')}<span>تم استلام إعلانك بنجاح وهو الآن قيد المراجعة للتوثيق!</span></div>
+        <p style="margin:0;font-size:.86rem;color:var(--ink)">احتفظ بهذا الرمز الخاص (أو الرابط) لتتمكن من متابعة حالة النشر وإغلاق الشاغر فور إتمام التوظيف:</p>
+        <div class="token-code-row">
+          <input class="token-code" readonly value="${esc(d.manage_token)}" onclick="this.select()">
+          <button type="button" class="btn primary" id="copyTokBtn" style="padding:8px 14px;font-size:.82rem">${icoHtml('copy')}<span>نسخ الرمز</span></button>
+          <button type="button" class="btn ghost" id="copyTokUrlBtn" style="padding:8px 14px;font-size:.82rem">${icoHtml('link')}<span>نسخ رابط الإدارة</span></button>
+        </div>
+      `;
+      document.getElementById('copyTokBtn').addEventListener('click', () => {
+        navigator.clipboard && navigator.clipboard.writeText(d.manage_token);
+        document.getElementById('copyTokBtn').lastChild.textContent = 'تم النسخ ✓';
+      });
+      document.getElementById('copyTokUrlBtn').addEventListener('click', () => {
+        navigator.clipboard && navigator.clipboard.writeText(manageUrl);
+        document.getElementById('copyTokUrlBtn').lastChild.textContent = 'تم النسخ ✓';
+      });
+      f.reset();
+      setCountry(body.country || 'sy');
+    } else {
+      msg.className = 'err';
+      msg.textContent = d.detail || 'تعذر إرسال الإعلان، تأكد من الحقول المطلوبة وحاول مجدداً.';
+    }
+  });
+
+  // Tab switching (Post vs Manage)
+  const tabPost = document.getElementById('tabPost');
+  const tabManage = document.getElementById('tabManage');
+  const panelPost = document.getElementById('panelPost');
+  const panelManage = document.getElementById('panelManage');
+  function switchTab(which) {
+    const isManage = which === 'manage';
+    tabPost.setAttribute('aria-selected', String(!isManage));
+    tabManage.setAttribute('aria-selected', String(isManage));
+    panelPost.hidden = isManage;
+    panelManage.hidden = !isManage;
+  }
+  tabPost.addEventListener('click', () => switchTab('post'));
+  tabManage.addEventListener('click', () => switchTab('manage'));
+
+  // Self-service Manage / Close flow
+  const tokIn = document.getElementById('manageTokenInput');
+  const manageOut = document.getElementById('manageOut');
+  const STATUS_AR = {
+    review: ['بانتظار المراجعة والتوثيق', 'verified'],
+    live: ['منشور ومتاح للمتقدمين الآن', 'ngo'],
+    expired: ['مغلق — تم التوظيف / منتهي', 'gov'],
+    rejected: ['مرفوض لعدم مطابقة شروط النشر', '']
+  };
+
+  async function inspectToken(rawTok) {
+    const tok = (rawTok || tokIn.value || '').trim();
+    if (!tok) return;
+    tokIn.value = tok;
+    manageOut.hidden = false;
+    manageOut.innerHTML = '<p style="color:var(--muted);margin:0">جاري التحقق من حالة الشاغر...</p>';
+    const r = await fetch('/api/employer/manage/' + encodeURIComponent(tok));
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      manageOut.innerHTML = `<p class="err" style="margin:0">${esc(d.detail || 'لم يتم العثور على شاغر بهذا الرمز.')}</p>`;
+      return;
+    }
+    const [stLbl, stCls] = STATUS_AR[d.status] || [d.status, ''];
+    const canClose = d.status === 'live' || d.status === 'review';
+    manageOut.innerHTML = `
+      <div class="manage-status-card">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+          <h3 style="margin:0;font-family:var(--font-display)">${esc(d.title)}</h3>
+          <span class="trust-pill ${stCls}">${icoHtml(d.status === 'live' ? 'badge-check' : 'clock')}<span>${stLbl}</span></span>
+        </div>
+        <div style="font-size:.86rem;color:var(--muted);display:flex;flex-wrap:wrap;gap:8px 16px">
+          <span>الجهة: <b>${esc(d.employer)}</b></span>
+          <span>الدولة: <b>${d.country === 'tr' ? 'تركيا 🇹🇷' : 'سوريا 🇸🇾'}</b></span>
+          ${d.cities && d.cities.length ? `<span>المدينة: <b>${esc(d.cities.join('، '))}</b></span>` : ''}
+          ${d.verified ? `<span style="color:var(--accent);font-weight:700">✓ موثّق بشارة لقيت</span>` : ''}
+        </div>
+        <div class="row" style="margin-top:4px">
+          ${d.public_url ? `<a class="btn ghost" href="${esc(d.public_url)}" target="_blank" rel="noopener">${icoHtml('external-link')}<span>عرض الإعلان المنشور</span></a>` : ''}
+          ${canClose ? `<button type="button" class="btn" id="closeJobNowBtn" style="background:var(--exp-high);color:#fff;border-color:var(--exp-high)">${icoHtml('check-circle')}<span>إغلاق الشاغر فوراً (تم التوظيف)</span></button>` : ''}
+        </div>
+      </div>
+    `;
+    const closeBtn = document.getElementById('closeJobNowBtn');
+    if (closeBtn) {
+      closeBtn.addEventListener('click', async () => {
+        if (!confirm('هل تريد إغلاق هذا الشاغر وإزالته فوراً من قائمة الوظائف المفتوحة؟')) return;
+        const cr = await fetch(`/api/employer/manage/${encodeURIComponent(tok)}/close`, { method: 'POST' });
+        if (cr.ok) inspectToken(tok);
+      });
+    }
+  }
+
+  document.getElementById('checkTokenBtn').addEventListener('click', () => inspectToken());
+  tokIn.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); inspectToken(); } });
+
+  function renderSavedTokens() {
+    const items = loadTokens();
+    const box = document.getElementById('savedTokensBox');
+    const list = document.getElementById('savedTokensList');
+    if (!items.length) { box.hidden = true; return; }
+    box.hidden = false;
+    list.innerHTML = items.map((it) => `
+      <div class="saved-token-item">
+        <div><b>${esc(it.title)}</b> <small style="color:var(--muted)">· ${esc(it.employer)} (${esc(it.created)})</small></div>
+        <button type="button" class="btn ghost" style="padding:5px 12px;font-size:.8rem" data-open-tok="${esc(it.token)}">فحص / إغلاق</button>
+      </div>
+    `).join('');
+    list.querySelectorAll('[data-open-tok]').forEach((b) => {
+      b.addEventListener('click', () => inspectToken(b.dataset.openTok));
+    });
+  }
+  renderSavedTokens();
+
+  const urlTok = new URLSearchParams(location.search).get('token');
+  if (urlTok) {
+    switchTab('manage');
+    inspectToken(urlTok);
+  }
+})();
 </script>
 </body>
 </html>

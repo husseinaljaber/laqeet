@@ -3,42 +3,112 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>سيرتي الذاتية · لقيت</title>
+<title>سيرتي الذاتية الاحترافية (ATS) · لقيت</title>
 <meta name="theme-color" content="#0B1C16">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Alexandria:wght@500;600;700;800&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="app.css?v=31">
-<script src="ui.js?v=31"></script>
+<link rel="stylesheet" href="app.css?v=32">
+<script src="ui.js?v=32"></script>
 <style>
-.cvwrap{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);gap:18px;padding-block:20px 44px}
-@media (max-width:860px){.cvwrap{grid-template-columns:1fr}}
+.cv-toolbar{
+  display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;
+  background:var(--surface);border:1px solid var(--line);border-radius:var(--r);
+  padding:13px 16px;margin-top:18px;box-shadow:var(--shadow-sm);
+}
+.cv-seg-group{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.cv-seg-label{font-size:.8rem;font-weight:700;color:var(--muted)}
+.cv-seg{display:inline-flex;padding:3px;border-radius:999px;background:var(--surface-subtle);border:1px solid var(--line);gap:3px}
+.cv-seg button{
+  all:unset;cursor:pointer;padding:6px 13px;border-radius:999px;font-size:.82rem;font-weight:700;
+  color:var(--muted);transition:all .18s var(--ease);
+}
+.cv-seg button:hover{color:var(--ink)}
+.cv-seg button[aria-pressed="true"]{background:var(--accent);color:#fff;box-shadow:0 3px 10px -3px rgba(11,107,83,.45)}
+:root[data-theme="dark"] .cv-seg button[aria-pressed="true"]{color:#051711}
+
+main.inner.cvwrap{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);gap:20px;padding-block:16px 46px;align-items:start}
+@media (max-width:900px){main.inner.cvwrap{grid-template-columns:1fr}}
 .form{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:18px;display:flex;flex-direction:column;gap:12px;box-shadow:var(--shadow-sm)}
-.form label{display:flex;flex-direction:column;gap:5px;font-size:.86rem;font-weight:500;color:var(--muted);min-width:0}
+.form label{display:flex;flex-direction:column;gap:5px;font-size:.85rem;font-weight:600;color:var(--muted);min-width:0}
 .form input,.form textarea,.form select{font:inherit;color:var(--ink);background:var(--surface-subtle);border:1px solid var(--line-strong);border-radius:10px;padding:9px 12px;width:100%;min-width:0;transition:border-color .18s,background .18s,box-shadow .18s}
 .form input:focus,.form textarea:focus,.form select:focus{background:var(--surface);border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft);outline:none}
-.form textarea{min-height:5.5rem;resize:vertical}
+.form textarea{min-height:5.2rem;resize:vertical}
 .two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 @media (max-width:560px){.two{grid-template-columns:1fr}.paper{padding:20px 18px;min-height:auto}}
-.need{background:var(--accent-soft);border:1px solid rgba(11,107,83,.2);border-radius:var(--r-sm);padding:13px 15px;font-size:.9rem}
-.need h3{margin:0 0 6px;font-family:var(--font-display);font-size:1rem;color:var(--ink)}
-.need li.hit{color:var(--accent);font-weight:600}
+
+.ats-card{
+  background:var(--surface-subtle);border:1px solid var(--line);border-radius:12px;
+  padding:13px 15px;display:flex;flex-direction:column;gap:8px;
+}
+.ats-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.ats-title{display:inline-flex;align-items:center;gap:6px;font-weight:700;font-size:.88rem;color:var(--ink)}
+.ats-score{font-family:var(--font-display);font-weight:800;font-size:1rem;color:var(--accent);font-variant-numeric:tabular-nums}
+.ats-track{height:8px;border-radius:999px;background:var(--surface);border:1px solid var(--line);overflow:hidden}
+.ats-fill{height:100%;width:0;border-radius:999px;background:linear-gradient(270deg,var(--accent),var(--mint));transition:width .4s var(--ease)}
+.ats-tips{display:flex;flex-wrap:wrap;gap:6px}
+.ats-tip{font-size:.75rem;padding:3px 9px;border-radius:999px;background:var(--surface);border:1px solid var(--line);color:var(--muted);font-weight:600}
+.ats-tip.ok{background:var(--accent-soft);color:var(--accent);border-color:transparent}
+
+.need{background:var(--accent-soft);border:1px solid rgba(11,107,83,.2);border-radius:var(--r-sm);padding:13px 15px;font-size:.88rem}
+.need h3{margin:0 0 6px;font-family:var(--font-display);font-size:.98rem;color:var(--ink)}
+.need li.hit{color:var(--accent);font-weight:700}
 .need li.hit::marker{content:"✓ "}
-.paper{background:#fff;color:#12211B;border-radius:10px;border:1px solid var(--line);box-shadow:var(--shadow-md);padding:34px 36px;min-height:60rem;font-size:14px;line-height:1.72}
-.paper h1{font-family:var(--font-display);font-size:2rem;margin:0;color:#0B1C16}
-.paper .role{color:#0B6B53;font-weight:600;margin:2px 0 8px}
+
+/* Paper Preview + 3 ATS Templates */
+.paper-wrap{position:sticky;top:76px;display:flex;flex-direction:column;gap:10px}
+.paper-meta{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:.8rem;color:var(--muted);padding-inline:4px}
+.paper{
+  background:#fff;color:#12211B;border-radius:10px;border:1px solid var(--line);
+  box-shadow:var(--shadow-md);padding:34px 36px;min-height:56rem;
+  font-size:14px;line-height:1.72;
+}
+.paper[dir="ltr"]{font-family:"IBM Plex Sans Arabic","Segoe UI",system-ui,sans-serif;text-align:left}
+.paper h1{font-family:var(--font-display);font-size:1.95rem;margin:0;color:#0B1C16;line-height:1.25}
+.paper .role{color:#0B6B53;font-weight:700;font-size:1.02rem;margin:3px 0 8px}
 .paper .contact{display:flex;flex-wrap:wrap;gap:4px 16px;color:#475751;font-size:.85rem;border-bottom:2px solid #2DB88A;padding-bottom:10px}
-.paper h2{font-family:var(--font-display);font-size:1.05rem;color:#0B1C16;margin:16px 0 5px;border-inline-start:4px solid #2DB88A;padding-inline-start:8px}
+.paper h2{font-family:var(--font-display);font-size:1.02rem;color:#0B1C16;margin:16px 0 5px;border-inline-start:4px solid #2DB88A;padding-inline-start:8px;text-transform:none}
 .paper p,.paper ul{margin:0}
-.paper ul{padding-inline-start:20px}
+.paper ul{padding-inline-start:20px;display:flex;flex-direction:column;gap:3px}
 .paper mark{background:#E3F3ED;color:inherit;padding:0 3px;border-radius:4px}
-.bar2{display:flex;gap:10px;flex-wrap:wrap;margin-top:4px}
-.bar2 .btn{border:1px solid var(--line-strong);color:var(--ink);background:var(--surface)}
-.bar2 .btn.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
-.bar2 .btn.primary:hover{background:var(--accent-hover)}
-@media print{body{background:#fff}.site-nav,.hero,.form,.bar2,.need,footer{display:none!important}.cvwrap{display:block;padding:0}.paper{box-shadow:none;border:none;padding:0;min-height:0}@page{margin:14mm}}
+
+/* Template 1: ATS Classic (clean black/charcoal lines, zero graphics) */
+.paper.tpl-classic{padding:36px 40px;font-size:13.8px}
+.paper.tpl-classic h1{color:#111;font-size:1.85rem;text-align:center}
+.paper.tpl-classic .role{color:#333;text-align:center;font-weight:600}
+.paper.tpl-classic .contact{justify-content:center;border-bottom:1.5px solid #222;color:#333;padding-bottom:10px}
+.paper.tpl-classic h2{color:#111;border-inline-start:none;padding-inline-start:0;border-bottom:1px solid #C8CECB;padding-bottom:4px;margin-top:16px;letter-spacing:.01em}
+
+/* Template 2: Modern Laqeet (velvet emerald header band) */
+.paper.tpl-modern{padding:0;overflow:hidden}
+.paper.tpl-modern .paper-head-band{background:#0B1C16;color:#EEF5F2;padding:26px 34px 22px}
+.paper.tpl-modern .paper-head-band h1{color:#fff}
+.paper.tpl-modern .paper-head-band .role{color:#34C796}
+.paper.tpl-modern .paper-head-band .contact{border-bottom:none;padding-bottom:0;color:#B8CCC3;margin-top:8px}
+.paper.tpl-modern .paper-body-band{padding:20px 34px 34px}
+
+/* Template 3: Compact Executive (high density for 1-page A4) */
+.paper.tpl-compact{padding:24px 28px;font-size:13px;line-height:1.56}
+.paper.tpl-compact h1{font-size:1.65rem}
+.paper.tpl-compact h2{margin:11px 0 3px;font-size:.94rem;border-inline-start-width:3px}
+.paper.tpl-compact .contact{padding-bottom:7px;font-size:.8rem}
+
+.bar2{display:flex;gap:8px;flex-wrap:wrap;margin-top:4px}
+.bar2 .btn{padding:9px 15px;font-size:.84rem}
+.privacy-note{display:inline-flex;align-items:center;gap:6px;font-size:.78rem;color:var(--muted)}
+
+@media print{
+  body{background:#fff}
+  .site-nav,.hero,.cv-toolbar,.form,.bar2,.need,.paper-meta,footer{display:none!important}
+  .cvwrap{display:block;padding:0}
+  .paper-wrap{position:static}
+  .paper{box-shadow:none;border:none;padding:0;min-height:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .paper.tpl-modern .paper-head-band{padding:20px 24px}
+  .paper.tpl-modern .paper-body-band{padding:16px 24px}
+  @page{margin:12mm}
+}
 </style>
 </head>
 <body>
@@ -70,69 +140,247 @@
 </nav>
 
 <section class="hero slim"><div class="inner">
-  <div class="eyebrow"><a class="link" href="./?view=jobs"><i data-ico="arrow-left" data-ico-cls="ico-sm"></i><span>رجوع للوظائف</span></a></div>
-  <h1><span class="brand">لقيت</span> سيرتك الذاتية بدقيقتين</h1>
-  <p class="sub">عبّي المعلومات، وشوف السيرة جاهزة أمامك. اطبعها أو احفظها PDF من زر «اطبع». كل شي بيضل على جهازك فقط وما منبعت شي لأي جهة.</p>
+  <div class="eyebrow">
+    <a class="link" href="./?view=jobs"><i data-ico="arrow-left" data-ico-cls="ico-sm"></i><span>رجوع للوظائف</span></a>
+    <span class="trust-pill ngo"><i data-ico="lock" data-ico-cls="ico-sm"></i><span>خصوصية 100% — محفوظ على جهازك فقط</span></span>
+  </div>
+  <h1><span class="brand">منشئ السيرة الذاتية</span> المتوافق مع أنظمة الـ ATS</h1>
+  <p class="sub">صمّم سيرتك بالعربية أو الإنجليزية (للمنظمات الدولية والشركات) بثلاثة قوالب احترافية جاهزة للحفظ كـ PDF مع فحص فوري لجاهزية السيرة ومطابقة مهارات الشاغر.</p>
 </div></section>
+
+<div class="inner">
+  <div class="cv-toolbar" role="region" aria-label="إعدادات اللغة والقالب">
+    <div class="cv-seg-group">
+      <span class="cv-seg-label">لغة السيرة:</span>
+      <div class="cv-seg" id="langSwitch">
+        <button type="button" data-cv-lang="ar" aria-pressed="true">العربية (RTL)</button>
+        <button type="button" data-cv-lang="en" aria-pressed="false">English (ATS · NGOs)</button>
+      </div>
+    </div>
+    <div class="cv-seg-group">
+      <span class="cv-seg-label">القالب:</span>
+      <div class="cv-seg" id="tplSwitch">
+        <button type="button" data-cv-tpl="classic" aria-pressed="true">كلاسيكي ATS</button>
+        <button type="button" data-cv-tpl="modern" aria-pressed="false">عصري زمردي</button>
+        <button type="button" data-cv-tpl="compact" aria-pressed="false">تنفيذي مكثّف</button>
+      </div>
+    </div>
+    <div class="cv-seg-group">
+      <button type="button" class="btn primary" id="printTop" style="padding:8px 16px;font-size:.84rem"><i data-ico="download" data-ico-cls="ico-sm"></i><span>حفظ PDF / طباعة</span></button>
+    </div>
+  </div>
+</div>
 
 <main class="inner cvwrap">
   <div class="form" id="form">
+    <div class="ats-card" aria-live="polite">
+      <div class="ats-head">
+        <span class="ats-title"><i data-ico="award" data-ico-cls="ico-sm"></i><span>مؤشر جاهزية السيرة للـ ATS</span></span>
+        <span class="ats-score" id="atsScore">0%</span>
+      </div>
+      <div class="ats-track"><div class="ats-fill" id="atsFill"></div></div>
+      <div class="ats-tips" id="atsTips"></div>
+    </div>
+
     <div class="need" id="need" hidden></div>
-    <label>الاسم الكامل <input name="name" autocomplete="name"></label>
-    <label>المسمى يلي بدك تقدّم عليه <input name="role" placeholder="مثلاً: محاسب، فني شبكات، كاشير"></label>
+
+    <label><span data-lbl="name">الاسم الكامل</span><input name="name" autocomplete="name" placeholder="مثال: أحمد محمد العلي"></label>
+    <label><span data-lbl="role">المسمى الوظيفي المستهدف</span><input name="role" placeholder="مثال: محاسب مالي، مهندس شبكات، منسق مشاريع"></label>
     <div class="two">
-      <label>رقم التلفون <input name="phone" inputmode="tel" autocomplete="tel"></label>
-      <label>الإيميل <input name="email" type="email" autocomplete="email"></label>
+      <label><span data-lbl="phone">رقم الهاتف / واتساب</span><input name="phone" inputmode="tel" autocomplete="tel" placeholder="09xxxxxxxx / 05xxxxxxxx"></label>
+      <label><span data-lbl="email">البريد الإلكتروني</span><input name="email" type="email" autocomplete="email" placeholder="name@email.com"></label>
     </div>
     <div class="two">
-      <label>المدينة <input name="city"></label>
-      <label>سنة الميلاد <input name="born" inputmode="numeric"></label>
+      <label><span data-lbl="city">المدينة / الإقامة</span><input name="city" placeholder="دمشق · إسطنبول"></label>
+      <label><span data-lbl="born">سنة الميلاد (اختياري)</span><input name="born" inputmode="numeric" placeholder="1997"></label>
     </div>
-    <label>نبذة عنك (سطرين) <textarea name="about" placeholder="مثلاً: خريج معهد حاسوب، عندي خبرة سنتين بصيانة الشبكات، ملتزم وبحب الشغل الجماعي."></textarea></label>
-    <label>الشهادة والتعليم <textarea name="education" placeholder="كل شهادة بسطر: إجازة في الهندسة المعلوماتية، جامعة دمشق، 2022"></textarea></label>
-    <label>الخبرات <textarea name="experience" placeholder="كل خبرة بسطر: محاسب، شركة كذا، 2023–2025، شو كنت تعمل"></textarea></label>
-    <label>المهارات (افصل بينها بفاصلة) <textarea name="skills" placeholder="Excel، محاسبة، خدمة زبائن، صيانة حواسيب"></textarea></label>
-    <label>اللغات <input name="langs" placeholder="العربية (أم)، الإنكليزية (جيد)"></label>
-    <label>دورات وشهادات <textarea name="courses" placeholder="كل دورة بسطر"></textarea></label>
+    <label><span data-lbl="about">الملخص المهني (2–3 أسطر واضحة)</span><textarea name="about" placeholder="مثال: محاسب بخبرة 3 سنوات في إدارة الحسابات وإعداد التقارير المالية باستخدام Excel والأمين..."></textarea></label>
+    <label><span data-lbl="education">التعليم والشهادات الأكاديمية (كل شهادة بسطر)</span><textarea name="education" placeholder="إجازة في الاقتصاد — جامعة دمشق (2022)"></textarea></label>
+    <label><span data-lbl="experience">الخبرات العملية (كل وظيفة بسطر: المسمى، الجهة، المدة، الإنجاز)</span><textarea name="experience" placeholder="محاسب — شركة النور التجارية (2023–2025) — إدارة الفواتير والمطابقات البنكية الشهرية"></textarea></label>
+    <label><span data-lbl="skills">المهارات الأساسية (افصل بينها بفاصلة)</span><textarea name="skills" placeholder="Excel متقدم، برنامج الأمين، إعداد الميزانيات، العمل الجماعي"></textarea></label>
+    <label><span data-lbl="langs">اللغات</span><input name="langs" placeholder="العربية (اللغة الأم)، الإنجليزية (جيد جداً)، التركية (متوسط)"></label>
+    <label><span data-lbl="courses">الدورات والشهادات التدريبية (كل دورة بسطر)</span><textarea name="courses" placeholder="دورة الإدارة المالية للمنظمات غير الربحية — 2024"></textarea></label>
+
     <div class="bar2">
-      <button class="btn primary" id="print"><i data-ico="file-text" data-ico-cls="ico-sm"></i><span>اطبع أو احفظ PDF</span></button>
-      <button class="btn" id="clear">امسح كلشي</button>
+      <button type="button" class="btn primary" id="print"><i data-ico="download" data-ico-cls="ico-sm"></i><span>حفظ PDF / طباعة</span></button>
+      <button type="button" class="btn ghost" id="exportJson"><i data-ico="copy" data-ico-cls="ico-sm"></i><span>نسخة احتياطية (JSON)</span></button>
+      <button type="button" class="btn ghost" id="importJsonBtn"><i data-ico="upload" data-ico-cls="ico-sm"></i><span>استعادة نسخة</span></button>
+      <input type="file" id="importJsonFile" accept="application/json" hidden>
+      <button type="button" class="btn ghost" id="clear" style="color:var(--exp-high)"><i data-ico="trash" data-ico-cls="ico-sm"></i><span>مسح الحقول</span></button>
     </div>
+    <span class="privacy-note"><i data-ico="lock" data-ico-cls="ico-sm"></i><span>تُحفظ بياناتك تلقائياً في متصفحك فقط ولا يتم رفعها لأي خادم.</span></span>
   </div>
-  <article class="paper" id="paper" aria-label="معاينة السيرة الذاتية"></article>
+
+  <div class="paper-wrap">
+    <div class="paper-meta">
+      <span style="display:inline-flex;align-items:center;gap:6px"><i data-ico="eye" data-ico-cls="ico-sm"></i><span>معاينة حية لصفحة الطباعة (A4)</span></span>
+      <span id="tplMetaLabel">قالب كلاسيكي متوافق مع الـ ATS</span>
+    </div>
+    <article class="paper tpl-classic" id="paper" aria-label="معاينة السيرة الذاتية"></article>
+  </div>
 </main>
 
 <script>
 (function () {
-  const KEY = 'laqeet.cv', form = document.getElementById('form'), paper = document.getElementById('paper');
-  let data = {}; try { data = JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) {}
+  const KEY = 'laqeet.cv';
+  const PREF_KEY = 'laqeet.cv.prefs';
+  const form = document.getElementById('form');
+  const paper = document.getElementById('paper');
+  let data = {};
+  let prefs = { lang: 'ar', tpl: 'classic' };
+  try { data = JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) {}
+  try { prefs = Object.assign(prefs, JSON.parse(localStorage.getItem(PREF_KEY)) || {}); } catch (e) {}
   let wanted = [];
+
+  const I18N = {
+    ar: {
+      dir: 'rtl',
+      fallbackName: 'اسمك الكامل هنا',
+      bornPrefix: 'مواليد ',
+      sec: { about: 'الملخص المهني', education: 'التعليم والشهادات', experience: 'الخبرات العملية', skills: 'المهارات الأساسية', langs: 'اللغات', courses: 'الدورات والشهادات التدريبية' },
+      tplNames: { classic: 'قالب كلاسيكي متوافق مع الـ ATS', modern: 'قالب عصري زمردي', compact: 'قالب تنفيذي مكثّف لصفحة واحدة' }
+    },
+    en: {
+      dir: 'ltr',
+      fallbackName: 'Your Full Name',
+      bornPrefix: 'Born ',
+      sec: { about: 'Professional Summary', education: 'Education', experience: 'Work Experience', skills: 'Core Skills', langs: 'Languages', courses: 'Certifications & Training' },
+      tplNames: { classic: 'Classic ATS-Friendly Template', modern: 'Modern Emerald Template', compact: 'Compact 1-Page Executive' }
+    }
+  };
+
   const fold = (s) => String(s || '').toLowerCase().replace(/[ً-ْ]/g, '').replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي').replace(/ؤ/g, 'و').replace(/ئ/g, 'ي');
   const esc = (s) => String(s || '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const lines = (s) => String(s || '').split('\n').map((x) => x.trim()).filter(Boolean);
   const skills = () => String(data.skills || '').split(/[،,\n]/).map((x) => x.trim()).filter(Boolean);
   const words = (s) => fold(s).split(/[^\p{L}\p{N}+#]+/u).map((w) => (w.length > 4 && w.startsWith('ال') ? w.slice(2) : w)).filter((w) => w.length >= 3);
-  const hits = (req) => { const r = new Set(words(req)); return skills().some((s) => words(s).some((w) => r.has(w))); };
+  const hits = (req) => { const r = new Set(words(req)); return skills().some((s) => words(s).some((w) => r.has(w))) || words(data.experience + ' ' + data.about).some((w) => r.has(w)); };
   const mark = (s) => wanted.length && wanted.some((req) => words(req).some((w) => words(s).includes(w))) ? `<mark>${esc(s)}</mark>` : esc(s);
 
-  function render() {
-    const sec = (t, html) => html ? `<h2>${t}</h2>${html}` : '';
-    const ul = (xs) => xs.length ? `<ul>${xs.map((x) => `<li>${mark(x)}</li>`).join('')}</ul>` : '';
-    paper.innerHTML = `<h1>${esc(data.name) || 'اسمك هون'}</h1><div class="role">${esc(data.role)}</div>
-      <div class="contact">${[data.phone, data.email, data.city, data.born && 'مواليد ' + data.born].filter(Boolean).map(esc).map((x) => `<span>${x}</span>`).join('')}</div>
-      ${sec('نبذة', data.about ? `<p>${esc(data.about)}</p>` : '')}
-      ${sec('التعليم', ul(lines(data.education)))}${sec('الخبرات', ul(lines(data.experience)))}
-      ${sec('المهارات', skills().length ? `<p>${skills().map(mark).join(' · ')}</p>` : '')}
-      ${sec('اللغات', data.langs ? `<p>${esc(data.langs)}</p>` : '')}${sec('دورات وشهادات', ul(lines(data.courses)))}`;
-    const need = document.getElementById('need');
-    if (wanted.length) need.querySelectorAll('li').forEach((li) => li.classList.toggle('hit', hits(li.dataset.req)));
+  function savePrefs() {
+    try { localStorage.setItem(PREF_KEY, JSON.stringify(prefs)); } catch (e) {}
   }
+
+  function computeAts() {
+    const checks = [
+      { ok: (data.name || '').trim().length >= 4 && (data.role || '').trim().length >= 3, pts: 18, lbl: 'الاسم والمسمى' },
+      { ok: Boolean((data.phone || '').trim() && (data.email || '').trim()), pts: 16, lbl: 'الهاتف والإيميل' },
+      { ok: (data.about || '').trim().length >= 35, pts: 16, lbl: 'ملخص مهني واضح' },
+      { ok: lines(data.education).length >= 1, pts: 15, lbl: 'التعليم والشهادة' },
+      { ok: lines(data.experience).length >= 1, pts: 20, lbl: 'خبرات عملية' },
+      { ok: skills().length >= 4, pts: 15, lbl: '4+ مهارات مفتاحية' }
+    ];
+    const score = checks.reduce((sum, c) => sum + (c.ok ? c.pts : 0), 0);
+    document.getElementById('atsScore').textContent = score + '%';
+    document.getElementById('atsFill').style.width = score + '%';
+    document.getElementById('atsTips').innerHTML = checks.map((c) =>
+      `<span class="ats-tip${c.ok ? ' ok' : ''}">${c.ok ? '✓ ' : '+ '}${c.lbl}</span>`
+    ).join('');
+  }
+
+  function render() {
+    const lang = prefs.lang === 'en' ? 'en' : 'ar';
+    const tpl = ['classic', 'modern', 'compact'].includes(prefs.tpl) ? prefs.tpl : 'classic';
+    const t = I18N[lang];
+    paper.dir = t.dir;
+    paper.className = 'paper tpl-' + tpl;
+    document.getElementById('tplMetaLabel').textContent = t.tplNames[tpl];
+
+    document.querySelectorAll('[data-cv-lang]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.cvLang === lang)));
+    document.querySelectorAll('[data-cv-tpl]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.cvTpl === tpl)));
+
+    const sec = (title, html) => html ? `<h2>${title}</h2>${html}` : '';
+    const ul = (xs) => xs.length ? `<ul>${xs.map((x) => `<li>${mark(x)}</li>`).join('')}</ul>` : '';
+    const headHtml = `<h1>${esc(data.name) || t.fallbackName}</h1>` +
+      (data.role ? `<div class="role">${esc(data.role)}</div>` : '') +
+      `<div class="contact">${[data.phone, data.email, data.city, data.born && (t.bornPrefix + data.born)].filter(Boolean).map(esc).map((x) => `<span>${x}</span>`).join('')}</div>`;
+    const bodyHtml =
+      sec(t.sec.about, data.about ? `<p>${esc(data.about)}</p>` : '') +
+      sec(t.sec.education, ul(lines(data.education))) +
+      sec(t.sec.experience, ul(lines(data.experience))) +
+      sec(t.sec.skills, skills().length ? `<p>${skills().map(mark).join(' · ')}</p>` : '') +
+      sec(t.sec.langs, data.langs ? `<p>${esc(data.langs)}</p>` : '') +
+      sec(t.sec.courses, ul(lines(data.courses)));
+
+    if (tpl === 'modern') {
+      paper.innerHTML = `<div class="paper-head-band">${headHtml}</div><div class="paper-body-band">${bodyHtml}</div>`;
+    } else {
+      paper.innerHTML = headHtml + bodyHtml;
+    }
+
+    const need = document.getElementById('need');
+    if (wanted.length) {
+      let hitCount = 0;
+      need.querySelectorAll('li').forEach((li) => {
+        const isHit = hits(li.dataset.req);
+        if (isHit) hitCount += 1;
+        li.classList.toggle('hit', isHit);
+      });
+      const hitBadge = need.querySelector('.need-hit-badge');
+      if (hitBadge) hitBadge.textContent = `مطابقة ${hitCount} من ${Math.min(wanted.length, 10)} مهارة`;
+    }
+    computeAts();
+  }
+
+  document.querySelectorAll('[data-cv-lang]').forEach((b) => {
+    b.addEventListener('click', () => { prefs.lang = b.dataset.cvLang; savePrefs(); render(); });
+  });
+  document.querySelectorAll('[data-cv-tpl]').forEach((b) => {
+    b.addEventListener('click', () => { prefs.tpl = b.dataset.cvTpl; savePrefs(); render(); });
+  });
+
   form.querySelectorAll('[name]').forEach((f) => {
     f.value = data[f.name] || '';
-    f.addEventListener('input', () => { data[f.name] = f.value; try { localStorage.setItem(KEY, JSON.stringify(data)); } catch (e) {} render(); });
+    f.addEventListener('input', () => {
+      data[f.name] = f.value;
+      try { localStorage.setItem(KEY, JSON.stringify(data)); } catch (e) {}
+      render();
+    });
   });
-  document.getElementById('print').addEventListener('click', () => window.print());
-  document.getElementById('clear').addEventListener('click', () => { if (confirm('أكيد بدك تمسح كل المعلومات؟')) { data = {}; try { localStorage.removeItem(KEY); } catch (e) {} form.querySelectorAll('[name]').forEach((f) => { f.value = ''; }); render(); } });
+
+  const doPrint = () => window.print();
+  document.getElementById('print').addEventListener('click', doPrint);
+  document.getElementById('printTop').addEventListener('click', doPrint);
+  document.getElementById('clear').addEventListener('click', () => {
+    if (confirm('أكيد بدك تمسح كل معلومات السيرة الذاتية؟')) {
+      data = {};
+      try { localStorage.removeItem(KEY); } catch (e) {}
+      form.querySelectorAll('[name]').forEach((f) => { f.value = ''; });
+      render();
+    }
+  });
+
+  document.getElementById('exportJson').addEventListener('click', () => {
+    const blob = new Blob([JSON.stringify({ data, prefs }, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'laqeet-cv-backup.json';
+    a.click();
+  });
+  const fileIn = document.getElementById('importJsonFile');
+  document.getElementById('importJsonBtn').addEventListener('click', () => fileIn.click());
+  fileIn.addEventListener('change', () => {
+    const file = fileIn.files && fileIn.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const parsed = JSON.parse(String(reader.result || '{}'));
+        const nextData = parsed.data || parsed;
+        if (nextData && typeof nextData === 'object') {
+          data = nextData;
+          if (parsed.prefs) prefs = Object.assign(prefs, parsed.prefs);
+          try { localStorage.setItem(KEY, JSON.stringify(data)); } catch (e) {}
+          savePrefs();
+          form.querySelectorAll('[name]').forEach((f) => { f.value = data[f.name] || ''; });
+          render();
+        }
+      } catch (_) {
+        alert('ملف النسخة الاحتياطية غير صالح.');
+      }
+    };
+    reader.readAsText(file);
+  });
 
   const id = new URLSearchParams(location.search).get('job');
   if (id) fetch('/api/jobs/' + encodeURIComponent(id)).then((r) => r.ok ? r.json() : null).then((j) => {
@@ -140,9 +388,10 @@
     wanted = [...(j.skills || []), ...(j.tasks || []), j.specialty].filter(Boolean);
     const need = document.getElementById('need');
     need.hidden = false;
-    need.innerHTML = `<h3>عم تجهّز سيرتك لـ«${esc(j.title)}»</h3><p>هي شو بيطلبوا. يلي عليه ✓ موجود بمهاراتك، والباقي حاول تذكره إذا عندك ياه:</p>` +
-      (wanted.length ? `<ul>${wanted.slice(0, 10).map((w) => `<li data-req="${esc(w)}">${esc(w)}</li>`).join('')}</ul>` : '<p>الإعلان ما فيه تفاصيل مهارات.</p>');
+    need.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><h3>عم تجهّز سيرتك لـ«${esc(j.title)}»</h3><span class="trust-pill ngo need-hit-badge"></span></div><p style="margin:4px 0 6px;color:var(--muted)">هي المهارات المطلوبة في الشاغر. يلي عليه ✓ موجود بسيرتك:</p>` +
+      (wanted.length ? `<ul style="margin:0;padding-inline-start:18px">${wanted.slice(0, 10).map((w) => `<li data-req="${esc(w)}">${esc(w)}</li>`).join('')}</ul>` : '<p>الإعلان ما فيه تفاصيل مهارات محددة.</p>');
     if (!data.role) { data.role = j.title; form.querySelector('[name=role]').value = j.title; try { localStorage.setItem(KEY, JSON.stringify(data)); } catch (e) {} }
+    if (/[A-Za-z]{4,}/.test(j.title || '') && j.sector === 'ngo') { prefs.lang = 'en'; savePrefs(); }
     render();
   }).catch(() => {});
   render();

@@ -8,6 +8,7 @@ import ipaddress
 import json
 import logging
 import os
+import secrets
 import threading
 import time
 from collections import Counter, defaultdict
@@ -406,6 +407,7 @@ def stats(country: str | None = None):
             "open_tr": tr_sum["open"],
             "city_counts_tr": tr_sum["city_counts"],
             "by_country": {"sy": sy_sum, "tr": tr_sum},
+            "trust": db.trust_metrics(con),
             "updated_at": updated,
         }
         _stats_cache[key] = (time.time(), out)
@@ -429,10 +431,11 @@ def employer_post(request: Request, body: dict = Body(...)):
         raise HTTPException(429, "وصلت للحد اليومي")
     _post_times[ip] = recent + [time.time()]
     clip = lambda k, n=200: (str(body.get(k) or "").strip()[:n] or None)
-    title, employer, phone = clip("title", 120), clip("employer", 120), clip("phone", 20)
+    country = "tr" if clip("country", 4) == "tr" else "sy"
+    title, employer, phone = clip("title", 120), clip("employer", 120), clip("phone", 24)
     apply_url = da.strip_tracking(clip("apply_url", 300) or "") or None
     email = clip("email", 120)
-    parsed_phones = tx.phones(phone or "")
+    parsed_phones = tx.phones_tr(phone or "") if country == "tr" else tx.phones(phone or "")
     if not title or not employer or not (phone or apply_url or email):
         raise HTTPException(400, "لازم المسمى واسم الجهة وطريقة تقديم (رقم تلفون أو رابط أو إيميل)")
     if apply_url and (da.is_disallowed_offline_url(apply_url) or da.is_strict_portal_wrapper(apply_url) or da.is_shortener(apply_url)):
@@ -440,32 +443,98 @@ def employer_post(request: Request, body: dict = Body(...)):
     if email and "@" not in email:
         raise HTTPException(400, "صيغة الإيميل غير صحيحة")
     if not (parsed_phones or apply_url or email):
-        raise HTTPException(400, "رقم التلفون لازم يكون رقم سوري صحيح (يبدأ بـ 09)")
+        msg = "رقم التلفون لازم يكون رقم تركي صحيح (يبدأ بـ 05)" if country == "tr" else "رقم التلفون لازم يكون رقم سوري صحيح (يبدأ بـ 09)"
+        raise HTTPException(400, msg)
     deadline = clip("deadline", 10)
     if deadline:
         try:
             date.fromisoformat(deadline)
         except ValueError:
             raise HTTPException(400, "تاريخ الانتهاء لازم يكون YYYY-MM-DD")
-    city = clip("city", 30)
+    city = clip("city", 40)
+    valid_cities = tx.TR_CITIES if country == "tr" else tx.CITIES
     edu = body.get("education") if body.get("education") in tx.EDU_RANK else None
     text = clip("details", 3000) or ""
+    company_url = clip("company_url", 250)
+    contact_note = clip("contact_note", 300)
+    note_parts = [p for p in (company_url, contact_note) if p]
+    sec_hint = clip("sector", 16)
+    if country == "tr" and sec_hint == "gov":
+        sec_hint = "private"
     job = Job(title=title, source="employer", post_url=config.PUBLIC_URL, posted_at=db.now(), employer=employer,
-              cities=[city] if city in tx.CITIES else [], education=edu, education_from="stated" if edu else "unknown",
+              cities=[city] if city in valid_cities else [], education=edu, education_from="stated" if edu else "unknown",
               kind="quick" if body.get("kind") == "quick" else "formal", deadline=deadline,
               salary=clip("salary", 60), shift=clip("shift", 60), apply_url=apply_url,
               phones=parsed_phones, whatsapp=bool(body.get("whatsapp")), email=email,
               experience=int(body["experience"]) if str(body.get("experience") or "").isdigit() else None,
               gender=body.get("gender") if body.get("gender") in ("male", "female") else None,
-              country="sy",
+              country=country,
               tasks=[l.strip("-• ") for l in text.splitlines() if l.strip()][:8], raw=text)
     job.field = tx.field_from_text(title, text)
-    job.sector = tx.infer_sector(False, job.field, job.employer, text, hint=body.get("sector"))
+    job.sector = tx.infer_sector(False, job.field, job.employer, text, hint=sec_hint, country=country)
     da.resolve_job_apply(job, client=None)
     jid, _ = db.upsert(con, job, status="review")
     con.execute("UPDATE job_sources SET post_url=? WHERE job_id=? AND source='employer'", (f"{config.PUBLIC_URL}/#job-{jid}", jid))
+    manage_token = secrets.token_urlsafe(18)
+    con.execute(
+        "INSERT INTO employer_tokens (token, job_id, verified, contact_note, created_at) VALUES (?,?,?,?,?)",
+        (manage_token, jid, 0, " | ".join(note_parts) if note_parts else None, db.now()),
+    )
     con.commit()
-    return {"ok": True, "id": jid}
+    return {"ok": True, "id": jid, "manage_token": manage_token, "status": "review"}
+
+
+@app.get("/api/employer/manage/{token}")
+def employer_manage_status(token: str):
+    """Self-service status check for an employer's submitted job using their private management code."""
+    tok = (token or "").strip()
+    if len(tok) < 12:
+        raise HTTPException(404, "رمز المتابعة غير صحيح")
+    row = con.execute(
+        "SELECT t.job_id, t.verified, t.created_at, t.closed_at, j.title, j.country, j.sector, j.cities, j.deadline, j.posted_at, j.status, j.data "
+        "FROM employer_tokens t JOIN jobs j ON j.id = t.job_id WHERE t.token=?",
+        (tok,),
+    ).fetchone()
+    if not row:
+        raise HTTPException(404, "لم يتم العثور على شاغر بهذا الرمز")
+    d = json.loads(row["data"])
+    return {
+        "ok": True,
+        "id": row["job_id"],
+        "title": row["title"],
+        "employer": d.get("employer") or "",
+        "country": row["country"],
+        "sector": row["sector"],
+        "cities": [c for c in (row["cities"] or "").split("|") if c],
+        "deadline": row["deadline"],
+        "posted_at": row["posted_at"],
+        "status": row["status"],
+        "verified": bool(row["verified"] or row["status"] == "live"),
+        "closed_at": row["closed_at"],
+        "public_url": f"/j/{row['job_id']}" if row["status"] == "live" else None,
+    }
+
+
+@app.post("/api/employer/manage/{token}/close")
+def employer_manage_close(token: str):
+    """Allow the employer who posted a job to close/mark it filled immediately."""
+    tok = (token or "").strip()
+    if len(tok) < 12:
+        raise HTTPException(404, "رمز المتابعة غير صحيح")
+    row = con.execute(
+        "SELECT t.job_id, j.status FROM employer_tokens t JOIN jobs j ON j.id = t.job_id WHERE t.token=?",
+        (tok,),
+    ).fetchone()
+    if not row:
+        raise HTTPException(404, "لم يتم العثور على شاغر بهذا الرمز")
+    closed_at = db.now()
+    yesterday = (date.today() - timedelta(days=1)).isoformat()
+    con.execute("UPDATE jobs SET status='expired', expires_on=?, updated_at=? WHERE id=?", (yesterday, closed_at, row["job_id"]))
+    con.execute("UPDATE employer_tokens SET closed_at=? WHERE token=?", (closed_at, tok))
+    db.sync_fts(con, row["job_id"])
+    con.commit()
+    _stats_cache.clear()
+    return {"ok": True, "id": row["job_id"], "status": "expired", "closed_at": closed_at}
 
 
 def _admin(token: str | None):
@@ -494,6 +563,8 @@ def admin_decide(job_id: int, body: dict = Body(...), x_admin_token: str | None 
         raise HTTPException(400)
     con.execute("UPDATE jobs SET status=?, reports=CASE WHEN ?='live' THEN 0 ELSE reports END, first_seen=CASE WHEN source='employer' AND ?='live' THEN ? ELSE first_seen END WHERE id=?",
                 (status, status, status, db.now(), job_id))
+    if status == "live":
+        con.execute("UPDATE employer_tokens SET verified=1 WHERE job_id=?", (job_id,))
     db.sync_fts(con, job_id)
     con.commit()
     _stats_cache.clear()
@@ -665,6 +736,12 @@ def job_page(job_id: int, request: Request):
     official_srcs = [s for s in (j.get("sources") or []) if s.get("official_public")]
     srcs_html = " · ".join(f'<a target="_blank" rel="noopener" href="{e(s["post_url"])}">{e(s["label"])}</a>' for s in official_srcs)
     src_note_html = f'<p class="note" style="color:var(--muted)">المصدر: {srcs_html}</p>' if srcs_html else ""
+    trust_map = {
+        "gov": '<span class="trust-pill gov"><i data-ico="shield-check" data-ico-cls="ico-sm"></i><span>جهة حكومية رسمية موثّقة</span></span>',
+        "ngo": '<span class="trust-pill ngo"><i data-ico="shield-check" data-ico-cls="ico-sm"></i><span>منظمة دولية / إنسانية موثّقة</span></span>',
+        "verified_employer": '<span class="trust-pill verified"><i data-ico="badge-check" data-ico-cls="ico-sm"></i><span>صاحب عمل موثّق على لقيت</span></span>',
+    }
+    trust_badge_html = trust_map.get(j.get("trust_tier") or "", "")
     return HTMLResponse(f"""<!doctype html>
 <html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>{e(j['title'])} · {e(config.SITE_NAME)}</title>
@@ -679,8 +756,8 @@ def job_page(job_id: int, request: Request):
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Alexandria:wght@500;600;700;800&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="/app.css?v=31"><link rel="stylesheet" href="/page.css?v=31">
-<script src="/ui.js?v=31"></script>
+<link rel="stylesheet" href="/app.css?v=32"><link rel="stylesheet" href="/page.css?v=32">
+<script src="/ui.js?v=32"></script>
 </head><body>
 <nav class="site-nav" aria-label="التنقل الرئيسي">
   <div class="inner site-nav-inner">
@@ -709,7 +786,7 @@ def job_page(job_id: int, request: Request):
   </div>
 </nav>
 <section class="hero slim"><div class="inner">
-  <div class="eyebrow"><a class="link" href="/?view=jobs"><i data-ico="arrow-left" data-ico-cls="ico-sm"></i><span>كل الوظائف على {e(config.SITE_NAME)}</span></a></div>
+  <div class="eyebrow"><a class="link" href="/?view=jobs"><i data-ico="arrow-left" data-ico-cls="ico-sm"></i><span>كل الوظائف على {e(config.SITE_NAME)}</span></a>{trust_badge_html}</div>
   <h1>{e(j['title'])}</h1>
   <p class="sub">{e(desc)}</p>
 </div></section>

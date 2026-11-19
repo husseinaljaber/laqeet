@@ -12,8 +12,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Alexandria:wght@500;600;700;800&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="app.css?v=31">
-<script src="ui.js?v=31"></script>
+<link rel="stylesheet" href="app.css?v=32">
+<script src="ui.js?v=32"></script>
 </head>
 <body>
 <a class="skip" href="#board">انتقل للوظائف</a>
@@ -347,6 +347,47 @@
       </div>
     </section>
 
+    <!-- SECTION 2.5: LIVE TRANSPARENCY & TRUST INDEX -->
+    <section class="lp-section" id="lpTrustSection" aria-labelledby="lpTrustHeading">
+      <div class="lp-sec-head">
+        <span class="lp-sec-eyebrow"><i data-ico="shield-check" data-ico-cls="ico-sm"></i> ركائز الثقة والشفافية</span>
+        <h2 id="lpTrustHeading">مؤشر الثقة والشفافية الحي على «لقيت»</h2>
+        <p>أرقام حقيقية ومباشرة من محرك التدقيق والتنقية: كل إعلان يُفحص تلقائياً لدمج المكرر وإزالة المنتهي وحماية الباحثين عن عمل.</p>
+      </div>
+
+      <div class="lp-trust-shell">
+        <div class="lp-trust-grid">
+          <div class="lp-trust-metric">
+            <div class="lp-trust-metric-top"><i data-ico="activity"></i><span class="trust-pill ngo">فحص مستمر</span></div>
+            <b data-trust-stat="scanned_total">0</b>
+            <span>إعلان ومصدر تم رصده وفحصه</span>
+          </div>
+          <div class="lp-trust-metric">
+            <div class="lp-trust-metric-top"><i data-ico="layers"></i><span class="trust-pill ngo">بدون تكرار</span></div>
+            <b data-trust-stat="duplicates_merged">0</b>
+            <span>إعلان مكرر تم دمجه في بطاقة واحدة نظيفة</span>
+          </div>
+          <div class="lp-trust-metric">
+            <div class="lp-trust-metric-top"><i data-ico="hourglass"></i><span class="trust-pill verified">دائماً محدّث</span></div>
+            <b data-trust-stat="expired_filtered">0</b>
+            <span>إعلان منتهي أُزيل تلقائياً من النتائج</span>
+          </div>
+          <div class="lp-trust-metric">
+            <div class="lp-trust-metric-top"><i data-ico="badge-check"></i><span class="trust-pill gov">مصادر رسمية</span></div>
+            <b data-trust-stat="official_verified">0</b>
+            <span>شاغر حكومي ومنظمات دولية موثّق حالياً</span>
+          </div>
+        </div>
+        <div class="lp-trust-foot">
+          <span style="display:inline-flex;align-items:center;gap:6px"><i data-ico="shield-check" data-ico-cls="ico-sm"></i><span>التوظيف عبر لقيت مجاني 100% دائماً — نمنع أي إعلان يطلب رسوماً أو عمولات.</span></span>
+          <div class="lp-trust-actions">
+            <a href="scam.html" class="btn ghost" style="padding:7px 14px;font-size:.82rem"><i data-ico="shield-alert" data-ico-cls="ico-sm"></i><span>افحص إعلاناً في رادار النصب</span></a>
+            <a href="employer.html" class="btn primary" style="padding:7px 14px;font-size:.82rem"><i data-ico="badge-check" data-ico-cls="ico-sm"></i><span>انشر كصاحب عمل موثّق</span></a>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <!-- SECTION 3: LAQEET SMART CAREER ECOSYSTEM TOOLS -->
     <section class="lp-section" aria-labelledby="lpToolsHeading">
       <div class="lp-sec-head">
@@ -560,7 +601,7 @@
       <!-- Action Toggles -->
       <div class="row options-row">
         <button class="chip" id="newToday" aria-pressed="false"><i data-ico="sparkles" data-ico-cls="ico-sm"></i><span>جديد اليوم</span></button>
-        <button class="chip" id="savedOnly" aria-pressed="false"><i data-ico="bookmark" data-ico-cls="ico-sm"></i><span>المحفوظة (<span id="savedCount">0</span>)</span></button>
+        <button class="chip" id="savedOnly" aria-pressed="false"><i data-ico="clipboard-check" data-ico-cls="ico-sm"></i><span>تقديماتي ومحفوظاتي (<span id="savedCount">0</span>)</span></button>
         <label class="toggle">
           <input id="lower" type="checkbox" checked> ورجيني أيضاً شواغر تطلب مؤهل أقل أو بدون تحديد شهادة
         </label>
@@ -594,6 +635,7 @@
       <div id="activeFilterPills" class="active-pills"></div>
     </div>
     <div id="typoBanner" class="typo-banner" hidden></div>
+    <div id="trackerBar" class="tracker-bar" hidden></div>
 
     <!-- Job Cards Grid -->
     <div class="grid" id="grid"></div>
@@ -674,6 +716,6 @@
 
 <div class="toast" id="toast" role="status" hidden></div>
 
-<script src="app.js?v=31" defer></script>
+<script src="app.js?v=32" defer></script>
 </body>
 </html>

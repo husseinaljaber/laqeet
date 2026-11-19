@@ -9,9 +9,9 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Alexandria:wght@500;600;700;800&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="app.css?v=31">
-<link rel="stylesheet" href="page.css?v=31">
-<script src="ui.js?v=31"></script>
+<link rel="stylesheet" href="app.css?v=32">
+<link rel="stylesheet" href="page.css?v=32">
+<script src="ui.js?v=32"></script>
 </head>
 <body>
 <nav class="site-nav" aria-label="التنقل الرئيسي">
@@ -42,15 +42,21 @@
 </nav>
 
 <section class="hero slim"><div class="inner">
-  <div class="eyebrow"><a class="link" href="./?view=jobs"><i data-ico="arrow-left" data-ico-cls="ico-sm"></i><span>رجوع للوظائف</span></a></div>
+  <div class="eyebrow">
+    <a class="link" href="./?view=jobs"><i data-ico="arrow-left" data-ico-cls="ico-sm"></i><span>رجوع للوظائف</span></a>
+    <div class="board-country-switch" role="tablist" aria-label="اختيار سوق البلد">
+      <button type="button" class="board-country-btn active" data-pulse-country="sy" data-board-country="sy" aria-selected="true">🇸🇾 سوق سوريا</button>
+      <button type="button" class="board-country-btn" data-pulse-country="tr" data-board-country="tr" aria-selected="false">🇹🇷 سوق تركيا</button>
+    </div>
+  </div>
   <h1><span class="brand">نبض السوق</span> شو مطلوب هلأ؟</h1>
-  <p class="sub">من كل الإعلانات يلي جمعناها في سوريا بآخر 6 شهور. اختار المدينة والشهادة لتشوف شو بيطلبوا ناس متلك، وشو عم يزيد وشو عم ينقص.</p>
+  <p class="sub">إحصائيات حية من كل الإعلانات الموثقة بآخر 6 شهور. اختار البلد والمدينة والشهادة لتشوف شو بيطلبوا ناس متلك، وشو عم يزيد وشو عم ينقص.</p>
   <div class="row"><select id="city"><option value="">كل المدن والمحافظات</option></select><select id="edu"><option value="">كل الشهادات</option></select></div>
 </div></section>
 <main class="inner page">
   <div class="box" style="border-color:var(--mint)">
-    <h2 style="display:flex;align-items:center;gap:8px"><i data-ico="bar-chart" data-ico-cls="ico-sm"></i><span>ملخص نبض السوق في سوريا</span></h2>
-    <p style="margin:0;color:var(--muted);font-size:.9rem">اختار محافظتك وشهادتك فوق لتشوف فوراً قديش في فرص مفتوحة إلك هلأ وشو أكتر شي مطلوب بمدينتك.</p>
+    <h2 style="display:flex;align-items:center;gap:8px"><i data-ico="bar-chart" data-ico-cls="ico-sm"></i><span id="pulseSummaryTitle">ملخص نبض السوق في سوريا</span></h2>
+    <p style="margin:0;color:var(--muted);font-size:.9rem">اختار محافظتك أو ولايتك وشهادتك فوق لتشوف فوراً قديش في فرص مفتوحة إلك هلأ وشو أكتر شي مطلوب.</p>
     <div id="bridge" style="display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;font-weight:600"></div>
   </div>
   <div class="count" id="total"></div>
@@ -67,23 +73,29 @@
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const MONTHS = ['كانون 2','شباط','آذار','نيسان','أيار','حزيران','تموز','آب','أيلول','تشرين 1','تشرين 2','كانون 1'];
+const TR_CITIES = ['إسطنبول','غازي عنتاب','مرسين','أنقرة','بورصة','هاتاي (أنطاكيا)','إزمير','قونيا','شانلي أورفا','أضنة','قيصري','كليس','طرابزون','أنطاليا','قوجه إيلي','ساكاريا','سامسون'];
 const bars = (rows, label, n) => { const max = Math.max(1, ...rows.map(n)); return rows.map(r => `<div class="hbar"><span>${esc(label(r))}</span><span class="t"><span class="f" style="width:${n(r)/max*100}%"></span></span><span class="n">${n(r)}</span></div>`).join(''); };
 let META = null;
+let curCountry = 'sy';
+
 function fillCities() {
   const sel = $('city'), prev = sel.value;
-  const list = (META && META.cities) || [];
-  sel.replaceChildren(new Option('كل المدن والمحافظات', ''), ...list.map(x => new Option(x, x)));
+  const list = curCountry === 'tr' ? TR_CITIES : ((META && META.cities) || []);
+  sel.replaceChildren(new Option(curCountry === 'tr' ? 'كل الولايات والمدن التركية' : 'كل المدن والمحافظات السورية', ''), ...list.map(x => new Option(x, x)));
   if (list.includes(prev)) sel.value = prev;
+  else sel.value = '';
 }
 async function load() {
   const p = new URLSearchParams();
+  p.set('country', curCountry);
   if ($('city').value) p.set('city', $('city').value);
   if ($('edu').value) p.set('edu', $('edu').value);
+  $('pulseSummaryTitle').textContent = curCountry === 'tr' ? 'ملخص نبض السوق في تركيا 🇹🇷' : 'ملخص نبض السوق في سوريا 🇸🇾';
   const d = await (await fetch('/api/pulse?' + p)).json();
   $('total').textContent = `${d.total} إعلان بآخر 6 شهور · الأشهر: ${d.months.map(m => MONTHS[+m.slice(5) - 1]).join('، ')}`;
-  const cName = $('city').value || 'سوريا';
+  const cName = $('city').value || (curCountry === 'tr' ? 'تركيا' : 'سوريا');
   const topTitle = d.titles[0] ? ` · أكتر مسمى مطلوب: «${esc(d.titles[0].title)}»` : '';
-  const browseUrl = './?view=jobs' + (p.toString() ? '&' + p.toString() : '');
+  const browseUrl = './?view=jobs&' + p.toString();
   $('bridge').innerHTML = `<span class="ok">${d.open_now} فرصة مفتوحة هلأ في ${esc(cName)}</span><span>· ${d.remote_open} فرصة عن بعد / أونلاين</span><span>${topTitle}</span><a class="btn primary" style="padding:7px 15px;font-size:.85rem;margin-inline-start:auto" href="${browseUrl}">تصفح الفرص هلأ</a>`;
   const vsLabel = d.pace_day ? `عن أول ${d.pace_day} يوم بالشهر الماضي` : 'عن الشهر الماضي';
   $('fields').innerHTML = d.fields.map(f => { const max = Math.max(1, ...f.series);
@@ -95,6 +107,18 @@ async function load() {
   const ex = {'0-2':'حتى سنتين','3-4':'3–4 سنين','5+':'5 وأكتر','unknown':'مو مذكورة'};
   $('exp').innerHTML = bars(Object.entries(d.experience).map(([k, v]) => ({k, v})), r => ex[r.k], r => r.v);
 }
+document.querySelectorAll('[data-pulse-country]').forEach((b) => {
+  b.addEventListener('click', () => {
+    curCountry = b.dataset.pulseCountry === 'tr' ? 'tr' : 'sy';
+    document.querySelectorAll('[data-pulse-country]').forEach((x) => {
+      const act = x.dataset.pulseCountry === curCountry;
+      x.classList.toggle('active', act);
+      x.setAttribute('aria-selected', String(act));
+    });
+    fillCities();
+    load();
+  });
+});
 fetch('/api/meta').then(r => r.json()).then(m => { META = m; fillCities(); m.education.forEach(e => $('edu').append(new Option(e.label, e.code))); });
 $('city').addEventListener('change', load); $('edu').addEventListener('change', load); load();
 </script>

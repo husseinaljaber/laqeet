@@ -496,3 +496,61 @@ def test_cloudflare_email_footer_ignore_and_new_portals():
         assert len(jis_jobs) == 2
         assert jis_jobs[0].employer == "شركة الأمل" and "0933112233" in jis_jobs[0].phones
         assert jis_jobs[1].employer == "جمعية جذور" and jis_jobs[1].apply_url == "https://forms.gle/jisForm2"
+
+
+def test_phase2_employer_self_manage_verified_badge_and_trust_metrics():
+    # Submit a Turkey employer job and receive a self-service management token
+    r = client.post("/api/employer/jobs", json={
+        "country": "tr",
+        "title": "مصمم غرافيك إسطنبول",
+        "employer": "استوديو الفجر للتصميم",
+        "city": "إسطنبول",
+        "phone": "05341112233",
+        "whatsapp": True,
+        "education": "bachelor",
+        "kind": "formal",
+        "sector": "private",
+        "company_url": "https://fajrstudio.example.com",
+        "details": "تصميم هوية بصرية ومحتوى سوشال ميديا",
+    })
+    assert r.status_code == 200
+    data = r.json()
+    jid = data["id"]
+    token = data["manage_token"]
+    assert token and len(token) >= 16 and data["status"] == "review"
+
+    # Unknown token returns 404
+    assert client.get("/api/employer/manage/invalid-short").status_code == 404
+    assert client.get("/api/employer/manage/unknown_token_123456").status_code == 404
+
+    # Status check before approval shows 'review'
+    st_before = client.get(f"/api/employer/manage/{token}").json()
+    assert st_before["status"] == "review" and st_before["public_url"] is None and st_before["country"] == "tr"
+
+    # Admin approves -> job goes live with verified_employer=True & trust_tier='verified_employer'
+    h = {"X-Admin-Token": "test-token"}
+    assert client.post(f"/api/admin/jobs/{jid}", json={"action": "approve"}, headers=h).status_code == 200
+    live_job = client.get(f"/api/jobs/{jid}").json()
+    assert live_job["verified_employer"] is True
+    assert live_job["trust_tier"] == "verified_employer"
+    assert "صاحب عمل موثّق على لقيت" in client.get(f"/j/{jid}").text
+
+    st_live = client.get(f"/api/employer/manage/{token}").json()
+    assert st_live["status"] == "live" and st_live["verified"] is True and st_live["public_url"] == f"/j/{jid}"
+
+    # /api/stats returns live trust telemetry
+    st_stats = client.get("/api/stats").json()
+    assert "trust" in st_stats
+    trust = st_stats["trust"]
+    assert trust["open_total"] >= 1
+    assert trust["verified_employers"] >= 1
+    assert trust["scanned_total"] >= trust["open_total"]
+    assert isinstance(trust["duplicates_merged"], int) and trust["duplicates_merged"] >= 0
+
+    # Employer immediately closes/marks filled via self-service token
+    cl = client.post(f"/api/employer/manage/{token}/close")
+    assert cl.status_code == 200 and cl.json()["status"] == "expired"
+    assert client.get("/api/jobs", params={"country": "tr", "q": "غرافيك"}).json()["total"] == 0
+    st_closed = client.get(f"/api/employer/manage/{token}").json()
+    assert st_closed["status"] == "expired" and st_closed["closed_at"] is not None
+

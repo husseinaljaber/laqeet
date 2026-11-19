@@ -5,7 +5,16 @@
   const PAGE = 30;
   const PROFILE_KEY = 'laqeet.profile';
   const SAVED_KEY = 'laqeet.saved';
+  const TRACKER_KEY = 'laqeet.tracker';
   const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  const TRACKER_STAGES = [
+    { code: 'saved', label: 'محفوظة', ico: 'bookmark-filled', cls: 'st-saved' },
+    { code: 'applied', label: 'قدّمت عليها', ico: 'send', cls: 'st-applied' },
+    { code: 'interview', label: 'مقابلة', ico: 'calendar', cls: 'st-interview' },
+    { code: 'offered', label: 'عرض عمل', ico: 'award', cls: 'st-offered' }
+  ];
+  const STAGE_MAP = Object.fromEntries(TRACKER_STAGES.map((s) => [s.code, s]));
 
   const LEVELS = [
     ['none', 'بدون شهادة'],
@@ -41,7 +50,18 @@
   let META = null, STATS = null;
   let profile = loadProfile();
   let savedMap = {};
+  let trackerMap = {};
   try { savedMap = JSON.parse(localStorage.getItem(SAVED_KEY) || '{}') || {}; } catch (e) {}
+  try { trackerMap = JSON.parse(localStorage.getItem(TRACKER_KEY) || '{}') || {}; } catch (e) {}
+  // One-time seamless bridge from legacy savedMap -> trackerMap
+  for (const [id, job] of Object.entries(savedMap)) {
+    if (job && !trackerMap[id]) {
+      trackerMap[id] = { job, stage: 'saved', note: '', updatedAt: new Date().toISOString() };
+    }
+  }
+  for (const [id, entry] of Object.entries(trackerMap)) {
+    if (entry && entry.job && !savedMap[id]) savedMap[id] = entry.job;
+  }
 
   const state = {
     view: 'landing',
@@ -60,6 +80,7 @@
     terms: [],
     fresh: false,
     saved: false,
+    trackerFilter: '',
     offset: 0,
     total: 0
   };
@@ -87,6 +108,97 @@
   }
   function saveSaved() {
     try { localStorage.setItem(SAVED_KEY, JSON.stringify(savedMap)); } catch (e) {}
+    try { localStorage.setItem(TRACKER_KEY, JSON.stringify(trackerMap)); } catch (e) {}
+  }
+
+  function getTrack(id) {
+    return trackerMap[String(id)] || null;
+  }
+
+  function setTrack(j, stage, note) {
+    const k = String(j.id);
+    const prev = trackerMap[k] || {};
+    const nextStage = STAGE_MAP[stage] ? stage : (prev.stage || 'saved');
+    const nextNote = note !== undefined ? String(note).slice(0, 240) : (prev.note || '');
+    trackerMap[k] = { job: j, stage: nextStage, note: nextNote, updatedAt: new Date().toISOString() };
+    savedMap[k] = j;
+    saveSaved();
+    updateSavedCount();
+  }
+
+  function removeTrack(id) {
+    const k = String(id);
+    delete trackerMap[k];
+    delete savedMap[k];
+    saveSaved();
+    updateSavedCount();
+  }
+
+  function trustPill(j) {
+    const tier = j.trust_tier || (j.verified_employer ? 'verified_employer' : (j.sector === 'gov' ? 'gov' : (j.sector === 'ngo' ? 'ngo' : 'standard')));
+    if (tier === 'gov') {
+      return el('span', { class: 'trust-pill gov' }, ico('shield-check', 'ico-sm'), 'جهة حكومية رسمية موثّقة');
+    }
+    if (tier === 'ngo') {
+      return el('span', { class: 'trust-pill ngo' }, ico('shield-check', 'ico-sm'), 'منظمة دولية / إنسانية موثّقة');
+    }
+    if (tier === 'verified_employer') {
+      return el('span', { class: 'trust-pill verified' }, ico('badge-check', 'ico-sm'), 'صاحب عمل موثّق على لقيت');
+    }
+    return null;
+  }
+
+  function buildApplyTemplates(j) {
+    let cv = {};
+    try { cv = JSON.parse(localStorage.getItem('laqeet.cv') || '{}') || {}; } catch (_) {}
+    const myName = (cv.name || '').trim() || '[اسمك الكامل]';
+    const myPhone = (cv.phone || '').trim();
+    const myExp = profile.exp != null ? `${profile.exp} سنوات خبرة` : '';
+    const myEdu = profile.edu && EDU_LABEL[profile.edu] ? EDU_LABEL[profile.edu] : '';
+    const ent = entityMeta(j);
+    const orgAr = ent.name && !/^جهة|^شركة\s*\/\s*صاحب/.test(ent.name) ? `في ${ent.name}` : 'لديكم';
+    const cityTxt = (j.cities || [])[0] || (j.country === 'tr' ? 'تركيا' : 'سوريا');
+    const quals = [myEdu, myExp].filter(Boolean).join(' و');
+    const qualLineAr = quals ? `، وأمتلك ${quals} مناسبة لمتطلبات الدور` : '';
+
+    const waAr = [
+      `السلام عليكم ورحمة الله وبركاته،`,
+      `أرغب بالتقديم على شاغر «${j.title}» ${orgAr} (${cityTxt}) المنشور عبر منصة لقيت.`,
+      `اسمي ${myName}${qualLineAr}.`,
+      `مرفق لكم السيرة الذاتية، ويسعدني تواصلكم في أي وقت لتحديد موعد مقابلة.`,
+      myPhone ? `رقم التواصل: ${myPhone}` : null
+    ].filter(Boolean).join('\n');
+
+    const emailSubjectAr = `التقديم على شاغر: ${j.title}${myName !== '[اسمك الكامل]' ? ' - ' + myName : ''}`;
+    const emailBodyAr = [
+      `تحية طيبة وبعد،`,
+      ``,
+      `أكتب إليكم للتقدم بطلب التوظيف لشاغر «${j.title}» ${orgAr} في ${cityTxt}.`,
+      `اسمي ${myName}${qualLineAr}، ولدي جاهزية كاملة للالتزام بمهام الوظيفة والانضمام إلى فريقكم.`,
+      ``,
+      `تجدون في المرفقات سيرتي الذاتية المحدثة، وأتطلع لفرصة مناقشة مساهمتي المحتملة خلال مقابلة عمل.`,
+      ``,
+      `مع خالص الشكر والتقدير،`,
+      myName,
+      myPhone || null
+    ].filter((x) => x !== null).join('\n');
+
+    const orgEn = ent.name && /[A-Za-z]/.test(ent.name) ? ent.name : 'your organization';
+    const emailSubjectEn = `Application for ${j.title}${myName !== '[اسمك الكامل]' ? ' - ' + myName : ''}`;
+    const emailBodyEn = [
+      `Dear Hiring Team at ${orgEn},`,
+      ``,
+      `I am writing to express my strong interest in the "${j.title}" position (${cityTxt}).`,
+      `Please find my updated CV attached for your review. I am confident that my background and commitment align well with the role requirements, and I would welcome the opportunity to discuss how I can contribute to your team.`,
+      ``,
+      `Thank you for your time and consideration.`,
+      ``,
+      `Best regards,`,
+      myName !== '[اسمك الكامل]' ? myName : '[Your Full Name]',
+      myPhone || null
+    ].filter((x) => x !== null).join('\n');
+
+    return { waAr, emailSubjectAr, emailBodyAr, emailSubjectEn, emailBodyEn };
   }
 
   async function get(path) {
@@ -372,20 +484,18 @@
   }
 
   function toggleSave(j) {
-    if (savedMap[j.id]) {
-      delete savedMap[j.id];
-      toast('تمت إزالة الشاغر من المحفوظات');
+    if (getTrack(j.id)) {
+      removeTrack(j.id);
+      toast('تمت إزالة الشاغر من متتبع تقديماتي');
     } else {
-      savedMap[j.id] = j;
-      toast('تم حفظ الشاغر في المحفوظات');
+      setTrack(j, 'saved');
+      toast('تم حفظ الشاغر في متتبع تقديماتي');
     }
-    saveSaved();
-    updateSavedCount();
     if (state.saved) refresh();
   }
 
   function updateSavedCount() {
-    const n = Object.keys(savedMap).length;
+    const n = Object.keys(trackerMap).length;
     if ($('savedCount')) $('savedCount').textContent = n;
   }
 
@@ -709,14 +819,45 @@
       el('span', { class: 'card-loc' }, ico('map-pin', 'ico-sm'), ...highlightNodes(`المدينة: ${cityTxt}`, state.terms))
     );
 
+    const trk = getTrack(j.id);
+    const stageInfo = trk ? STAGE_MAP[trk.stage] : null;
+    const verifiedChip = j.verified_employer
+      ? el('span', { class: 'card-verified-chip' }, ico('badge-check', 'ico-sm'), 'صاحب عمل موثّق على لقيت')
+      : null;
+    const trackBadge = (!state.saved && stageInfo && trk.stage !== 'saved')
+      ? el('span', { class: 'tracker-stage-pill ' + stageInfo.cls }, ico(stageInfo.ico, 'ico-sm'), stageInfo.label)
+      : null;
+
+    let trackerRow = null;
+    if (state.saved && trk) {
+      const sel = el('select', {
+        'aria-label': 'تغيير حالة التقديم',
+        onchange: (e) => {
+          setTrack(j, e.target.value);
+          toast(`تم تحديث الحالة إلى «${STAGE_MAP[e.target.value].label}»`);
+          refresh();
+        }
+      }, ...TRACKER_STAGES.map((st) => el('option', { value: st.code, selected: trk.stage === st.code }, st.label)));
+      trackerRow = el('div', { class: 'tracker-card-bar' },
+        el('span', { class: 'tracker-stage-pill ' + (stageInfo ? stageInfo.cls : 'st-saved') },
+          ico(stageInfo ? stageInfo.ico : 'bookmark-filled', 'ico-sm'),
+          stageInfo ? stageInfo.label : 'محفوظة'
+        ),
+        sel,
+        trk.note ? el('p', { class: 'tracker-card-note' }, `ملاحظتي: ${trk.note}`) : null
+      );
+    }
+
     return el('article', { class: 'card in', style },
       el('div', { class: 'top' },
         el('span', { class: 'sec-tag sec-' + sec }, ico(secMeta.ico, 'ico-sm'), secMeta.label),
         statusOf(j)
       ),
+      (verifiedChip || trackBadge) ? el('div', { style: 'display:flex;flex-wrap:wrap;gap:6px;align-items:center' }, verifiedChip, trackBadge) : null,
       datesRow,
       el('h3', null, el('button', { onclick: () => openDetail(j) }, ...highlightNodes(j.title, state.terms))),
       orgLoc,
+      trackerRow,
       desc,
       m ? el('div', { class: 'fit ' + m.level }, el('i'), m.text) : null,
       el('div', { class: 'badges' }, badges(j)),
@@ -749,6 +890,137 @@
     const detSummary = cleanSummary(j.summary);
     const summaryBlock = detSummary ? [el('h4', null, ico('file-text', 'ico-sm'), 'نبذة ووصف الشاغر'), el('p', { style: 'margin:0;line-height:1.72' }, detSummary)] : [];
     const hasDirectLink = Boolean(j.apply_url && !/^https?:\/\/(?:wa\.me\/|api\.whatsapp\.com\/)/i.test(j.apply_url));
+
+    // Phase 2: Personal Application Tracker Control Box inside Drawer
+    const curTrk = getTrack(j.id);
+    const noteInput = el('input', {
+      type: 'text',
+      class: 'tracker-note-input',
+      placeholder: 'أضف ملاحظة شخصية (مثال: موعد المقابلة أو اسم المسؤول)...',
+      value: curTrk ? (curTrk.note || '') : '',
+      maxlength: '240'
+    });
+    const stageBtns = TRACKER_STAGES.map((st) => {
+      const btn = el('button', {
+        type: 'button',
+        class: 'tracker-stage-btn',
+        'aria-pressed': String(Boolean(curTrk && curTrk.stage === st.code)),
+        onclick: () => {
+          setTrack(j, st.code, noteInput.value.trim());
+          stageBtns.forEach((b, idx) => b.setAttribute('aria-pressed', String(TRACKER_STAGES[idx].code === st.code)));
+          toast(`تم الحفظ في «تقديماتي» بحالة: ${st.label}`);
+          if (state.saved) refresh();
+        }
+      }, ico(st.ico, 'ico-sm'), st.label);
+      return btn;
+    });
+    const saveNoteBtn = el('button', {
+      type: 'button',
+      class: 'btn ghost',
+      style: 'padding:7px 13px;font-size:.8rem',
+      onclick: () => {
+        const existing = getTrack(j.id);
+        setTrack(j, existing ? existing.stage : 'saved', noteInput.value.trim());
+        stageBtns.forEach((b, idx) => b.setAttribute('aria-pressed', String(TRACKER_STAGES[idx].code === (existing ? existing.stage : 'saved'))));
+        toast('تم حفظ الملاحظة الشخصية على جهازك');
+        if (state.saved) refresh();
+      }
+    }, ico('check', 'ico-sm'), 'حفظ');
+    const trackerBox = el('div', { class: 'tracker-sheet-box' },
+      el('div', { class: 'tracker-sheet-head' },
+        el('span', { style: 'display:inline-flex;align-items:center;gap:6px' }, ico('clipboard-check', 'ico-sm'), 'متتبع تقديماتي الشخصي'),
+        el('span', { class: 'tracker-privacy' }, ico('lock', 'ico-sm'), 'محفوظ على جهازك فقط')
+      ),
+      el('div', { class: 'tracker-stage-grid' }, ...stageBtns),
+      el('div', { class: 'tracker-note-row' }, noteInput, saveNoteBtn)
+    );
+
+    // Phase 2: Quick Apply Message Templates (WhatsApp AR, Email AR, Email EN for NGOs)
+    const tpls = buildApplyTemplates(j);
+    const defaultTab = (sec === 'ngo' && /[A-Za-z]{4,}/.test(j.title || '')) ? 'en' : (j.email && !(j.phones && j.phones.length) ? 'email' : 'wa');
+    let activeTplTab = defaultTab;
+    const tplTextarea = el('textarea', { class: 'tpl-textarea', 'aria-label': 'قالب رسالة التقديم' });
+    const tplDirectBtn = el('a', { class: 'btn ghost', target: '_blank', rel: 'noopener', hidden: true });
+    const tplTabs = [
+      { id: 'wa', label: 'واتساب (عربي)' },
+      { id: 'email', label: 'إيميل (عربي)' },
+      { id: 'en', label: 'Email (EN · NGOs)' }
+    ];
+    const tplTabBtns = [];
+    const syncTplView = (tabId) => {
+      activeTplTab = tabId;
+      tplTabBtns.forEach((b, i) => b.setAttribute('aria-selected', String(tplTabs[i].id === tabId)));
+      if (tabId === 'wa') {
+        tplTextarea.dir = 'rtl';
+        tplTextarea.value = tpls.waAr;
+        const p = (j.phones || []).find((x) => x.startsWith('09') || (j.country === 'tr' && x.startsWith('05')));
+        if (p) {
+          const intl = (j.country === 'tr' && p.startsWith('05')) ? '90' + p.slice(1) : '963' + p.slice(1);
+          tplDirectBtn.hidden = false;
+          tplDirectBtn.href = `https://wa.me/${intl}?text=${encodeURIComponent(tplTextarea.value)}`;
+          tplDirectBtn.replaceChildren(ico('whatsapp', 'ico-sm'), 'إرسال الرسالة بواتساب');
+        } else {
+          tplDirectBtn.hidden = true;
+        }
+      } else if (tabId === 'email') {
+        tplTextarea.dir = 'rtl';
+        tplTextarea.value = `العنوان (Subject): ${tpls.emailSubjectAr}\n\n${tpls.emailBodyAr}`;
+        if (j.email) {
+          tplDirectBtn.hidden = false;
+          tplDirectBtn.href = `mailto:${encodeURIComponent(j.email)}?subject=${encodeURIComponent(tpls.emailSubjectAr)}&body=${encodeURIComponent(tpls.emailBodyAr)}`;
+          tplDirectBtn.replaceChildren(ico('mail', 'ico-sm'), 'فتح في تطبيق الإيميل');
+        } else {
+          tplDirectBtn.hidden = true;
+        }
+      } else {
+        tplTextarea.dir = 'ltr';
+        tplTextarea.value = `Subject: ${tpls.emailSubjectEn}\n\n${tpls.emailBodyEn}`;
+        if (j.email) {
+          tplDirectBtn.hidden = false;
+          tplDirectBtn.href = `mailto:${encodeURIComponent(j.email)}?subject=${encodeURIComponent(tpls.emailSubjectEn)}&body=${encodeURIComponent(tpls.emailBodyEn)}`;
+          tplDirectBtn.replaceChildren(ico('mail', 'ico-sm'), 'Open in Email App');
+        } else {
+          tplDirectBtn.hidden = true;
+        }
+      }
+    };
+    tplTextarea.addEventListener('input', () => {
+      if (activeTplTab === 'wa' && !tplDirectBtn.hidden) {
+        const p = (j.phones || []).find((x) => x.startsWith('09') || (j.country === 'tr' && x.startsWith('05')));
+        if (p) {
+          const intl = (j.country === 'tr' && p.startsWith('05')) ? '90' + p.slice(1) : '963' + p.slice(1);
+          tplDirectBtn.href = `https://wa.me/${intl}?text=${encodeURIComponent(tplTextarea.value)}`;
+        }
+      }
+    });
+    tplTabs.forEach((t) => {
+      tplTabBtns.push(el('button', {
+        type: 'button',
+        class: 'tpl-tab',
+        role: 'tab',
+        'aria-selected': 'false',
+        onclick: () => syncTplView(t.id)
+      }, t.label));
+    });
+    syncTplView(defaultTab);
+
+    const templatesSection = el('div', { class: 'tpl-box' },
+      el('div', { class: 'tpl-head' },
+        el('span', { class: 'tpl-title' }, ico('message-square', 'ico-sm'), 'رسالة تقديم جاهزة ومخصصة لهذا الشاغر'),
+        el('div', { class: 'tpl-tabs', role: 'tablist' }, ...tplTabBtns)
+      ),
+      tplTextarea,
+      el('div', { class: 'tpl-actions' },
+        el('button', {
+          type: 'button',
+          class: 'btn primary',
+          style: 'padding:8px 15px;font-size:.83rem',
+          onclick: () => copyText(tplTextarea.value, 'تم نسخ رسالة التقديم الجاهزة')
+        }, ico('copy', 'ico-sm'), 'نسخ الرسالة'),
+        tplDirectBtn
+      )
+    );
+
     const shareSection = el('div', { class: 'share-box' },
       el('div', { class: 'share-box-title' }, ico('share', 'ico-sm'), 'مشاركة الإعلان أو نسخه مع الوصف وطريقة التقديم:'),
       el('div', { class: 'share-actions' },
@@ -758,6 +1030,17 @@
           : el('button', { type: 'button', class: 'btn ghost', onclick: () => copyText(primaryJobLink(j), 'تم نسخ الرابط') }, ico('link', 'ico-sm'), 'نسخ الرابط فقط'),
         el('button', { type: 'button', class: 'btn ghost', onclick: () => shareJob(j) }, ico('send', 'ico-sm'), 'معاينة أو إرسال واتساب / تيليجرام')
       )
+    );
+
+    const safetyStrip = el('div', { class: 'safety-strip' },
+      el('span', { class: 'safety-strip-main' }, ico('shield-check', 'ico-sm'), 'التوظيف مجاني 100% — تواصل مباشر بدون وسطاء أو رسوم'),
+      el('button', {
+        type: 'button',
+        onclick: () => {
+          try { sessionStorage.setItem('laqeet.scam_prefill', buildShareText(j)); } catch (_) {}
+          location.href = 'scam.html';
+        }
+      }, 'فحص النص في رادار النصب')
     );
 
     const offSrcs = visibleSources(j);
@@ -794,19 +1077,22 @@
         el('button', { class: 'close', 'aria-label': 'إغلاق', onclick: () => $('sheet').close() }, ico('x'))
       ),
       el('h2', { id: 'sheetTitle' }, j.title),
-      j.official ? el('span', { class: 'official', style: 'align-self:flex-start' }, ico('shield-check', 'ico-sm'), 'رسمي · مسابقة أو إعلان حكومي') : null
+      trustPill(j)
     );
 
     const contentEl = el('div', { class: 'sheet-content' }, ...[
       metaGrid,
       m ? el('div', { class: 'fit ' + m.level }, el('i'), m.text) : null,
+      trackerBox,
       kv.length ? el('dl', { class: 'kv' }, kv.map(([k, v]) => [el('dt', null, k), el('dd', null, v)])) : null,
       ...summaryBlock,
       ...listBlock('المهام والمسؤوليات الرئيسية', j.tasks),
       ...listBlock('الشروط والمهارات المطلوبة', j.skills),
+      templatesSection,
       shareSection,
       ...sourcesSection,
       links(j, true),
+      safetyStrip,
       el('div', { class: 'row', style: 'margin-top:4px' },
         el('a', { class: 'btn primary', href: 'cv.html?job=' + j.id }, ico('file-text', 'ico-sm'), 'إنشاء سيرة ذاتية لهذا الشاغر'),
         el('button', { class: 'btn ghost', onclick: () => speakJob(j) }, ico('volume', 'ico-sm'), 'قراءة صوتية'),
@@ -1096,8 +1382,36 @@
       addPill(aInfo ? aInfo.ico : 'send', aInfo ? aInfo.label : a, () => { state.apply = removeCsvItem(state.apply, a); syncFilterUI(); refresh(); });
     }
     if (state.fresh) addPill('sparkles', 'جديد اليوم', () => { state.fresh = false; syncFilterUI(); refresh(); });
-    if (state.saved) addPill('bookmark', 'المحفوظة فقط', () => { state.saved = false; syncFilterUI(); refresh(); });
+    if (state.saved) addPill('clipboard-check', 'متتبع تقديماتي', () => { state.saved = false; state.trackerFilter = ''; syncFilterUI(); refresh(); });
     box.replaceChildren(...pills);
+  }
+
+  function renderTrackerBar(entries) {
+    const bar = $('trackerBar');
+    if (!bar) return;
+    if (!state.saved) {
+      bar.hidden = true;
+      bar.replaceChildren();
+      return;
+    }
+    const counts = { '': entries.length, saved: 0, applied: 0, interview: 0, offered: 0 };
+    entries.forEach((e) => { if (counts[e.stage] != null) counts[e.stage] += 1; });
+    const tabs = [{ code: '', label: 'الكل', ico: 'layers' }, ...TRACKER_STAGES].map((st) =>
+      el('button', {
+        type: 'button',
+        class: 'tracker-tab',
+        'aria-pressed': String(state.trackerFilter === st.code),
+        onclick: () => {
+          state.trackerFilter = st.code;
+          refresh();
+        }
+      }, ico(st.ico, 'ico-sm'), el('span', null, st.label), el('small', null, `(${counts[st.code] || 0})`))
+    );
+    bar.hidden = false;
+    bar.replaceChildren(
+      el('div', { class: 'tracker-tabs' }, ...tabs),
+      el('span', { class: 'tracker-privacy' }, ico('lock', 'ico-sm'), 'متتبعك محفوظ محلياً على جهازك فقط')
+    );
   }
 
   // ---------------------------------------------------------------- refresh jobs
@@ -1108,19 +1422,28 @@
       state.terms = [];
       renderActivePills();
       if ($('typoBanner')) $('typoBanner').hidden = true;
-      const list = Object.values(savedMap);
+      const entries = Object.values(trackerMap)
+        .filter((e) => e && e.job)
+        .sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')));
+      renderTrackerBar(entries);
+      const filtered = state.trackerFilter
+        ? entries.filter((e) => e.stage === state.trackerFilter)
+        : entries;
       $('grid').replaceChildren(
-        ...(list.length ? list.map((j, i) => card(j, i)) : [
+        ...(filtered.length ? filtered.map((e, i) => card(e.job, i)) : [
           el('div', { class: 'empty' },
-            el('b', null, 'لا توجد شواغر محفوظة بعد'),
-            el('span', null, 'اضغط على زر «احفظ» الموجود على أي بطاقة شاغر للوصول السريع إليها هنا.')
+            el('b', null, entries.length ? 'لا توجد شواغر ضمن هذه المرحلة حالياً' : 'متتبع تقديماتك فارغ حالياً'),
+            el('span', null, entries.length
+              ? 'يمكنك تغيير حالة أي شاغر إلى «قدّمت عليها» أو «مقابلة» من قائمة الحالة على البطاقة أو من تفاصيل الوظيفة.'
+              : 'اضغط على «احفظ» على أي بطاقة، أو افتح تفاصيل الشاغر وسجّل حالتك (محفوظة / قدّمت / مقابلة / عرض عمل) لتتابع كل تقديماتك هنا مجاناً بدون حساب.')
           )
         ])
       );
-      $('count').textContent = `${list.length} شاغر في المحفوظات`;
+      $('count').textContent = `${filtered.length} شاغر في متتبع تقديماتي` + (state.trackerFilter && STAGE_MAP[state.trackerFilter] ? ` · ${STAGE_MAP[state.trackerFilter].label}` : '');
       $('more').hidden = true;
       return;
     }
+    if ($('trackerBar')) $('trackerBar').hidden = true;
 
     if (!append) state.offset = 0;
     const currentSeq = ++requestSeq;
@@ -1315,6 +1638,7 @@
     state.terms = [];
     state.fresh = false;
     state.saved = false;
+    state.trackerFilter = '';
     state.lower = true;
     if (location.search) {
       try { history.replaceState(null, '', location.pathname + location.hash); } catch (e) {}
@@ -2078,12 +2402,24 @@
       } catch (_) {}
     }, 180000);
 
-    // Counters in Landing & Board Hero
+    // Counters in Landing & Board Hero + Live Trust & Transparency Telemetry
     const statCounts = getStatCounts();
     document.querySelectorAll('[data-count]').forEach((node) => {
       const k = node.dataset.count;
       countUp(node, statCounts[k] != null ? statCounts[k] : 0);
     });
+    const syncTrustMetrics = (animate) => {
+      const tr = (STATS && STATS.trust) || null;
+      if (!tr) return;
+      document.querySelectorAll('[data-trust-stat]').forEach((node) => {
+        const k = node.dataset.trustStat;
+        if (tr[k] != null) {
+          if (animate) countUp(node, tr[k]);
+          else node.textContent = String(tr[k]);
+        }
+      });
+    };
+    syncTrustMetrics(true);
 
     populateLandingPortals();
 

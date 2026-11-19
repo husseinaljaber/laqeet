@@ -9,9 +9,9 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Alexandria:wght@500;600;700;800&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="app.css?v=31">
-<link rel="stylesheet" href="page.css?v=31">
-<script src="ui.js?v=31"></script>
+<link rel="stylesheet" href="app.css?v=32">
+<link rel="stylesheet" href="page.css?v=32">
+<script src="ui.js?v=32"></script>
 <style>
 .verdict{border-radius:var(--r);padding:16px;border:1px solid var(--line);display:flex;flex-direction:column;gap:7px}
 .verdict.safe{background:var(--exp-low-bg);border-color:var(--exp-low);color:var(--exp-low)}
@@ -19,6 +19,10 @@
 .verdict.danger{background:var(--exp-high-bg);border-color:var(--exp-high);color:var(--exp-high)}
 .verdict h3{margin:0;font-family:var(--font-display);font-size:1.15rem;display:flex;align-items:center;gap:8px}
 .verdict ul{margin:4px 0 0;padding-inline-start:20px;color:var(--ink)}
+.scam-trust-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,13rem),1fr));gap:10px}
+.scam-stat{background:var(--surface-subtle);border:1px solid var(--line);border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;gap:2px}
+.scam-stat b{font-family:var(--font-display);font-size:1.3rem;color:var(--accent);font-variant-numeric:tabular-nums}
+.scam-stat span{font-size:.8rem;color:var(--muted);font-weight:600}
 </style>
 </head>
 <body>
@@ -64,6 +68,16 @@
     </div>
     <div id="out" hidden></div>
   </div>
+
+  <div class="box">
+    <h2 style="display:flex;align-items:center;gap:7px"><i data-ico="activity" data-ico-cls="ico-sm"></i><span>حماية تلقائية مستمرة على «لقيت»</span></h2>
+    <div class="scam-trust-row">
+      <div class="scam-stat"><b id="stScanned">0</b><span>إعلان ومصدر تم فحصه</span></div>
+      <div class="scam-stat"><b id="stDupes">0</b><span>إعلان مكرر تم دمجه وتنقيته</span></div>
+      <div class="scam-stat"><b id="stExpired">0</b><span>إعلان منتهي أُزيل تلقائياً</span></div>
+    </div>
+  </div>
+
   <div class="box">
     <h2>قواعد ذهبية تحميك من النصب</h2>
     <ul>
@@ -98,6 +112,22 @@ async function run() {
 $('check').addEventListener('click', run);
 $('sampleBad').addEventListener('click', () => { $('txt').value = 'مطلوب شباب وصبايا للعمل من البيت بربح يومي 40$ على بينانس بدون خبرة! دفع رسوم تسجيل رمزية عبر شام كاش.'; run(); });
 $('sampleOk').addEventListener('click', () => { $('txt').value = 'تعلن شركة النور في دمشق عن حاجتها لمحاسب بخبرة سنتين بدوام كامل من 9 حتى 5. للتواصل واتساب 0933123456'; run(); });
+
+fetch('/api/stats').then(r => r.json()).then(s => {
+  const t = (s && s.trust) || {};
+  if ($('stScanned')) $('stScanned').textContent = t.scanned_total || 0;
+  if ($('stDupes')) $('stDupes').textContent = t.duplicates_merged || 0;
+  if ($('stExpired')) $('stExpired').textContent = t.expired_filtered || 0;
+}).catch(() => {});
+
+try {
+  const prefill = sessionStorage.getItem('laqeet.scam_prefill');
+  if (prefill) {
+    sessionStorage.removeItem('laqeet.scam_prefill');
+    $('txt').value = prefill;
+    run();
+  }
+} catch (_) {}
 </script>
 </body>
 </html>

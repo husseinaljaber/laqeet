@@ -76,6 +76,15 @@ CREATE TABLE IF NOT EXISTS bot_users (        -- Telegram alert bot: only the ch
     created TEXT
 );
 CREATE TABLE IF NOT EXISTS bot_sent (chat_id INTEGER, job_id INTEGER, at TEXT, PRIMARY KEY(chat_id, job_id));
+CREATE TABLE IF NOT EXISTS employer_tokens (  -- self-service token so employers can track & close their own job ads
+    token TEXT PRIMARY KEY,
+    job_id INTEGER NOT NULL REFERENCES jobs(id),
+    verified INTEGER DEFAULT 0,
+    contact_note TEXT,
+    created_at TEXT NOT NULL,
+    closed_at TEXT
+);
+CREATE INDEX IF NOT EXISTS employer_tokens_job ON employer_tokens(job_id);
 CREATE VIRTUAL TABLE IF NOT EXISTS jobs_fts USING fts5(
     job_id UNINDEXED,
     title_text,
@@ -139,6 +148,7 @@ def delete_jobs(con: sqlite3.Connection, job_ids: list[int]) -> int:
     con.execute(f"DELETE FROM jobs_fts WHERE job_id IN ({ph})", job_ids)
     con.execute(f"DELETE FROM job_sources WHERE job_id IN ({ph})", job_ids)
     con.execute(f"DELETE FROM job_keys WHERE job_id IN ({ph})", job_ids)
+    con.execute(f"DELETE FROM employer_tokens WHERE job_id IN ({ph})", job_ids)
     con.execute(f"DELETE FROM jobs WHERE id IN ({ph})", job_ids)
     return len(job_ids)
 
@@ -1203,6 +1213,44 @@ def _enrich_from_raw(d: dict) -> None:
         d["summary"] = f"{prefix} — {cur_s}"[:240]
 
 
+def trust_metrics(con: sqlite3.Connection) -> dict:
+    """Real-time transparency & quality telemetry computed directly from SQLite."""
+    today_s = date.today().isoformat()
+    open_total = con.execute(
+        "SELECT COUNT(*) FROM jobs WHERE status='live' AND expires_on>=? AND (deadline IS NULL OR deadline='' OR deadline>=?)",
+        (today_s, today_s),
+    ).fetchone()[0]
+    official_verified = con.execute(
+        "SELECT COUNT(*) FROM jobs WHERE status='live' AND sector IN ('gov','ngo') "
+        "AND expires_on>=? AND (deadline IS NULL OR deadline='' OR deadline>=?)",
+        (today_s, today_s),
+    ).fetchone()[0]
+    verified_employers = con.execute(
+        "SELECT COUNT(*) FROM jobs WHERE status='live' AND source='employer' "
+        "AND expires_on>=? AND (deadline IS NULL OR deadline='' OR deadline>=?)",
+        (today_s, today_s),
+    ).fetchone()[0]
+    jobs_total = con.execute("SELECT COUNT(*) FROM jobs").fetchone()[0]
+    sources_total = con.execute("SELECT COUNT(*) FROM job_sources").fetchone()[0]
+    posts_total = con.execute("SELECT COUNT(*) FROM posts").fetchone()[0]
+    expired_filtered = con.execute(
+        "SELECT COUNT(*) FROM jobs WHERE status='expired' OR expires_on<? OR (deadline IS NOT NULL AND deadline!='' AND deadline<?)",
+        (today_s, today_s),
+    ).fetchone()[0]
+    rejected_cnt = con.execute("SELECT COUNT(*) FROM jobs WHERE status='rejected'").fetchone()[0]
+    reports_cnt = con.execute("SELECT COUNT(*) FROM reports").fetchone()[0]
+    return {
+        "open_total": open_total,
+        "scanned_total": max(posts_total, sources_total, jobs_total),
+        "duplicates_merged": max(0, sources_total - jobs_total),
+        "expired_filtered": expired_filtered,
+        "rejected_filtered": rejected_cnt + reports_cnt,
+        "official_verified": official_verified,
+        "verified_employers": verified_employers,
+        "updated_at": get_meta(con, "updated_at"),
+    }
+
+
 def row_to_dict(con, row) -> dict:
     d = json.loads(row["data"])
     _enrich_from_raw(d)
@@ -1228,4 +1276,8 @@ def row_to_dict(con, row) -> dict:
         )
         srcs.append(dict(source=s["source"], post_url=s["post_url"], label=lbl, official_public=is_official_public))
     d["sources"] = srcs
+    d["sources_count"] = len(srcs)
+    is_verified_emp = bool(row["source"] == "employer" and row["status"] == "live")
+    d["verified_employer"] = is_verified_emp
+    d["trust_tier"] = "gov" if sec == "gov" else ("ngo" if sec == "ngo" else ("verified_employer" if is_verified_emp else "standard"))
     return d

@@ -658,7 +658,7 @@ def job_page(job_id: int, request: Request):
         btns.append(f'<a class="btn primary" href="mailto:{e(j["email"])}">إرسال CV بالإيميل ({e(j["email"])})</a>')
     if has_direct_link:
         btns.append(f'<a class="btn primary" target="_blank" rel="noopener" href="{e(j["apply_url"])}">قدّم عالوظيفة</a>')
-    btns.append(f'<a class="btn" style="border:1px solid var(--line)" href="/cv.html?job={job_id}">جهّز سيرة ذاتية إلها</a>')
+    btns.append(f'<a class="btn ghost" href="/cv.html?job={job_id}"><i data-ico="file-text" data-ico-cls="ico-sm"></i><span>جهّز سيرة ذاتية إلها</span></a>')
     summary_html = f'<h3>نبذة ووصف الشاغر</h3><p style="line-height:1.7">{e(j["summary"])}</p>' if j.get("summary") else ""
     tasks_html = ("<h3>المهام</h3><ul>" + "".join(f"<li>{e(t)}</li>" for t in j.get("tasks") or []) + "</ul>") if j.get("tasks") else ""
     skills_html = ("<h3>المهارات المطلوبة</h3><ul>" + "".join(f"<li>{e(s)}</li>" for s in j.get("skills") or []) + "</ul>") if j.get("skills") else ""
@@ -666,18 +666,50 @@ def job_page(job_id: int, request: Request):
     srcs_html = " · ".join(f'<a target="_blank" rel="noopener" href="{e(s["post_url"])}">{e(s["label"])}</a>' for s in official_srcs)
     src_note_html = f'<p class="note" style="color:var(--muted)">المصدر: {srcs_html}</p>' if srcs_html else ""
     return HTMLResponse(f"""<!doctype html>
-<html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>{e(j['title'])} · {e(config.SITE_NAME)}</title>
 <meta name="description" content="{e(og_desc)}">
+<meta name="theme-color" content="#0B1C16">
 <meta property="og:type" content="website">
 <meta property="og:title" content="{e(j['title'])} — {e(cities)}">
 <meta property="og:description" content="{e(og_desc)}">
 <meta property="og:url" content="{e(share_url)}">
 <meta name="twitter:card" content="summary">
-<link rel="icon" href="/icons/icon.svg"><link rel="stylesheet" href="/app.css"><link rel="stylesheet" href="/page.css">
+<link rel="icon" href="/icons/icon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Alexandria:wght@500;600;700;800&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="/app.css?v=31"><link rel="stylesheet" href="/page.css?v=31">
+<script src="/ui.js?v=31"></script>
 </head><body>
+<nav class="site-nav" aria-label="التنقل الرئيسي">
+  <div class="inner site-nav-inner">
+    <a class="site-brand" href="/">
+      <img class="site-brand-mark" src="/icons/icon.svg" alt="" width="36" height="36">
+      <span class="site-brand-text">
+        <span class="site-brand-name">{e(config.SITE_NAME)}</span>
+        <span class="site-brand-sub">سوريا وتركيا</span>
+      </span>
+    </a>
+    <div class="site-nav-links">
+      <a class="site-nav-link is-active" href="/?view=jobs"><i data-ico="briefcase" data-ico-cls="ico-sm"></i><span>الوظائف</span></a>
+      <a class="site-nav-link" href="/cv.html"><i data-ico="file-text" data-ico-cls="ico-sm"></i><span>سيرتي الذاتية</span></a>
+      <a class="site-nav-link" href="/pulse.html"><i data-ico="bar-chart" data-ico-cls="ico-sm"></i><span>نبض السوق</span></a>
+      <a class="site-nav-link" href="/scam.html"><i data-ico="shield-check" data-ico-cls="ico-sm"></i><span>رادار النصب</span></a>
+      <a class="site-nav-link" href="/employer.html"><i data-ico="megaphone" data-ico-cls="ico-sm"></i><span>انشر وظيفة</span></a>
+    </div>
+    <div class="site-nav-actions">
+      <button type="button" class="nav-icon-btn" data-theme-toggle aria-label="تبديل وضع الألوان">
+        <span class="theme-ico"></span><span class="theme-lbl">الليلي</span>
+      </button>
+      <button type="button" class="nav-icon-btn nav-menu-btn" data-nav-menu-toggle aria-label="القائمة" aria-expanded="false">
+        <i data-ico="menu"></i>
+      </button>
+    </div>
+  </div>
+</nav>
 <section class="hero slim"><div class="inner">
-  <div class="eyebrow"><a class="link" href="/">← كل الوظائف على {e(config.SITE_NAME)}</a></div>
+  <div class="eyebrow"><a class="link" href="/?view=jobs"><i data-ico="arrow-left" data-ico-cls="ico-sm"></i><span>كل الوظائف على {e(config.SITE_NAME)}</span></a></div>
   <h1>{e(j['title'])}</h1>
   <p class="sub">{e(desc)}</p>
 </div></section>
@@ -694,13 +726,13 @@ def job_page(job_id: int, request: Request):
     {summary_html}{tasks_html}{skills_html}
     <div class="row" style="margin-top:8px">{''.join(btns)}</div>
     <div class="share-box" style="margin-top:16px">
-      <div class="share-box-title">📤 مشاركة ونسخ الإعلان مع الوصف وطريقة التقديم:</div>
+      <div class="share-box-title"><i data-ico="share" data-ico-cls="ico-sm"></i><span>مشاركة ونسخ الإعلان مع الوصف وطريقة التقديم:</span></div>
       <textarea id="shareAdText" class="share-preview" dir="rtl">{e(share_text)}</textarea>
       <div class="share-actions">
-        <button type="button" class="btn primary" onclick="navigator.clipboard.writeText(document.getElementById('shareAdText').value).then(()=>this.textContent='تم نسخ الإعلان مع الوصف ✅')">📋 نسخ الإعلان مع الوصف</button>
-        <button type="button" class="btn ghost" onclick="navigator.clipboard.writeText('{e(primary_link)}').then(()=>this.textContent='تم نسخ الرابط ✅')">🔗 نسخ الرابط فقط</button>
-        <a class="btn ghost" target="_blank" rel="noopener" href="{wa_share}">💬 مشاركة عبر واتساب</a>
-        <a class="btn ghost" target="_blank" rel="noopener" href="{tg_share}">✈️ مشاركة عبر تيليجرام</a>
+        <button type="button" class="btn primary" onclick="navigator.clipboard.writeText(document.getElementById('shareAdText').value).then(()=>this.textContent='تم نسخ الإعلان مع الوصف')"><i data-ico="copy" data-ico-cls="ico-sm"></i><span>نسخ الإعلان مع الوصف</span></button>
+        <button type="button" class="btn ghost" onclick="navigator.clipboard.writeText('{e(primary_link)}').then(()=>this.textContent='تم نسخ الرابط')"><i data-ico="link" data-ico-cls="ico-sm"></i><span>نسخ الرابط فقط</span></button>
+        <a class="btn ghost" target="_blank" rel="noopener" href="{wa_share}"><i data-ico="whatsapp" data-ico-cls="ico-sm"></i><span>مشاركة عبر واتساب</span></a>
+        <a class="btn ghost" target="_blank" rel="noopener" href="{tg_share}"><i data-ico="send" data-ico-cls="ico-sm"></i><span>مشاركة عبر تيليجرام</span></a>
       </div>
     </div>
     {src_note_html}

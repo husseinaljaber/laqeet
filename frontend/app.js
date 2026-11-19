@@ -20,18 +20,23 @@
   const EDU_RANK = Object.fromEntries(LEVELS.map(([c], i) => [c, i]));
 
   const SECTOR_UI = {
-    gov: { label: '🏛️ قطاع حكومي', badge: 'رسمي ✓ حكومي' },
-    ngo: { label: '🤝 منظمات وهيئات', badge: 'منظمة إنسانية' },
-    private: { label: '🏢 قطاع خاص', badge: 'قطاع خاص' }
+    gov: { label: 'قطاع حكومي', ico: 'landmark', badge: 'رسمي · حكومي' },
+    ngo: { label: 'منظمات وهيئات', ico: 'handshake', badge: 'منظمة إنسانية' },
+    private: { label: 'قطاع خاص', ico: 'building', badge: 'قطاع خاص' }
   };
 
   const APPLY_UI = {
-    whatsapp: '💬 واتساب',
-    form: '📝 فورم تقديم',
-    site: '🌐 موقع التوظيف',
-    email: '📧 إيميل',
-    call: '📞 اتصال هاتفي'
+    whatsapp: { label: 'واتساب', ico: 'whatsapp' },
+    form: { label: 'فورم تقديم', ico: 'file-text' },
+    site: { label: 'موقع التوظيف', ico: 'globe' },
+    email: { label: 'إيميل', ico: 'mail' },
+    call: { label: 'اتصال هاتفي', ico: 'phone' }
   };
+
+  function ico(name, cls) {
+    if (window.LaqeetUI && window.LaqeetUI.icon) return window.LaqeetUI.icon(name, cls);
+    return '';
+  }
 
   let META = null, STATS = null;
   let profile = loadProfile();
@@ -113,8 +118,12 @@
 
   function toast(msg) {
     const t = $('toast');
-    t.textContent = msg;
+    if (!t) return;
+    t.replaceChildren(ico('check-circle'), el('span', null, msg));
     t.hidden = false;
+    t.style.animation = 'none';
+    void t.offsetWidth;
+    t.style.animation = '';
     clearTimeout(toast.timer);
     toast.timer = setTimeout(() => { t.hidden = true; }, 2600);
   }
@@ -307,12 +316,12 @@
     const sec = j.sector || (j.official ? 'gov' : 'private');
     const emp = cleanEmployer(j);
     if (sec === 'gov') {
-      return { icon: '🏛️', role: 'الوزارة / الجهة', name: emp || 'جهة حكومية رسمية' };
+      return { icon: '🏛️', ico: 'landmark', role: 'الوزارة / الجهة', name: emp || 'جهة حكومية رسمية' };
     }
     if (sec === 'ngo') {
-      return { icon: '🤝', role: 'المنظمة', name: emp || 'منظمة دولية / إنسانية' };
+      return { icon: '🤝', ico: 'handshake', role: 'المنظمة', name: emp || 'منظمة دولية / إنسانية' };
     }
-    return { icon: '🏢', role: 'الشركة / الجهة', name: emp || 'شركة / صاحب عمل (قطاع خاص)' };
+    return { icon: '🏢', ico: 'building', role: 'الشركة / الجهة', name: emp || 'شركة / صاحب عمل (قطاع خاص)' };
   }
 
   function visibleSources(j) {
@@ -326,25 +335,25 @@
       el('span', { class: 'b exp' }, expText(j.experience))
     ];
     if (j.education) {
-      b.push(el('span', { class: 'b' }, '🎓 ' + (EDU_LABEL[j.education] || j.education) + (j.education_from === 'grade' && j.grade ? ` (فئة ${j.grade})` : '')));
+      b.push(el('span', { class: 'b' }, ico('graduation-cap', 'ico-sm'), (EDU_LABEL[j.education] || j.education) + (j.education_from === 'grade' && j.grade ? ` (فئة ${j.grade})` : '')));
     }
     if (j.field && j.field !== 'other') {
-      b.push(el('span', { class: 'b' }, '💼 ' + (j.subfield ? subLabel(j.subfield) : fieldLabel(j.field))));
+      b.push(el('span', { class: 'b' }, ico('briefcase', 'ico-sm'), j.subfield ? subLabel(j.subfield) : fieldLabel(j.field)));
     }
     if (j.specialty) {
-      b.push(el('span', { class: 'b' }, '🔹 ' + j.specialty.slice(0, 45)));
+      b.push(el('span', { class: 'b' }, ico('tag', 'ico-sm'), j.specialty.slice(0, 45)));
     }
     if (j.salary) {
-      b.push(el('span', { class: 'b' }, '💰 الأجر: ' + j.salary.slice(0, 35)));
+      b.push(el('span', { class: 'b' }, ico('coins', 'ico-sm'), 'الأجر: ' + j.salary.slice(0, 35)));
     }
     if (j.shift) {
-      b.push(el('span', { class: 'b' }, '🕒 ' + j.shift.slice(0, 40)));
+      b.push(el('span', { class: 'b' }, ico('clock', 'ico-sm'), j.shift.slice(0, 40)));
     }
     if (j.age_min || j.age_max) {
-      b.push(el('span', { class: 'b' }, `👤 العمر ${j.age_min || '؟'}–${j.age_max || '؟'}`));
+      b.push(el('span', { class: 'b' }, ico('user', 'ico-sm'), `العمر ${j.age_min || '؟'}–${j.age_max || '؟'}`));
     }
     if (j.gender) {
-      b.push(el('span', { class: 'b' }, j.gender === 'female' ? '👩 إناث فقط' : '👨 ذكور فقط'));
+      b.push(el('span', { class: 'b' }, ico('users', 'ico-sm'), j.gender === 'female' ? 'إناث فقط' : 'ذكور فقط'));
     }
     (j.tags || []).forEach((t) => b.push(el('span', { class: 'b' }, t)));
     return b;
@@ -355,7 +364,7 @@
     if (j.deadline) {
       const d = daysLeft(j.deadline);
       if (d < 0) return el('span', { class: 'status' }, 'انتهى موعد التقديم');
-      if (d === 0) return el('span', { class: 'status soon' }, '⚠️ آخر موعد للتقديم اليوم!');
+      if (d === 0) return el('span', { class: 'status soon' }, ico('alert', 'ico-sm'), 'آخر موعد للتقديم اليوم!');
       return el('span', { class: 'status ' + (d <= 3 ? 'soon' : fresh ? 'new' : 'open') },
         (fresh ? 'جديد · ' : '') + `متبقي ${d} ${d <= 10 ? 'أيام' : 'يوماً'}`);
     }
@@ -368,7 +377,7 @@
       toast('تمت إزالة الشاغر من المحفوظات');
     } else {
       savedMap[j.id] = j;
-      toast('تم حفظ الشاغر في المحفوظات 🔖');
+      toast('تم حفظ الشاغر في المحفوظات');
     }
     saveSaved();
     updateSavedCount();
@@ -527,8 +536,8 @@
 
     body.replaceChildren(...[
       el('div', { class: 'drawer-header' },
-        el('h2', { id: 'shareDialogTitle' }, '📤 مشاركة ونسخ الإعلان'),
-        el('button', { class: 'close', 'aria-label': 'إغلاق', onclick: () => dlg.close() }, '×')
+        el('h2', { id: 'shareDialogTitle' }, ico('share'), 'مشاركة ونسخ الإعلان'),
+        el('button', { class: 'close', 'aria-label': 'إغلاق', onclick: () => dlg.close() }, ico('x'))
       ),
       el('p', { class: 'drawer-desc' }, 'نص الإعلان جاهز للنسخ والنشر مع الوصف وطريقة التقديم الأساسية المحددة في الإعلان (إيميل CV أو رابط تقديم أو رقم تواصل):'),
       previewEl,
@@ -537,35 +546,35 @@
         el('button', {
           type: 'button',
           class: 'btn ghost',
-          onclick: () => copyText(linkToCopy, hasDirectLink ? 'تم نسخ رابط التقديم المباشر 🔗' : 'تم نسخ رابط الإعلان 🔗')
-        }, hasDirectLink ? '🔗 نسخ رابط التقديم' : '🔗 نسخ رابط الإعلان')
+          onclick: () => copyText(linkToCopy, hasDirectLink ? 'تم نسخ رابط التقديم المباشر' : 'تم نسخ رابط الإعلان')
+        }, ico('link'), hasDirectLink ? 'نسخ رابط التقديم' : 'نسخ رابط الإعلان')
       ),
       el('div', { class: 'share-actions' },
         el('button', {
           type: 'button',
           class: 'btn primary',
-          onclick: () => copyText(previewEl.value, 'تم نسخ الإعلان كاملاً مع الوصف ✅')
-        }, '📋 نسخ الإعلان مع الوصف'),
+          onclick: () => copyText(previewEl.value, 'تم نسخ الإعلان كاملاً مع الوصف')
+        }, ico('copy'), 'نسخ الإعلان مع الوصف'),
         j.email ? el('button', {
           type: 'button',
           class: 'btn ghost',
-          onclick: () => copyText(j.email, 'تم نسخ البريد الإلكتروني للتقديم ✉️')
-        }, '✉️ نسخ الإيميل فقط') : null,
+          onclick: () => copyText(j.email, 'تم نسخ البريد الإلكتروني للتقديم')
+        }, ico('mail'), 'نسخ الإيميل فقط') : null,
         el('button', {
           type: 'button',
           class: 'btn ghost',
           onclick: () => window.open('https://wa.me/?text=' + encodeURIComponent(previewEl.value), '_blank', 'noopener')
-        }, '💬 إرسال عبر واتساب'),
+        }, ico('whatsapp'), 'إرسال عبر واتساب'),
         el('button', {
           type: 'button',
           class: 'btn ghost',
           onclick: () => window.open('https://t.me/share/url?url=' + encodeURIComponent(linkToCopy) + '&text=' + encodeURIComponent(previewEl.value), '_blank', 'noopener')
-        }, '✈️ إرسال عبر تيليجرام'),
+        }, ico('send'), 'إرسال عبر تيليجرام'),
         navigator.share ? el('button', {
           type: 'button',
           class: 'btn ghost',
           onclick: () => navigator.share({ title: j.title, text: previewEl.value }).catch(() => {})
-        }, '📲 مشاركة عبر الجهاز') : null
+        }, ico('share'), 'مشاركة عبر الجهاز') : null
       )
     ].filter(Boolean));
 
@@ -612,22 +621,22 @@
     const out = el('div', { class: 'links' });
     const wa = waLink(j);
     if (wa) {
-      out.append(el('a', { class: 'wa', href: wa, target: '_blank', rel: 'noopener' }, 'راسل واتساب'));
+      out.append(el('a', { class: 'wa', href: wa, target: '_blank', rel: 'noopener' }, ico('whatsapp', 'ico-sm'), 'راسل واتساب'));
     }
     const phone = (j.phones || [])[0];
     if (phone && !j.whatsapp) {
-      out.append(el('a', { class: 'call', href: 'tel:' + phone }, 'اتصل ' + phone));
+      out.append(el('a', { class: 'call', href: 'tel:' + phone }, ico('phone', 'ico-sm'), 'اتصل ' + phone));
     }
     if (j.apply_url && !/^https?:\/\/(?:wa\.me\/|api\.whatsapp\.com\/)/i.test(j.apply_url) && !(j.deadline && daysLeft(j.deadline) < 0)) {
       const isForm = (j.apply_types || []).includes('form');
-      out.append(el('a', { class: 'apply', href: j.apply_url, target: '_blank', rel: 'noopener' }, isForm ? 'تعبئة استمارة التقديم' : 'التقديم عبر الموقع'));
+      out.append(el('a', { class: 'apply', href: j.apply_url, target: '_blank', rel: 'noopener' }, ico(isForm ? 'file-text' : 'external-link', 'ico-sm'), isForm ? 'تعبئة استمارة التقديم' : 'التقديم عبر الموقع'));
     }
     const isWrapperUrl = (u) => /(?:^|\.)(?:worklink\.sy|jobinsyria\.com|reliefweb\.int|unjobs\.org|unjobnet\.org|ngosquare\.com|jobsyria\.org|nsjobs\.net|ngossyria\.com|sqrjobs\.net|syria-jobs\.com|shamhr\.com|forsa-sy\.com|jobsintr\.net|salamjobs\.com|adwhit\.com|ab-ilan\.com|wazifturk\.com|mahereen\.com|spc\.sy)(?:\/|$)/i.test((() => { try { return new URL(u).hostname; } catch { return ''; } })());
     if (j.details_url && j.details_url !== j.apply_url && !isWrapperUrl(j.details_url)) {
-      out.append(el('a', { href: j.details_url, target: '_blank', rel: 'noopener' }, 'تفاصيل الإعلان'));
+      out.append(el('a', { href: j.details_url, target: '_blank', rel: 'noopener' }, ico('external-link', 'ico-sm'), 'تفاصيل الإعلان'));
     }
     if (j.email) {
-      out.append(el('a', { href: 'mailto:' + j.email }, 'إرسال CV بالإيميل'));
+      out.append(el('a', { href: 'mailto:' + j.email }, ico('mail', 'ico-sm'), 'إرسال CV بالإيميل'));
     }
     visibleSources(j).slice(0, big ? 6 : 1).forEach((s) => {
       out.append(el('a', { href: s.post_url, target: '_blank', rel: 'noopener' }, 'المصدر: ' + s.label));
@@ -638,20 +647,40 @@
       class: 'report',
       onclick: (e) => {
         toggleSave(j);
-        e.currentTarget.textContent = savedMap[j.id] ? '🔖 محفوظة' : 'احفظ';
+        const nowSav = Boolean(savedMap[j.id]);
+        e.currentTarget.replaceChildren(ico(nowSav ? 'bookmark-filled' : 'bookmark', 'ico-sm'), nowSav ? 'محفوظة' : 'احفظ');
       }
-    }, isSav ? '🔖 محفوظة' : 'احفظ');
+    }, ico(isSav ? 'bookmark-filled' : 'bookmark', 'ico-sm'), isSav ? 'محفوظة' : 'احفظ');
 
     const hasDirectLink = Boolean(j.apply_url && !/^https?:\/\/(?:wa\.me\/|api\.whatsapp\.com\/)/i.test(j.apply_url));
     out.append(
-      el('button', { class: 'report share-btn', onclick: () => shareJob(j) }, '📤 مشاركة ونسخ الإعلان'),
+      el('button', { class: 'report share-btn', onclick: () => shareJob(j) }, ico('share', 'ico-sm'), 'مشاركة ونسخ'),
       j.email && !hasDirectLink
-        ? el('button', { class: 'report', onclick: () => copyText(j.email, 'تم نسخ إيميل التقديم ✉️') }, '✉️ نسخ الإيميل')
-        : el('button', { class: 'report', onclick: () => copyText(primaryJobLink(j), 'تم نسخ الرابط 🔗') }, '🔗 نسخ الرابط'),
+        ? el('button', { class: 'report', onclick: () => copyText(j.email, 'تم نسخ إيميل التقديم') }, ico('mail', 'ico-sm'), 'نسخ الإيميل')
+        : el('button', { class: 'report', onclick: () => copyText(primaryJobLink(j), 'تم نسخ الرابط') }, ico('link', 'ico-sm'), 'نسخ الرابط'),
       saveBtn,
-      el('button', { class: 'report', onclick: () => report(j) }, 'بلّغ')
+      el('button', { class: 'report', onclick: () => report(j) }, ico('flag', 'ico-sm'), 'بلّغ')
     );
     return out;
+  }
+
+  function renderSkeletons(count = 6) {
+    const frag = [];
+    for (let i = 0; i < count; i++) {
+      frag.push(
+        el('article', { class: 'card skeleton-card', 'aria-hidden': 'true' },
+          el('div', { class: 'skel-row' },
+            el('div', { class: 'skel skel-pill' }),
+            el('div', { class: 'skel skel-pill' })
+          ),
+          el('div', { class: 'skel skel-title' }),
+          el('div', { class: 'skel skel-box' }),
+          el('div', { class: 'skel skel-desc' }),
+          el('div', { class: 'skel skel-foot' })
+        )
+      );
+    }
+    $('grid').replaceChildren(...frag);
   }
 
   function card(j, i) {
@@ -659,6 +688,7 @@
     const m = fit(j);
     const style = `--edge:var(--exp-${band});--ebg:var(--exp-${band}-bg);--efg:var(--exp-${band});--i:${Math.min(i, 12)}`;
     const sec = j.sector || (j.official ? 'gov' : 'private');
+    const secMeta = SECTOR_UI[sec] || SECTOR_UI.private;
     const ent = entityMeta(j);
     const pubDay = formatDate(j.posted_at);
     const dlDay = formatDate(j.deadline);
@@ -670,18 +700,18 @@
     const desc = summaryText ? el('p', { class: 'card-desc' }, ...highlightNodes(summaryText, state.terms)) : null;
 
     const datesRow = (pubDay || endDay) ? el('div', { class: 'card-dates' },
-      pubDay ? el('span', { class: 'card-date-item' }, `🗓️ تاريخ النشر: ${pubDay}`) : null,
-      endDay ? el('span', { class: 'card-date-item' + (dlDay ? ' is-dl' : '') }, `⏳ ${endLabel}: ${endDay}`) : null
+      pubDay ? el('span', { class: 'card-date-item' }, ico('calendar', 'ico-sm'), `تاريخ النشر: ${pubDay}`) : null,
+      endDay ? el('span', { class: 'card-date-item' + (dlDay ? ' is-dl' : '') }, ico('hourglass', 'ico-sm'), `${endLabel}: ${endDay}`) : null
     ) : null;
 
     const orgLoc = el('div', { class: 'card-org-loc' },
-      el('span', { class: 'card-org' }, ...highlightNodes(`${ent.icon} ${ent.role}: ${ent.name}`, state.terms)),
-      el('span', { class: 'card-loc' }, ...highlightNodes(`📍 المدينة: ${cityTxt}`, state.terms))
+      el('span', { class: 'card-org' }, ico(ent.ico, 'ico-sm'), ...highlightNodes(`${ent.role}: ${ent.name}`, state.terms)),
+      el('span', { class: 'card-loc' }, ico('map-pin', 'ico-sm'), ...highlightNodes(`المدينة: ${cityTxt}`, state.terms))
     );
 
     return el('article', { class: 'card in', style },
       el('div', { class: 'top' },
-        el('span', { class: 'sec-tag sec-' + sec }, (SECTOR_UI[sec] && SECTOR_UI[sec].label) || '🏢 قطاع خاص'),
+        el('span', { class: 'sec-tag sec-' + sec }, ico(secMeta.ico, 'ico-sm'), secMeta.label),
         statusOf(j)
       ),
       datesRow,
@@ -696,17 +726,16 @@
 
   function openDetail(j) {
     const m = fit(j);
+    const sec = j.sector || (j.official ? 'gov' : 'private');
+    const secMeta = SECTOR_UI[sec] || SECTOR_UI.private;
     const ent = entityMeta(j);
     const defaultCountry = j.country === 'tr' ? 'تركيا (عام)' : 'سوريا (عام)';
+    const citiesTxt = (j.cities || []).join('، ') || defaultCountry;
     const pubDay = formatDate(j.posted_at);
     const dlDay = formatDate(j.deadline);
     const expDay = formatDate(j.expires_on);
     const kv = [
-      [ent.role, ent.name],
-      ['المدينة / المحافظة', (j.cities || []).join('، ') || defaultCountry],
-      ['تاريخ النشر', pubDay],
-      [dlDay ? 'آخر موعد للتقديم' : 'تاريخ الانتهاء المتوقع', dlDay || expDay],
-      ['القطاع', (SECTOR_UI[j.sector] && SECTOR_UI[j.sector].label) || 'قطاع خاص'],
+      ['القطاع', secMeta.label],
       ['مجال العمل', j.field && j.field !== 'other' ? fieldLabel(j.field) : null],
       ['المؤهل العلمي', j.education ? (EDU_LABEL[j.education] || j.education) : 'غير مشترط / غير مذكور'],
       ['التخصص الدقيق', j.specialty],
@@ -718,43 +747,78 @@
 
     const listBlock = (title, items) => (items && items.length) ? [el('h4', null, title), el('ul', null, items.map((x) => el('li', null, x)))] : [];
     const detSummary = cleanSummary(j.summary);
-    const summaryBlock = detSummary ? [el('h4', null, 'نبذة ووصف الشاغر'), el('p', { style: 'margin:4px 0 10px;line-height:1.6' }, detSummary)] : [];
+    const summaryBlock = detSummary ? [el('h4', null, ico('file-text', 'ico-sm'), 'نبذة ووصف الشاغر'), el('p', { style: 'margin:0;line-height:1.72' }, detSummary)] : [];
     const hasDirectLink = Boolean(j.apply_url && !/^https?:\/\/(?:wa\.me\/|api\.whatsapp\.com\/)/i.test(j.apply_url));
     const shareSection = el('div', { class: 'share-box' },
-      el('div', { class: 'share-box-title' }, '📤 مشاركة الإعلان أو نسخه مع الوصف وطريقة التقديم:'),
+      el('div', { class: 'share-box-title' }, ico('share', 'ico-sm'), 'مشاركة الإعلان أو نسخه مع الوصف وطريقة التقديم:'),
       el('div', { class: 'share-actions' },
-        el('button', { type: 'button', class: 'btn primary', onclick: () => copyText(buildShareText(j), 'تم نسخ الإعلان كاملاً مع الوصف ✅') }, '📋 نسخ الإعلان مع الوصف'),
+        el('button', { type: 'button', class: 'btn primary', onclick: () => copyText(buildShareText(j), 'تم نسخ الإعلان كاملاً مع الوصف') }, ico('copy', 'ico-sm'), 'نسخ الإعلان مع الوصف'),
         j.email && !hasDirectLink
-          ? el('button', { type: 'button', class: 'btn ghost', onclick: () => copyText(j.email, 'تم نسخ إيميل التقديم ✉️') }, '✉️ نسخ الإيميل للتقديم')
-          : el('button', { type: 'button', class: 'btn ghost', onclick: () => copyText(primaryJobLink(j), 'تم نسخ الرابط 🔗') }, '🔗 نسخ الرابط فقط'),
-        el('button', { type: 'button', class: 'btn ghost', onclick: () => shareJob(j) }, '📝 معاينة النص أو إرساله واتساب/تيليجرام')
+          ? el('button', { type: 'button', class: 'btn ghost', onclick: () => copyText(j.email, 'تم نسخ إيميل التقديم') }, ico('mail', 'ico-sm'), 'نسخ الإيميل للتقديم')
+          : el('button', { type: 'button', class: 'btn ghost', onclick: () => copyText(primaryJobLink(j), 'تم نسخ الرابط') }, ico('link', 'ico-sm'), 'نسخ الرابط فقط'),
+        el('button', { type: 'button', class: 'btn ghost', onclick: () => shareJob(j) }, ico('send', 'ico-sm'), 'معاينة أو إرسال واتساب / تيليجرام')
       )
     );
 
     const offSrcs = visibleSources(j);
     const sourcesSection = offSrcs.length ? [
-      el('h4', null, 'جهات نشر وتوثيق الشاغر:'),
+      el('h4', null, ico('shield-check', 'ico-sm'), 'جهات نشر وتوثيق الشاغر:'),
       el('ul', null, offSrcs.map((s) => el('li', null, el('a', { href: s.post_url, target: '_blank', rel: 'noopener' }, s.label))))
     ] : [];
 
-    $('sheetBody').replaceChildren(...[
-      el('button', { class: 'close', 'aria-label': 'إغلاق', onclick: () => $('sheet').close() }, '×'),
+    const metaGrid = el('div', { class: 'sheet-meta-grid' },
+      el('div', { class: 'sheet-meta-card' },
+        el('small', null, ico(ent.ico, 'ico-sm'), ent.role),
+        el('b', null, ent.name)
+      ),
+      el('div', { class: 'sheet-meta-card' },
+        el('small', null, ico('map-pin', 'ico-sm'), 'المدينة / المحافظة'),
+        el('b', null, citiesTxt)
+      ),
+      pubDay ? el('div', { class: 'sheet-meta-card' },
+        el('small', null, ico('calendar', 'ico-sm'), 'تاريخ النشر'),
+        el('b', null, pubDay)
+      ) : null,
+      (dlDay || expDay) ? el('div', { class: 'sheet-meta-card' + (dlDay ? ' is-dl' : '') },
+        el('small', null, ico('hourglass', 'ico-sm'), dlDay ? 'آخر موعد للتقديم' : 'تاريخ الانتهاء المتوقع'),
+        el('b', null, dlDay || expDay)
+      ) : null
+    );
+
+    const headEl = el('div', { class: 'sheet-head' },
+      el('div', { class: 'sheet-head-top' },
+        el('div', { style: 'display:flex;align-items:center;gap:8px;flex-wrap:wrap' },
+          el('span', { class: 'sec-tag sec-' + sec }, ico(secMeta.ico, 'ico-sm'), secMeta.label),
+          statusOf(j)
+        ),
+        el('button', { class: 'close', 'aria-label': 'إغلاق', onclick: () => $('sheet').close() }, ico('x'))
+      ),
       el('h2', { id: 'sheetTitle' }, j.title),
-      j.official ? el('span', { class: 'official', style: 'align-self:flex-start' }, 'رسمي ✓ مسابقة أو إعلان حكومي') : null,
+      j.official ? el('span', { class: 'official', style: 'align-self:flex-start' }, ico('shield-check', 'ico-sm'), 'رسمي · مسابقة أو إعلان حكومي') : null
+    );
+
+    const contentEl = el('div', { class: 'sheet-content' }, ...[
+      metaGrid,
       m ? el('div', { class: 'fit ' + m.level }, el('i'), m.text) : null,
-      el('dl', { class: 'kv' }, kv.map(([k, v]) => [el('dt', null, k), el('dd', null, v)])),
-      summaryBlock,
-      listBlock('المهام والمسؤوليات الرئيسية', j.tasks),
-      listBlock('الشروط والمهارات المطلوبة', j.skills),
+      kv.length ? el('dl', { class: 'kv' }, kv.map(([k, v]) => [el('dt', null, k), el('dd', null, v)])) : null,
+      ...summaryBlock,
+      ...listBlock('المهام والمسؤوليات الرئيسية', j.tasks),
+      ...listBlock('الشروط والمهارات المطلوبة', j.skills),
       shareSection,
       ...sourcesSection,
       links(j, true),
-      el('div', { class: 'row', style: 'margin-top:10px' },
-        el('a', { class: 'btn primary', href: 'cv.html?job=' + j.id }, 'إنشاء سيرة ذاتية لهذا الشاغر'),
-        el('button', { class: 'btn ghost', onclick: () => speakJob(j) }, '🔊 قراءة صوتية للإعلان'),
-        j.deadline ? el('button', { class: 'btn ghost', onclick: () => downloadIcs(j) }, '📅 تذكير بالموعد') : null
+      el('div', { class: 'row', style: 'margin-top:4px' },
+        el('a', { class: 'btn primary', href: 'cv.html?job=' + j.id }, ico('file-text', 'ico-sm'), 'إنشاء سيرة ذاتية لهذا الشاغر'),
+        el('button', { class: 'btn ghost', onclick: () => speakJob(j) }, ico('volume', 'ico-sm'), 'قراءة صوتية'),
+        j.deadline ? el('button', { class: 'btn ghost', onclick: () => downloadIcs(j) }, ico('calendar', 'ico-sm'), 'تذكير بالموعد') : null
       )
     ].flat(Infinity).filter(Boolean));
+
+    $('sheetBody').replaceChildren(
+      el('div', { class: 'sheet-handle', 'aria-hidden': 'true' }),
+      headEl,
+      contentEl
+    );
 
     $('sheet').showModal();
   }
@@ -814,7 +878,7 @@
     let wrap = selEl.parentElement.querySelector(`.msel[data-for="${selectId}"]`);
     if (wrap) wrap.remove();
 
-    const btnText = el('span', { class: 'msel-btn-text' }, `${cfg.icon} ${cfg.placeholder}`);
+    const btnText = el('span', { class: 'msel-btn-text' });
     const badge = el('span', { class: 'msel-badge', hidden: true }, '0');
     const caret = el('span', { class: 'msel-caret' }, '▾');
     const btn = el('button', {
@@ -933,22 +997,30 @@
       listEl.replaceChildren(...rows);
     }
 
+    function setBtnLabel(txt) {
+      if (cfg.ico) {
+        btnText.replaceChildren(ico(cfg.ico, 'ico-sm'), el('span', null, txt));
+      } else {
+        btnText.textContent = cfg.icon ? `${cfg.icon} ${txt}` : txt;
+      }
+    }
+
     function sync() {
       const selected = splitCsv(cfg.getValue());
       const labels = selected.map((v) => labelMap[v] || v);
       if (!selected.length) {
-        btnText.textContent = `${cfg.icon} ${cfg.placeholder}`;
+        setBtnLabel(cfg.placeholder);
         badge.hidden = true;
         btn.classList.remove('has-val');
         statusText.textContent = 'الكل متاح';
       } else if (selected.length === 1) {
-        btnText.textContent = `${cfg.icon} ${labels[0]}`;
+        setBtnLabel(labels[0]);
         badge.hidden = true;
         btn.classList.add('has-val');
         statusText.textContent = 'تم اختيار عنصر واحد';
       } else {
         const preview = labels.slice(0, 2).join('، ') + (labels.length > 2 ? ` (+${labels.length - 2})` : '');
-        btnText.textContent = `${cfg.icon} ${preview}`;
+        setBtnLabel(preview);
         badge.textContent = String(selected.length);
         badge.hidden = false;
         btn.classList.add('has-val');
@@ -992,20 +1064,24 @@
     const box = $('activeFilterPills');
     if (!box) return;
     const pills = [];
-    const addPill = (label, clearFn) => {
-      pills.push(el('span', { class: 'active-pill' }, label, el('button', { type: 'button', 'aria-label': 'إزالة ' + label, onclick: clearFn }, '×')));
+    const addPill = (iconName, label, clearFn) => {
+      pills.push(el('span', { class: 'active-pill' },
+        iconName ? ico(iconName, 'ico-sm') : null,
+        el('span', null, label),
+        el('button', { type: 'button', 'aria-label': 'إزالة ' + label, onclick: clearFn }, '×')
+      ));
     };
-    if (state.q) addPill(`بحث: «${state.q}»`, () => { state.q = ''; syncFilterUI(); refresh(); });
-    if (state.sector && SECTOR_UI[state.sector]) addPill(SECTOR_UI[state.sector].label, () => { state.sector = ''; syncFilterUI(); refresh(); });
+    if (state.q) addPill('search', `بحث: «${state.q}»`, () => { state.q = ''; syncFilterUI(); refresh(); });
+    if (state.sector && SECTOR_UI[state.sector]) addPill(SECTOR_UI[state.sector].ico, SECTOR_UI[state.sector].label, () => { state.sector = ''; syncFilterUI(); refresh(); });
     for (const c of splitCsv(state.city)) {
-      addPill(`📍 ${c}`, () => { state.city = removeCsvItem(state.city, c); syncFilterUI(); refresh(); });
+      addPill('map-pin', c, () => { state.city = removeCsvItem(state.city, c); syncFilterUI(); refresh(); });
     }
     for (const e of splitCsv(state.edu)) {
-      addPill(`🎓 ${EDU_LABEL[e] || e}`, () => { state.edu = removeCsvItem(state.edu, e); syncFilterUI(); refresh(); });
+      addPill('graduation-cap', EDU_LABEL[e] || e, () => { state.edu = removeCsvItem(state.edu, e); syncFilterUI(); refresh(); });
     }
-    if (state.edu_group) addPill(state.edu_group === 'degree' ? '🎓 بشهادة' : '🛠️ بدون شهادة', () => { state.edu_group = ''; syncFilterUI(); refresh(); });
+    if (state.edu_group) addPill(state.edu_group === 'degree' ? 'graduation-cap' : 'wrench', state.edu_group === 'degree' ? 'بشهادة' : 'بدون شهادة', () => { state.edu_group = ''; syncFilterUI(); refresh(); });
     for (const f of splitCsv(state.field)) {
-      addPill(`💼 ${fieldLabel(f)}`, () => {
+      addPill('briefcase', fieldLabel(f), () => {
         state.field = removeCsvItem(state.field, f);
         if (!splitCsv(state.field).includes('computer')) state.sub = '';
         syncFilterUI();
@@ -1013,13 +1089,14 @@
       });
     }
     for (const s of splitCsv(state.sub)) {
-      addPill(subLabel(s), () => { state.sub = removeCsvItem(state.sub, s); refresh(); });
+      addPill('tag', subLabel(s), () => { state.sub = removeCsvItem(state.sub, s); refresh(); });
     }
     for (const a of splitCsv(state.apply)) {
-      addPill(APPLY_UI[a] || a, () => { state.apply = removeCsvItem(state.apply, a); syncFilterUI(); refresh(); });
+      const aInfo = APPLY_UI[a];
+      addPill(aInfo ? aInfo.ico : 'send', aInfo ? aInfo.label : a, () => { state.apply = removeCsvItem(state.apply, a); syncFilterUI(); refresh(); });
     }
-    if (state.fresh) addPill('✦ جديد اليوم', () => { state.fresh = false; syncFilterUI(); refresh(); });
-    if (state.saved) addPill('🔖 المحفوظة فقط', () => { state.saved = false; syncFilterUI(); refresh(); });
+    if (state.fresh) addPill('sparkles', 'جديد اليوم', () => { state.fresh = false; syncFilterUI(); refresh(); });
+    if (state.saved) addPill('bookmark', 'المحفوظة فقط', () => { state.saved = false; syncFilterUI(); refresh(); });
     box.replaceChildren(...pills);
   }
 
@@ -1047,6 +1124,7 @@
 
     if (!append) state.offset = 0;
     const currentSeq = ++requestSeq;
+    if (!append) renderSkeletons(6);
 
     let data;
     try {
@@ -1165,7 +1243,10 @@
     document.querySelectorAll('#applyRow .chip').forEach((btn) => {
       const a = btn.dataset.apply;
       if (a && APPLY_UI[a]) {
-        btn.textContent = `${APPLY_UI[a]} (${counts[a] || 0})`;
+        btn.replaceChildren(
+          ico(APPLY_UI[a].ico, 'ico-sm'),
+          el('span', null, `${APPLY_UI[a].label} (${counts[a] || 0})`)
+        );
       }
     });
   }
@@ -1440,24 +1521,18 @@
       });
     }
 
-    // Theme toggle
-    $('theme').addEventListener('click', () => {
-      const dark = document.documentElement.dataset.theme ? document.documentElement.dataset.theme === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
-      document.documentElement.dataset.theme = dark ? 'light' : 'dark';
-      try { localStorage.setItem('laqeet.theme', document.documentElement.dataset.theme); } catch (e) {}
-    });
-    try {
-      const savedTheme = localStorage.getItem('laqeet.theme');
-      if (savedTheme) document.documentElement.dataset.theme = savedTheme;
-    } catch (e) {}
+    // Theme toggle is unified & pre-paint synced in ui.js via [data-theme-toggle]
 
     // Profile Drawer (Qualifications matching)
-    $('openProfileDrawer').addEventListener('click', () => {
+    const openProfileModal = () => {
       $('userEdu').value = profile.edu || '';
       $('userExp').value = profile.exp ?? '';
       $('userAge').value = profile.age || '';
       $('userGender').value = profile.gender || '';
       $('profileDrawer').showModal();
+    };
+    ['openProfileDrawer', 'navProfileBtn'].forEach((id) => {
+      if ($(id)) $(id).addEventListener('click', openProfileModal);
     });
     $('closeProfileDrawer').addEventListener('click', () => $('profileDrawer').close());
     $('profileDrawer').addEventListener('click', (e) => {
@@ -1473,7 +1548,7 @@
       };
       saveProfile();
       $('profileDrawer').close();
-      toast('تم حفظ ملفك الشخصي بنجاح وتفعيل المطابقة ✓');
+      toast('تم حفظ ملفك الشخصي بنجاح وتفعيل المطابقة');
       refresh();
     });
     $('clearProfileBtn').addEventListener('click', () => {
@@ -1488,12 +1563,25 @@
       refresh();
     });
 
-    // Back to Landing Page buttons inside Board View
-    ['backToLandingBtn', 'navHomeLink', 'footerHomeLink'].forEach((id) => {
+    // Unified Navbar & Back-to-Landing Navigation
+    ['navBrandHome', 'backToLandingBtn', 'navHomeLink', 'footerHomeLink'].forEach((id) => {
       if ($(id)) {
-        $(id).addEventListener('click', () => showLanding(true));
+        $(id).addEventListener('click', (e) => {
+          e.preventDefault();
+          showLanding(true);
+        });
       }
     });
+    if ($('navJobsLink')) {
+      $('navJobsLink').addEventListener('click', (e) => {
+        e.preventDefault();
+        if (state.view === 'board') {
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        } else {
+          enterBoard({ country: window._wizCountry || state.country || 'sy' }, true);
+        }
+      });
+    }
 
     // Board Country Switcher Tabs (🇸🇾 وظائف سوريا | 🇹🇷 وظائف تركيا)
     document.querySelectorAll('[data-board-country]').forEach((btn) => {
@@ -1540,24 +1628,27 @@
       const selSec = $('lpWizSector');
       if (selSec) {
         const prevSec = selSec.value;
-        selSec.replaceChildren(
+        const secOpts = [
           new Option(`كل القطاعات والمؤهلات (${cs.open || 0})`, ''),
-          new Option(`🤝 منظمات دولية وإنسانية NGOs (${cs.ngo_count || 0})`, 'ngo'),
-          new Option(`🏢 شركات وقطاع خاص (${cs.private_count || 0})`, 'private'),
-          new Option(`🏛️ قطاع حكومي ومسابقات (${cs.gov_count || 0})`, 'gov'),
-          new Option(`🛠️ فرص سريعة وبدون شهادة (${cs.no_degree_count || 0})`, 'nodegree')
-        );
-        selSec.value = prevSec;
+          new Option(`منظمات دولية وإنسانية NGOs (${cs.ngo_count || 0})`, 'ngo'),
+          new Option(`شركات وقطاع خاص (${cs.private_count || 0})`, 'private'),
+        ];
+        if (!isTr) {
+          secOpts.push(new Option(`قطاع حكومي ومسابقات (${cs.gov_count || 0})`, 'gov'));
+        }
+        secOpts.push(new Option(`فرص سريعة وبدون شهادة (${cs.no_degree_count || 0})`, 'nodegree'));
+        selSec.replaceChildren(...secOpts);
+        selSec.value = (prevSec === 'gov' && isTr) ? '' : prevSec;
       }
 
       const bar = $('lpWizSectorsBar');
       if (bar) {
         const countryTag = isTr ? 'تركيا 🇹🇷' : 'سوريا 🇸🇾';
         const items = [
-          { lbl: '🏢 قطاع خاص', cnt: cs.private_count || 0, sector: 'private' },
-          { lbl: '🤝 منظمات دولية', cnt: cs.ngo_count || 0, sector: 'ngo' },
-          { lbl: '🏛️ حكومي', cnt: cs.gov_count || 0, sector: 'gov' },
-          { lbl: '🛠️ بدون شهادة', cnt: cs.no_degree_count || 0, eduGroup: 'nodegree' }
+          { ico: 'building', lbl: 'قطاع خاص', cnt: cs.private_count || 0, sector: 'private' },
+          { ico: 'handshake', lbl: 'منظمات دولية', cnt: cs.ngo_count || 0, sector: 'ngo' },
+          ...(isTr ? [] : [{ ico: 'landmark', lbl: 'حكومي', cnt: cs.gov_count || 0, sector: 'gov' }]),
+          { ico: 'wrench', lbl: 'بدون شهادة', cnt: cs.no_degree_count || 0, eduGroup: 'nodegree' }
         ];
         bar.replaceChildren(
           el('span', { class: 'lp-wiz-sectors-title' }, `أرقام قطاعات ${countryTag}:`),
@@ -1569,7 +1660,7 @@
             };
             if (it.sector) attrs['data-enter-sector'] = it.sector;
             if (it.eduGroup) attrs['data-enter-edu-group'] = it.eduGroup;
-            return el('button', attrs, el('span', null, it.lbl), el('b', null, String(it.cnt)));
+            return el('button', attrs, ico(it.ico, 'ico-sm'), el('span', null, it.lbl), el('b', null, String(it.cnt)));
           })
         );
       }
@@ -1591,18 +1682,21 @@
 
       const gwCountrySuffix = isTr ? 'في تركيا 🇹🇷' : 'في سوريا 🇸🇾';
       const gwLinkText = {
-        ngo_count: `تصفح شواغر المنظمات ${gwCountrySuffix} ←`,
-        gov_count: `تصفح الوظائف الحكومية ${gwCountrySuffix} ←`,
-        private_count: `تصفح وظائف الشركات ${gwCountrySuffix} ←`,
-        no_degree_count: `تصفح الفرص السريعة ${gwCountrySuffix} ←`
+        ngo_count: `تصفح شواغر المنظمات ${gwCountrySuffix}`,
+        gov_count: `تصفح الوظائف الحكومية ${gwCountrySuffix}`,
+        private_count: `تصفح وظائف الشركات ${gwCountrySuffix}`,
+        no_degree_count: `تصفح الفرص السريعة ${gwCountrySuffix}`
       };
       document.querySelectorAll('[data-gw-card]').forEach((card) => {
         const key = card.dataset.gwCard;
+        card.hidden = isTr && key === 'gov_count';
         card.setAttribute('data-enter-country', c);
         const cntEl = card.querySelector('.gw-count');
         if (cntEl) cntEl.textContent = String(cs[key] != null ? cs[key] : 0);
         const lnkEl = card.querySelector('.gw-link');
-        if (lnkEl && gwLinkText[key]) lnkEl.textContent = gwLinkText[key];
+        if (lnkEl && gwLinkText[key]) {
+          lnkEl.replaceChildren(el('span', null, gwLinkText[key]), ico('arrow-left', 'ico-sm'));
+        }
       });
     };
     window._syncLandingCountry = syncLandingCountry;
@@ -1703,19 +1797,14 @@
 
   function setupHeadlineRotation() {
     const countryBox = $('lpCountryRot');
-    let flipTimer = 0;
-    startRotator('#rot span', 3200);
-    startRotator('#lpRoleRot span', 3400, { initialDelayMs: 1600 });
+    startRotator('#rot span', 3200, { exitMs: 500 });
+    startRotator('#lpRoleRot span', 3400, { initialDelayMs: 1600, exitMs: 500 });
     startRotator('#lpCountryRot span', 3800, {
       initialDelayMs: 3200,
-      onStep: (activeSpan, _idx, isInit) => {
+      exitMs: 500,
+      onStep: (activeSpan) => {
         if (!countryBox) return;
         countryBox.classList.toggle('is-tr', activeSpan.dataset.rotCountry === 'tr');
-        if (!isInit && !reduce) {
-          countryBox.classList.add('is-flipping');
-          clearTimeout(flipTimer);
-          flipTimer = setTimeout(() => countryBox.classList.remove('is-flipping'), 360);
-        }
       }
     });
   }
@@ -1745,7 +1834,7 @@
       citySel.value = '';
     }
     createMultiSelect('city', {
-      icon: '📍',
+      ico: 'map-pin',
       placeholder: isTr ? 'كل الولايات والمدن التركية' : 'كل المدن والمحافظات السورية',
       headerHint: isTr ? 'اختر ولاية تركية أو أكثر:' : 'اختر محافظة أو أكثر (14 محافظة):',
       twoColumns: true,
@@ -1803,6 +1892,9 @@
         const k = node.dataset.boardStat;
         node.textContent = String(cs[k] != null ? cs[k] : 0);
       });
+      box.querySelectorAll('[data-counter-sector="gov"]').forEach((node) => {
+        node.hidden = c === 'tr';
+      });
     }
     if ($('boardOpenLabel')) {
       $('boardOpenLabel').textContent = c === 'tr' ? 'فرصة مفتوحة في تركيا 🇹🇷' : 'إعلان مفتوح في سوريا 🇸🇾';
@@ -1857,10 +1949,15 @@
     }
   }
 
+  function syncNavViewState() {
+    if ($('navJobsLink')) $('navJobsLink').classList.toggle('is-active', state.view === 'board');
+  }
+
   function showLanding(pushHistory = true) {
     state.view = 'landing';
     if ($('landingView')) $('landingView').hidden = false;
     if ($('boardView')) $('boardView').hidden = true;
+    syncNavViewState();
     if (pushHistory) {
       try { history.pushState({ view: 'landing' }, '', location.pathname); } catch (e) {}
     }
@@ -1888,6 +1985,7 @@
 
     if ($('landingView')) $('landingView').hidden = true;
     if ($('boardView')) $('boardView').hidden = false;
+    syncNavViewState();
 
     rebuildCityMultiSelect(state.country);
     updateBoardHeroStats(state.country);
@@ -2011,7 +2109,7 @@
     rebuildCityMultiSelect('sy');
 
     createMultiSelect('eduFilter', {
-      icon: '🎓',
+      ico: 'graduation-cap',
       placeholder: 'كل الشهادات والمؤهلات',
       headerHint: 'اختر مؤهلاً علمياً أو أكثر:',
       twoColumns: false,
@@ -2026,7 +2124,7 @@
     });
 
     createMultiSelect('fieldFilter', {
-      icon: '💼',
+      ico: 'briefcase',
       placeholder: 'كل التخصصات والمجالات',
       headerHint: 'اختر تخصصاً أو مجال عمل أو أكثر:',
       twoColumns: false,

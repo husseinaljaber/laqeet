@@ -1,19 +1,56 @@
 <!doctype html>
-<html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>رادار النصب · هل هاد الإعلان حقيقي؟ · لقيت</title><meta name="theme-color" content="#0D1F18"><link rel="icon" href="icons/icon.svg">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600&family=Reem+Kufi:wght@500;600;700&display=swap">
-<link rel="stylesheet" href="app.css"><link rel="stylesheet" href="page.css">
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>رادار النصب · هل هاد الإعلان حقيقي؟ · لقيت</title>
+<meta name="theme-color" content="#0B1C16">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Alexandria:wght@500;600;700;800&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="app.css?v=31">
+<link rel="stylesheet" href="page.css?v=31">
+<script src="ui.js?v=31"></script>
 <style>
-.verdict{border-radius:var(--r);padding:14px;border:1px solid var(--line);display:flex;flex-direction:column;gap:6px}
+.verdict{border-radius:var(--r);padding:16px;border:1px solid var(--line);display:flex;flex-direction:column;gap:7px}
 .verdict.safe{background:var(--exp-low-bg);border-color:var(--exp-low);color:var(--exp-low)}
 .verdict.caution{background:var(--exp-mid-bg);border-color:var(--exp-mid);color:var(--exp-mid)}
 .verdict.danger{background:var(--exp-high-bg);border-color:var(--exp-high);color:var(--exp-high)}
-.verdict h3{margin:0;font-family:var(--font-display);font-size:1.2rem}
+.verdict h3{margin:0;font-family:var(--font-display);font-size:1.15rem;display:flex;align-items:center;gap:8px}
 .verdict ul{margin:4px 0 0;padding-inline-start:20px;color:var(--ink)}
-</style></head>
+</style>
+</head>
 <body>
+<nav class="site-nav" aria-label="التنقل الرئيسي">
+  <div class="inner site-nav-inner">
+    <a class="site-brand" href="./">
+      <img class="site-brand-mark" src="icons/icon.svg" alt="" width="36" height="36">
+      <span class="site-brand-text">
+        <span class="site-brand-name">لقيت</span>
+        <span class="site-brand-sub">سوريا وتركيا</span>
+      </span>
+    </a>
+    <div class="site-nav-links">
+      <a class="site-nav-link" href="./?view=jobs"><i data-ico="briefcase" data-ico-cls="ico-sm"></i><span>الوظائف</span></a>
+      <a class="site-nav-link" href="cv.html"><i data-ico="file-text" data-ico-cls="ico-sm"></i><span>سيرتي الذاتية</span></a>
+      <a class="site-nav-link" href="pulse.html"><i data-ico="bar-chart" data-ico-cls="ico-sm"></i><span>نبض السوق</span></a>
+      <a class="site-nav-link is-active" href="scam.html"><i data-ico="shield-check" data-ico-cls="ico-sm"></i><span>رادار النصب</span></a>
+      <a class="site-nav-link" href="employer.html"><i data-ico="megaphone" data-ico-cls="ico-sm"></i><span>انشر وظيفة</span></a>
+    </div>
+    <div class="site-nav-actions">
+      <button type="button" class="nav-icon-btn" data-theme-toggle aria-label="تبديل وضع الألوان">
+        <span class="theme-ico"></span><span class="theme-lbl">الليلي</span>
+      </button>
+      <button type="button" class="nav-icon-btn nav-menu-btn" data-nav-menu-toggle aria-label="القائمة" aria-expanded="false">
+        <i data-ico="menu"></i>
+      </button>
+    </div>
+  </div>
+</nav>
+
 <section class="hero slim"><div class="inner">
-  <div class="eyebrow"><a class="link" href="./">← رجوع للشغل</a></div>
+  <div class="eyebrow"><a class="link" href="./?view=jobs"><i data-ico="arrow-left" data-ico-cls="ico-sm"></i><span>رجوع للوظائف</span></a></div>
   <h1><span class="brand">رادار النصب</span> هل هاد الإعلان حقيقي؟</h1>
   <p class="sub">انسخ نص أي إعلان شفته على واتساب أو فيسبوك أو تلغرام والصقه هون. منفحصلك إشارات الاحتيال وتكرار رقم التلفون عبر المدن فوراً.</p>
 </div></section>
@@ -21,9 +58,9 @@
   <div class="box">
     <label>نص الإعلان <textarea id="txt" rows="7" placeholder="مثال: مطلوب موظفين من البيت بربح يومي 50$ مع مكافأة تسجيل..."></textarea></label>
     <div class="row">
-      <button class="btn primary" id="check">افحص الإعلان</button>
-      <button class="btn" style="border:1px solid var(--line)" id="sampleBad">جرّب مثال نصب</button>
-      <button class="btn" style="border:1px solid var(--line)" id="sampleOk">جرّب مثال عادي</button>
+      <button class="btn primary" id="check"><i data-ico="shield-check" data-ico-cls="ico-sm"></i><span>افحص الإعلان</span></button>
+      <button class="btn ghost" id="sampleBad">جرّب مثال نصب</button>
+      <button class="btn ghost" id="sampleOk">جرّب مثال عادي</button>
     </div>
     <div id="out" hidden></div>
   </div>
@@ -40,9 +77,9 @@
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const LABEL = {
-  safe: ['✅ الإعلان شكله طبيعي', 'ما لقينا علامات نصب واضحة، بس تأكد دايماً وما تدفع أي مبلغ قبل ما تبدأ شغل.'],
-  caution: ['⚠️ انتبه شوي وشيّك قبل ما تتواصل', 'في إشارات بتحتاج حذر وتأكد من اسم الجهة الحقيقي.'],
-  danger: ['🚨 احتمال نصب كبير — احذر!', 'الإعلان فيه علامات احتيال واضحة. لا تبعت أوراقك ولا تدفع أي مصاري.'],
+  safe: ['check-circle', 'الإعلان شكله طبيعي', 'ما لقينا علامات نصب واضحة، بس تأكد دايماً وما تدفع أي مبلغ قبل ما تبدأ شغل.'],
+  caution: ['alert', 'انتبه شوي وشيّك قبل ما تتواصل', 'في إشارات بتحتاج حذر وتأكد من اسم الجهة الحقيقي.'],
+  danger: ['shield-alert', 'احتمال نصب كبير — احذر!', 'الإعلان فيه علامات احتيال واضحة. لا تبعت أوراقك ولا تدفع أي مصاري.'],
 };
 async function run() {
   const text = $('txt').value.trim();
@@ -50,15 +87,17 @@ async function run() {
   if (text.length < 10) { out.hidden = false; out.className = 'verdict caution'; out.innerHTML = '<h3>الصق نص أطول شوي</h3>'; return; }
   const r = await fetch('/api/scam-check', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({text})});
   const d = await r.json();
-  const [title, sub] = LABEL[d.verdict] || LABEL.caution;
+  const [icoName, title, sub] = LABEL[d.verdict] || LABEL.caution;
+  const icoHtml = (window.LaqeetUI && window.LaqeetUI.iconHtml) ? window.LaqeetUI.iconHtml(icoName) : '';
   const reasons = d.reasons.length ? '<ul>' + d.reasons.map(x => `<li>${esc(x)}</li>`).join('') + '</ul>' : '';
   const phones = (d.phones || []).map(p => `الرقم ${esc(p.phone)}: ظهر في ${p.ads} إعلان بـ ${p.cities} مدن`).join(' · ');
   out.hidden = false;
   out.className = 'verdict ' + d.verdict;
-  out.innerHTML = `<h3>${title}</h3><p style="margin:0;color:var(--ink)">${sub}</p>${reasons}${phones ? `<p style="margin:4px 0 0;font-size:.82rem;color:var(--muted)">${phones}</p>` : ''}`;
+  out.innerHTML = `<h3>${icoHtml}<span>${title}</span></h3><p style="margin:0;color:var(--ink)">${sub}</p>${reasons}${phones ? `<p style="margin:4px 0 0;font-size:.82rem;color:var(--muted)">${phones}</p>` : ''}`;
 }
 $('check').addEventListener('click', run);
 $('sampleBad').addEventListener('click', () => { $('txt').value = 'مطلوب شباب وصبايا للعمل من البيت بربح يومي 40$ على بينانس بدون خبرة! دفع رسوم تسجيل رمزية عبر شام كاش.'; run(); });
 $('sampleOk').addEventListener('click', () => { $('txt').value = 'تعلن شركة النور في دمشق عن حاجتها لمحاسب بخبرة سنتين بدوام كامل من 9 حتى 5. للتواصل واتساب 0933123456'; run(); });
 </script>
-</body></html>
+</body>
+</html>

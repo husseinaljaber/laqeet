@@ -1,11 +1,48 @@
 <!doctype html>
-<html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>انشر إعلان شغل · لقيت</title><meta name="theme-color" content="#0D1F18"><link rel="icon" href="icons/icon.svg">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600&family=Reem+Kufi:wght@500;600;700&display=swap">
-<link rel="stylesheet" href="app.css"><link rel="stylesheet" href="page.css"></head>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>انشر إعلان شغل · لقيت</title>
+<meta name="theme-color" content="#0B1C16">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Alexandria:wght@500;600;700;800&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="app.css?v=31">
+<link rel="stylesheet" href="page.css?v=31">
+<script src="ui.js?v=31"></script>
+</head>
 <body>
+<nav class="site-nav" aria-label="التنقل الرئيسي">
+  <div class="inner site-nav-inner">
+    <a class="site-brand" href="./">
+      <img class="site-brand-mark" src="icons/icon.svg" alt="" width="36" height="36">
+      <span class="site-brand-text">
+        <span class="site-brand-name">لقيت</span>
+        <span class="site-brand-sub">سوريا وتركيا</span>
+      </span>
+    </a>
+    <div class="site-nav-links">
+      <a class="site-nav-link" href="./?view=jobs"><i data-ico="briefcase" data-ico-cls="ico-sm"></i><span>الوظائف</span></a>
+      <a class="site-nav-link" href="cv.html"><i data-ico="file-text" data-ico-cls="ico-sm"></i><span>سيرتي الذاتية</span></a>
+      <a class="site-nav-link" href="pulse.html"><i data-ico="bar-chart" data-ico-cls="ico-sm"></i><span>نبض السوق</span></a>
+      <a class="site-nav-link" href="scam.html"><i data-ico="shield-check" data-ico-cls="ico-sm"></i><span>رادار النصب</span></a>
+      <a class="site-nav-link is-active" href="employer.html"><i data-ico="megaphone" data-ico-cls="ico-sm"></i><span>انشر وظيفة</span></a>
+    </div>
+    <div class="site-nav-actions">
+      <button type="button" class="nav-icon-btn" data-theme-toggle aria-label="تبديل وضع الألوان">
+        <span class="theme-ico"></span><span class="theme-lbl">الليلي</span>
+      </button>
+      <button type="button" class="nav-icon-btn nav-menu-btn" data-nav-menu-toggle aria-label="القائمة" aria-expanded="false">
+        <i data-ico="menu"></i>
+      </button>
+    </div>
+  </div>
+</nav>
+
 <section class="hero slim"><div class="inner">
-  <div class="eyebrow"><a class="link" href="./">← رجوع للشغل</a></div>
+  <div class="eyebrow"><a class="link" href="./?view=jobs"><i data-ico="arrow-left" data-ico-cls="ico-sm"></i><span>رجوع للوظائف</span></a></div>
   <h1>عندك شغل؟ <span class="brand">انشره ببلاش</span></h1>
   <p class="sub">إعلانك بيوصل للناس يلي شهادتهم ومدينتهم بتناسبه، وبيوصلهم كمان على بوت التلغرام. منراجع كل إعلان قبل ما ينزل (عادة خلال يوم).</p>
 </div></section>
@@ -34,7 +71,7 @@
   </div>
   <input class="hp" name="website" tabindex="-1" autocomplete="off" aria-hidden="true">
   <p class="note" style="color:var(--muted)">ممنوع تطلب مصاري من المتقدمين. أي إعلان بيطلب رسوم أو اشتراك بينرفض.</p>
-  <button class="btn primary" style="align-self:flex-start">ابعت للمراجعة</button>
+  <button class="btn primary" style="align-self:flex-start"><i data-ico="send" data-ico-cls="ico-sm"></i><span>ابعت للمراجعة</span></button>
   <div id="msg" role="status"></div>
 </form>
 </main>
@@ -49,8 +86,16 @@ f.addEventListener('submit', async (e) => {
   const body = Object.fromEntries(new FormData(f)); body.whatsapp = f.whatsapp.checked;
   const r = await fetch('/api/employer/jobs', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)});
   const d = await r.json().catch(() => ({}));
-  if (r.ok) { msg.className = 'ok'; msg.textContent = 'وصل إعلانك ✅ منراجعه وبينزل خلال يوم. شكراً!'; f.reset(); }
-  else { msg.className = 'err'; msg.textContent = d.detail || 'ما زبط، جرّب كمان مرة'; }
+  if (r.ok) {
+    msg.className = 'ok';
+    const checkIco = (window.LaqeetUI && window.LaqeetUI.iconHtml) ? window.LaqeetUI.iconHtml('check-circle', 'ico-sm') : '';
+    msg.innerHTML = `<span style="display:inline-flex;align-items:center;gap:6px">${checkIco}<span>وصل إعلانك بنجاح، منراجعه وبينزل خلال يوم. شكراً!</span></span>`;
+    f.reset();
+  } else {
+    msg.className = 'err';
+    msg.textContent = d.detail || 'ما زبط، جرّب كمان مرة';
+  }
 });
 </script>
-</body></html>
+</body>
+</html>

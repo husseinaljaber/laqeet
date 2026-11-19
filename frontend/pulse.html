@@ -1,18 +1,55 @@
 <!doctype html>
-<html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>نبض السوق · لقيت</title><meta name="theme-color" content="#0D1F18"><link rel="icon" href="icons/icon.svg">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600&family=Reem+Kufi:wght@500;600;700&display=swap">
-<link rel="stylesheet" href="app.css"><link rel="stylesheet" href="page.css"></head>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>نبض السوق · لقيت</title>
+<meta name="theme-color" content="#0B1C16">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Alexandria:wght@500;600;700;800&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="app.css?v=31">
+<link rel="stylesheet" href="page.css?v=31">
+<script src="ui.js?v=31"></script>
+</head>
 <body>
+<nav class="site-nav" aria-label="التنقل الرئيسي">
+  <div class="inner site-nav-inner">
+    <a class="site-brand" href="./">
+      <img class="site-brand-mark" src="icons/icon.svg" alt="" width="36" height="36">
+      <span class="site-brand-text">
+        <span class="site-brand-name">لقيت</span>
+        <span class="site-brand-sub">سوريا وتركيا</span>
+      </span>
+    </a>
+    <div class="site-nav-links">
+      <a class="site-nav-link" href="./?view=jobs"><i data-ico="briefcase" data-ico-cls="ico-sm"></i><span>الوظائف</span></a>
+      <a class="site-nav-link" href="cv.html"><i data-ico="file-text" data-ico-cls="ico-sm"></i><span>سيرتي الذاتية</span></a>
+      <a class="site-nav-link is-active" href="pulse.html"><i data-ico="bar-chart" data-ico-cls="ico-sm"></i><span>نبض السوق</span></a>
+      <a class="site-nav-link" href="scam.html"><i data-ico="shield-check" data-ico-cls="ico-sm"></i><span>رادار النصب</span></a>
+      <a class="site-nav-link" href="employer.html"><i data-ico="megaphone" data-ico-cls="ico-sm"></i><span>انشر وظيفة</span></a>
+    </div>
+    <div class="site-nav-actions">
+      <button type="button" class="nav-icon-btn" data-theme-toggle aria-label="تبديل وضع الألوان">
+        <span class="theme-ico"></span><span class="theme-lbl">الليلي</span>
+      </button>
+      <button type="button" class="nav-icon-btn nav-menu-btn" data-nav-menu-toggle aria-label="القائمة" aria-expanded="false">
+        <i data-ico="menu"></i>
+      </button>
+    </div>
+  </div>
+</nav>
+
 <section class="hero slim"><div class="inner">
-  <div class="eyebrow"><a class="link" href="./">← رجوع للشغل</a></div>
+  <div class="eyebrow"><a class="link" href="./?view=jobs"><i data-ico="arrow-left" data-ico-cls="ico-sm"></i><span>رجوع للوظائف</span></a></div>
   <h1><span class="brand">نبض السوق</span> شو مطلوب هلأ؟</h1>
   <p class="sub">من كل الإعلانات يلي جمعناها في سوريا بآخر 6 شهور. اختار المدينة والشهادة لتشوف شو بيطلبوا ناس متلك، وشو عم يزيد وشو عم ينقص.</p>
   <div class="row"><select id="city"><option value="">كل المدن والمحافظات</option></select><select id="edu"><option value="">كل الشهادات</option></select></div>
 </div></section>
 <main class="inner page">
   <div class="box" style="border-color:var(--mint)">
-    <h2>📊 ملخص نبض السوق في سوريا</h2>
+    <h2 style="display:flex;align-items:center;gap:8px"><i data-ico="bar-chart" data-ico-cls="ico-sm"></i><span>ملخص نبض السوق في سوريا</span></h2>
     <p style="margin:0;color:var(--muted);font-size:.9rem">اختار محافظتك وشهادتك فوق لتشوف فوراً قديش في فرص مفتوحة إلك هلأ وشو أكتر شي مطلوب بمدينتك.</p>
     <div id="bridge" style="display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;font-weight:600"></div>
   </div>
@@ -46,8 +83,8 @@ async function load() {
   $('total').textContent = `${d.total} إعلان بآخر 6 شهور · الأشهر: ${d.months.map(m => MONTHS[+m.slice(5) - 1]).join('، ')}`;
   const cName = $('city').value || 'سوريا';
   const topTitle = d.titles[0] ? ` · أكتر مسمى مطلوب: «${esc(d.titles[0].title)}»` : '';
-  const browseUrl = './' + (p.toString() ? '?' + p.toString() : '');
-  $('bridge').innerHTML = `<span class="ok">${d.open_now} فرصة مفتوحة هلأ في ${esc(cName)}</span><span>· ${d.remote_open} فرصة عن بعد / أونلاين</span><span>${topTitle}</span><a class="btn primary" style="padding:6px 14px;font-size:.85rem;margin-inline-start:auto" href="${browseUrl}">تصفح الفرص هلأ</a>`;
+  const browseUrl = './?view=jobs' + (p.toString() ? '&' + p.toString() : '');
+  $('bridge').innerHTML = `<span class="ok">${d.open_now} فرصة مفتوحة هلأ في ${esc(cName)}</span><span>· ${d.remote_open} فرصة عن بعد / أونلاين</span><span>${topTitle}</span><a class="btn primary" style="padding:7px 15px;font-size:.85rem;margin-inline-start:auto" href="${browseUrl}">تصفح الفرص هلأ</a>`;
   const vsLabel = d.pace_day ? `عن أول ${d.pace_day} يوم بالشهر الماضي` : 'عن الشهر الماضي';
   $('fields').innerHTML = d.fields.map(f => { const max = Math.max(1, ...f.series);
     const ch = f.change == null ? '' : f.change > 0 ? `<span class="trend up">▲ ${f.change} ${vsLabel}</span>` : f.change < 0 ? `<span class="trend down">▼ ${-f.change} ${vsLabel}</span>` : `<span class="trend">نفس الشي ${vsLabel}</span>`;
@@ -61,4 +98,5 @@ async function load() {
 fetch('/api/meta').then(r => r.json()).then(m => { META = m; fillCities(); m.education.forEach(e => $('edu').append(new Option(e.label, e.code))); });
 $('city').addEventListener('change', load); $('edu').addEventListener('change', load); load();
 </script>
-</body></html>
+</body>
+</html>

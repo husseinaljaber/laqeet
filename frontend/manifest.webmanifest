@@ -1,14 +1,14 @@
 {
-  "name": "لقيت · شغل بسوريا",
+  "name": "لقيت · فرص العمل في سوريا وتركيا",
   "short_name": "لقيت",
-  "description": "كل إعلانات الشغل بسوريا بمكان واحد، على قد شهادتك.",
+  "description": "البوابة الإقليمية لفرص العمل الموثقة في سوريا وتركيا — بشهادة وبدون شهادة.",
   "lang": "ar",
   "dir": "rtl",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
-  "background_color": "#0D1F18",
-  "theme_color": "#0D1F18",
+  "background_color": "#0B1C16",
+  "theme_color": "#0B1C16",
   "icons": [
     {"src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png"},
     {"src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png"},

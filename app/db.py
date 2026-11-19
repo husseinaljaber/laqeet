@@ -1063,9 +1063,17 @@ _SKIP_SUMMARY_LINE = re.compile(
 )
 
 
+_NUMBERED_LIST_ITEM_RE = re.compile(
+    r"^(?:[1-9]\d?|[١-٩][٠-٩]?|1️⃣|2️⃣|3️⃣|4️⃣|5️⃣|6️⃣|7️⃣|8️⃣|9️⃣|🔟)\s*[-.)–]|^(?:أولا|اولا|ثانيا|ثالثا|رابعا|خامسا)\s*[:\-–]"
+)
+_SPAM_BULLET_RE = re.compile(r"ادعمولنا|ادعمونا|عبتستفيد|شاركوا البوست|لايك|شير", re.I)
+
+
 def _clean_bullets(block: str, limit: int = 5) -> list[str]:
     out: list[str] = []
     for ln in (block or "").splitlines():
+        if _SPAM_BULLET_RE.search(ln):
+            continue
         s = re.sub(r"^[\s•\-–*▪▫♦✓✔\d.)+]+", "", ln).strip()
         if 8 <= len(s) <= 220 and not s.startswith("http") and not _SKIP_SUMMARY_LINE.search(s):
             if s not in out:
@@ -1126,10 +1134,27 @@ def _enrich_from_raw(d: dict) -> None:
         if not d.get("skills"):
             if m := _SKILLS_SEC_RE.search(raw):
                 d["skills"] = _clean_bullets(m.group(1))
+    if d.get("tasks"):
+        d["tasks"] = [
+            re.sub(r"^\s*(?:[1-9]\d?|[١-٩][٠-٩]?)\s*[-.)–]\s*", "", str(t)).strip()
+            for t in d["tasks"]
+            if not _SPAM_BULLET_RE.search(str(t))
+        ]
+    if d.get("skills"):
+        d["skills"] = [s for s in d["skills"] if not _SPAM_BULLET_RE.search(str(s))]
+
+    multi_list_raw = bool(
+        raw and len(re.findall(r"(?m)^\s*(?:[1-9]\d?|[١-٩][٠-٩]?|1️⃣|2️⃣|3️⃣|4️⃣|5️⃣)\s*[-.)–]", raw)) >= 2
+    )
 
     # Replace any stale synthetic, corrupted, or third-party-source summary
     cur_sum = _clean_summary_text((d.get("summary") or "").replace("\ufffd", "").replace("<PRIVATE_PERSON>", "").strip())
-    if cur_sum and ("التقديم متاح مباشرة عبر الرابط المرفق" in cur_sum or len(cur_sum) < 20 or cur_sum == title):
+    if cur_sum and (
+        "التقديم متاح مباشرة عبر الرابط المرفق" in cur_sum
+        or len(cur_sum) < 20
+        or cur_sum == title
+        or (multi_list_raw and not d.get("tasks"))
+    ):
         d["summary"] = None
     else:
         d["summary"] = cur_sum or None
@@ -1137,13 +1162,17 @@ def _enrich_from_raw(d: dict) -> None:
     if not d.get("summary"):
         if d.get("tasks"):
             d["summary"] = _clean_summary_text(" · ".join(d["tasks"][:2])[:240]) or None
+        elif multi_list_raw:
+            d["summary"] = _fallback_summary(d)
         elif raw:
             lines: list[str] = []
             title_head = title.split("—")[0].strip()
             for ln in raw.splitlines():
+                if _NUMBERED_LIST_ITEM_RE.match(ln.strip()):
+                    continue
                 s = _clean_summary_text(re.sub(r"https?://\S+", "", ln))
                 s = re.sub(r"\s+", " ", s).strip(" •-*–\t\r")
-                if not s or len(s) < 12:
+                if not s or len(s) < 12 or _NUMBERED_LIST_ITEM_RE.match(s):
                     continue
                 if s == title or (title_head and s == title_head) or s == emp_raw or s in city_set:
                     continue

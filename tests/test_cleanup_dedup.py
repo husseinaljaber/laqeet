@@ -1510,3 +1510,53 @@ def test_zero_sector_mixing_food_security_and_aleppo_neighborhoods():
     assert ex._good_title("دارة عزة") is False
     assert ex._good_title("ادعمولنا البوست لانو في ناس عبتستفيد") is False
     assert ex._good_title("إلى من يهمه الأمر") is False
+
+
+def test_city_title_isolation_two_tier_neighborhoods_and_multi_job_summaries(tmp_path):
+    # 1. Multi-job الصندوق السيادي السوري list post: strict per-item city & summary isolation + named gov employer
+    post_text = (
+        "شواغر وظيفية لدى الصندوق السيادي السوري\n\n"
+        "1 - موظف خدمات عامة – دمشق\n"
+        "2 - مدقق داخلي – حلب\n"
+        "3 - مدير متجر لبيع التجزئة – إدلب - سرمدا\n"
+        "4 - مهندس ميكانيك دراسات – دمشق\n\n"
+        "للتقديم: https://forms.gle/sovereign123\n"
+    )
+    extracted = ex.extract(
+        post_text,
+        source="nahda",
+        post_url="https://t.me/nahda/999",
+        posted_at="2026-11-18T10:00:00+00:00",
+    )
+    by_title = {j.title: j for j in extracted}
+    assert "مهندس ميكانيك دراسات" in by_title
+    assert "مدقق داخلي" in by_title
+    mech = by_title["مهندس ميكانيك دراسات"]
+    assert mech.cities == ["دمشق"]
+    assert mech.employer == "الصندوق السيادي السوري"
+    assert mech.sector == "gov"
+    assert by_title["مدقق داخلي"].cities == ["حلب"]
+    assert by_title["مدير متجر لبيع التجزئة"].cities == ["إدلب"]
+
+    con = db.connect(tmp_path / "multi_city.db")
+    try:
+        jid, _ = db.upsert(con, mech)
+        con.commit()
+        card = db.row_to_dict(con, con.execute("SELECT * FROM jobs WHERE id=?", (jid,)).fetchone())
+        assert "موظف خدمات عامة" not in (card.get("summary") or "")
+        assert "1 -" not in (card.get("summary") or "")
+    finally:
+        con.close()
+
+    # 2. Two-tier neighborhood & false-context city extraction
+    assert tx.cities_from_text("عمال خياطة في حي الميدان، حلب") == ["حلب"]
+    assert tx.cities_from_text("عامل من سكان القصور، حماة") == ["حماة"]
+    assert tx.cities_from_text("معلّم فول وحمص ومسبّحة في دمشق") == ["دمشق"]
+    assert tx.cities_from_text("كافيه لوسيل في حي الفرقان") == ["حلب"]
+    assert tx.cities_from_text("صيدلاني للعمل في صيدلية بالمزة") == ["دمشق"]
+
+    # 3. Explicit location priority, item delimiter splitting & 1-word rejections
+    assert tx.extract_explicit_location_cities("Programme Officer\nLocation:\nSyria, Idleb\nHQ: Damascus") == ["إدلب"]
+    assert ex._split_item_city("Program Officer / Damascus", "sy") == ("Program Officer", ["دمشق"])
+    assert ex._good_title("وظيفي") is False
+    assert ex._good_title("مطعم") is False

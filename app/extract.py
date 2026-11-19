@@ -93,8 +93,8 @@ _EMPLOYER = [
     re.compile(r"(?:^|\n)[^\w\n]{0,6}(?:الجهة(?:\s+المعلنة|\s+الموظِّ?فة)?|المعلن)\s*[:：]\s*([^\n]+)"),
     re.compile(r"(?:تُ?علِ?ن|تعلن|يُ?علِ?ن|يعلن|ترغب|يرغب|ترحّب|ترحب)\s+(?:عن\s+)?((?:ال)?(?:شركة|منظمة|جمعية|مؤسسة|مشفى|مستشفى|مجموعة|مركز|"
                r"معهد|جامعة|مدارس|مدرسة|بوابة|منصة|هيئة|وزارة|مديرية|محافظة|صندوق|الصندوق|الهلال|مصرف|بنك|وحدة|الرهبانية|"
-               r"عائلة|فريق|مكتب|مطعم|مجمع|اتحاد|نقابة|مؤسسه|شركه)[^\n،,.:]{2,70}?)\s+(?:عن\s|بالتنسيق|بحاجتها|حاجتها|حاجته|بالتعاقد|ب?رفد|الشواغر|ترحّب|بكل)"),
-    re.compile(r"(?:لدى|الجهة\s+الموظِّ?فة\s*:)\s*((?:ال)?(?:شركة|منظمة|جمعية|مؤسسة|مشفى|مستشفى|مجموعة|مركز|مصرف|بنك|مطعم|فندق|معهد|جامعة)\s+[^\n،,.:]{2,50}?)(?:\s+في\s|\s*$|\s*[\n،,.])"),
+               r"عائلة|فريق|مكتب|مطعم|مجمع|اتحاد|نقابة|مؤسسه|شركه)[^\n،,.:]{2,70}?)[،,]?\s+(?:عن\s|بالتنسيق|بحاجتها|حاجتها|حاجته|بالتعاقد|ب?رفد|الشواغر|ترحّب|بكل)"),
+    re.compile(r"(?:لدى|الجهة\s+الموظِّ?فة\s*:)\s*((?:ال)?(?:شركة|منظمة|جمعية|مؤسسة|مشفى|مستشفى|مجموعة|مركز|مصرف|بنك|مطعم|فندق|معهد|جامعة|صندوق|الصندوق|وزارة|مديرية|محافظة|هيئة|أمانة|مجلس)\s+[^\n،,.:]{2,50}?)(?:\s+في\s|\s*$|\s*[\n،,.])"),
 ]
 _MONTHS = {"كانون الثاني": 1, "شباط": 2, "آذار": 3, "اذار": 3, "نيسان": 4, "أيار": 5, "ايار": 5, "حزيران": 6, "تموز": 7, "آب": 8, "اب": 8,
            "أيلول": 9, "ايلول": 9, "تشرين الأول": 10, "تشرين الاول": 10, "تشرين الثاني": 11, "كانون الأول": 12, "كانون الاول": 12,
@@ -527,13 +527,68 @@ def _ordinal_items(lines: list[str]) -> list[tuple[str, str | None]]:
     return out
 
 
+_SY_TITLE_CITY_SUFFIX = re.compile(
+    r"\s+(?:في\s+(?:مدينة\s+|محافظة\s+|منطقة\s+)?|بـ?(?:مدينة\s+|محافظة\s+)?)?"
+    r"(?:ريف\s+دمشق|دمشق|حلب|حمص|حماة|حماه|إدلب|ادلب|اللاذقية|اللاذقيه|طرطوس|درعا|السويداء|القنيطرة|القنيطره|دير\s*الزور|الحسكة|الحسكه|الرقة|الرقه)"
+    r"(?:\s*[-–]\s*[^\n]{2,25}|\s+(?:مواقع\s+المشاريع|السوق\s+الحرة|المقر\s+الرئيسي))?\s*$",
+    re.I,
+)
+_TR_TITLE_CITY_SUFFIX = re.compile(
+    r"\s+(?:في\s+(?:ولاية\s+|مدينة\s+)?)?(?:إسطنبول|اسطنبول|غازي\s*عنتاب|مرسين|أنقرة|انقرة|بورصة|بورصه|أنطاكيا|هاتاي|أضنة|اضنة|إزمير|ازمير|قونيا|شانلي\s*أورفا|قيصري|كليس|طرابزون|أنطاليا|انطاليا|istanbul|ankara|gaziantep|mersin|bursa|izmir)\s*$",
+    re.I,
+)
+
+
 def _split_item_city(item: str, country: str = "sy") -> tuple[str, list[str]]:
-    """'مروجة - طرطوس' -> ('مروجة', ['طرطوس'])"""
-    m = re.match(r"(.+?)\s*[-–]\s*(.+)$", item)
-    if m:
-        cities = tx.tr_cities_from_text(m.group(2)) if country == "tr" else tx.cities_from_text(m.group(2))
-        if cities and len(m.group(2)) <= 25:
-            return m.group(1).strip(), cities
+    """Split city suffixes or extract city mentions from a role headline without losing SRD/specialty info."""
+    def _cities_fn(s: str) -> list[str]:
+        fn = tx.tr_cities_from_text if country == "tr" else tx.cities_from_text
+        gen = "عدة ولايات في تركيا" if country == "tr" else "عدة محافظات"
+        return [c for c in fn(s) if c != gen]
+
+    is_srd = bool(re.search(r"\bSRD\s*[-–]?\s*\d+", item, re.I))
+
+    # 1. Comma-delimited suffix: preserve full title context while locking trailing city ('...، حلب')
+    if m_comma := re.match(r"^(.+?)\s*[،,]\s*([^،,]{2,35})$", item):
+        tail_cs = _cities_fn(m_comma.group(2))
+        if tail_cs and len(m_comma.group(1).strip()) >= 4:
+            return item.strip(), tail_cs
+
+    sfx_rx = _TR_TITLE_CITY_SUFFIX if country == "tr" else _SY_TITLE_CITY_SUFFIX
+
+    # 2. Delimiter-separated suffix ('Program Officer / Damascus', 'أمين صندوق – دمشق - السوق الحرة', 'مروجة - طرطوس')
+    for rx in (
+        re.compile(r"^(.+?)(?:\s+/\s+|\s*[-–|]\s*)(.+)$"),
+        re.compile(r"^(.+)(?:\s+/\s+|\s*[-–|]\s*)([^-–|/]+)$"),
+    ):
+        if m := rx.match(item):
+            head, tail = m.group(1).strip(" -–/|،,"), m.group(2).strip()
+            tail_cs = _cities_fn(tail)
+            if tail_cs and len(tail) <= 45 and len(head) >= 4 and _good_title(head):
+                if is_srd:
+                    return item.strip(), tail_cs
+                if m_sub := sfx_rx.search(head):
+                    head2 = head[:m_sub.start()].strip(" -–/|،,")
+                    extra_cs = _cities_fn(head[max(0, m_sub.start() - 25):m_sub.end()])
+                    if extra_cs and len(head2) >= 4 and _good_title(head2) and not _NOT_TITLE.search(head2.strip("-•* ")):
+                        merged_cs = list(dict.fromkeys(extra_cs + tail_cs))
+                        return head2, merged_cs
+                return head, tail_cs
+
+    # 3. Space-separated trailing city ('مهندس ميكانيك دراسات دمشق', 'سائق بوب كات (تركس صغير) دمشق مواقع المشاريع')
+    if m := sfx_rx.search(item):
+        head = item[:m.start()].strip(" -–/|،,")
+        ctx = item[max(0, m.start() - 25):m.end()]
+        tail_cs = _cities_fn(ctx)
+        if tail_cs and len(head) >= 4 and _good_title(head) and not _NOT_TITLE.search(head.strip("-•* ")):
+            return head, tail_cs
+
+    # 4. Inline city outside parentheses (do not let parenthetical experience override real city)
+    outside = re.sub(r"\([^)]*\)", " ", item)
+    out_cs = _cities_fn(outside)
+    if out_cs:
+        return item.strip(), out_cs
+
     return item, []
 
 
@@ -561,6 +616,7 @@ _NOT_TITLE = re.compile(r"^(?:ال)?سلام عليكم|^مرحبا|^من (?:ب�
                         r"^(?:العمل\s+(?:من\s+البيت|حضوري|عن\s+بعد|24\s+ساعة)|وظيف[ةه]\s+عن\s+بعد|لا\s+تشترط\s+شهاد[ةه]|متاح\s+للشباب\s+فقط|خبر[ةه]\s+(?:جيد[ةه]|عملي[ةه]|قوي[ةه]|سابق[ةه]|مثبت[ةه]|متقدم[ةه]|كافي[ةه]|مميز[ةه]|ممتاز[ةه]|ميداني[ةه])|امتلاك\s+(?:رخص[ةه]|خبر[ةه]|حس)|حديث\s+تخرج|معرف[ةه]\s+ب(?:مبادئ|معايير)|مستو[ىي]\s+جيد\s+باللغ[ةه]|مونتاج\s+و[إا]نتاج|تصميم\s+وتنفيذ\s+Reels|تخطيط\s+و(?:متابع[ةه]|تنفيذ)|الرغب[ةه]\s+في\s+التعلم|تتاح\s+الفرص[ةه]\s+لحديثي|فرص[ةه]\s+تعاون\s+مهن[يى]|تبحث\s+شرك[ةه]\s+.{1,40}\s+عن\s+كوادر|[إا]لمام\s+جيد|[إا]جادة\s+(?:استخدام|برامج|جيد[ةه])|الأفضلي[ةه]\s+لمن|الدق[ةه]\s+(?:وتحمل|والاهتمام)|الجدي[ةه]\s+والالتزام|الالتزام\s+(?:وتحمل|والدق[ةه])|العمل\s+ضمن\s+نقط[ةه]|تنظيم\s+الملفات|استقبال\s+المكالمات|ال[إا]شراف\s+على\s+ال[أا]عمال|أن\s+يتراوح\s+العمر|أن\s+يكون\s+نشيط|حاصل/?[ةه]?\s+على\s+شهاد[ةه]|الحصول\s+على\s+شهاد[ةه]|شهاد[ةه]\s+(?:في|جامعي[ةه]|بكالوريوس|[إا]جاز[ةه])|التفرغ\s+(?:التام|الكامل)|مهار(?:ات|ة)\s+(?:التواصل|عالي[ةه]|قوي[ةه]|قيادي[ةه]|تنظيمي[ةه])|متفرغ/?[ةه]?\s+للعمل|خريجون\s+جدد\s+مرحب|المطلوب\s+أصحاب\s+الخبر[ةه])|"
                         r"^(?:تليغرام|تيليجرام|تلغرام|تليجرام|واتساب|واتس\s*اب|فيسبوك|انستغرام|انستقرام|لينكد[إا]ن|الموقع\s+الرسمي|شغلني|تكاتف\s+للوظائف|بواب[ةه]\s+الوظائف|متقدم$|كوادر\s+جديد[ةه]|مظهر\s+لائق|نحن\s+نوسع\s+فريق|توسيع\s+فريق\s+عملها|يفضل\s+وجود|عم\s+نبحث\s+عن\s+موظفين|موظفين\s+من\s+أصحاب|أصحاب\s+المحلات|التجار\s+وأصحاب|العلامات\s+التجاري[ةه]|المتسوقون|الأطباء$|طب\s+الفم\s+والأسنان$|الشواغر\s+الوظيفي[ةه]\s+المطلوب[ةه]|الوظائف\s+المتاح[ةه]$|تأمين\s+النقل|تدريب\s+وتطوير|مجال\s+للتطور|قسم\s+(?:المبيعات|الصيانة|الخدمات|الموارد|المحاسبة|المالية)$|^الخدمات$|^(?:ميكانيك|تصميم\s+وإنتاج|تصميم\s+ميكانيكي|كهرباء|طاقة\s+كهربائية|أتمتة\s+وتحكم\s+آلي|أنظمة\s+التحكم\s+الصناعية)$|أيام\s+العمل\s*:|ساعات\s+العمل\s*:|الراتب\s+والمزايا\s*:|3D\s*Max$|Corona\s*/\s*V-Ray$|HKN\s+Syria$|اترك\s+تعليق|إذا\s+كنت\s+بتتمتع|اذا\s+كنت\s+تتمتع|التزام\s+وقدر[ةه]\s+على\s+العمل|نتمنى\s+التوفيق|الفريق\s+ال[إا]داري\s+والفني$|موظف[ةه]?\s+للانضمام\s+[إا]ل[ىي]\s+فريق|كوادر\s+نسائي[ةه]\s+متخصص[ةه]|كفاء[ةه]\s+متميز[ةه]\s+لشغل\s+وظيف[ةه]|انضم\s+[إا]ل[ىي]\s+|جميع\s+تفاصيل\s+الوظيف[ةه]|شهاد[ةه]\s+معتمد[ةه]\s+عند\s+[إا]تمام\s+التدريب|^الجه[ةه]\s+\S+$|يتم\s+استبعاد\s+الطلبات|سيتم\s+النظر\s+فقط|يمكن\s+(?:للمهتمين|تقديم)|يرجى\s+تقديم|للمهتمين\s+بالانضمام|منص[ةه]\s+خطو[ةه]|تدعوكم\s+|قطاع\s+بيع\s+التجزئ[ةه]$|الشواغر\s+الوظيفي[ةه]\s+المتاح[ةه]$|الشرك[ةه]\s+ومجالها$|صاحبات$|يتوفر\s+لدينا\s+شاغر$|بالتنسيق\s+والتعاون|يهدف\s+هذا\s+التدريب|"
                         r"إلى\s+من\s+يهمه|الى\s+من\s+يهمه|ادعمولنا|ادعمونا|شاب\s+عندو?|صبي[ةه]\s+عندها?|(?:الالتزام|الانضباط)\s+و)|"
+                        r"^(?:وظيف[يى]|مطعم|كافيه|محل|شرك[ةه]|مؤسس[ةه])$|"
                         r"(?:^|\s)(?:يطلب|تطلب|تعلن\s+عن\s+وظائف\s+شاغر[ةه])\s*$|"
                         r"(?i:^(?:organization|closes|closing\s*date|deadline|duty\s*station|location|son\s+başvuru\s+tarihi)\s*[:：]|"
                         r"^(?:current\s+salary|expected\s+salary|notice\s+period|competitive\s+salary|internet\s+allowance|job\s+opportunity|university\s+graduates|age\s+up\s+to|very\s+good\s+english|available\s+to\s+join|stable\s+and\s+reliable|comfortable\s+in\s+a\s+target|creative\s+thinking|opportunities\s+for\s+professional|performance-based\s+bonuses|stay\s+updated|plan\s+and\s+coordinate|track\s+growth|present\s+product|handle\s+inquiries|follow\s+up\s+on\s+leads|achieve\s+monthly|building\s+and\s+maintaining|mobile\s+shooting|reel\s+editing)\b|"
@@ -891,10 +947,11 @@ def extract(text: str, source: str, post_url: str, posted_at: str | None = None,
     if _SOFT_NOT_JOB.search(F(body)) and not _EXPLICIT_VACANCY_HDR.search(F(body)):
         return []
     city_text = "\n".join(l for l in text.splitlines() if not _NOISE_LINE.search(F(l)))
+    explicit_cities = tx.extract_explicit_location_cities(city_text, target_country)
     if target_country == "tr":
-        cities = tx.tr_cities_from_text(city_text) or (["غازي عنتاب"] if source == "gaziantepis" else ["عدة ولايات في تركيا"])
+        cities = explicit_cities or tx.tr_cities_from_text(city_text) or (["غازي عنتاب"] if source == "gaziantepis" else ["عدة ولايات في تركيا"])
     else:
-        cities = tx.cities_from_text(city_text)
+        cities = explicit_cities or tx.cities_from_text(city_text)
     cleaned_extra_links = [da.clean_url(l) for l in (links or []) if l]
     all_links = list(dict.fromkeys(tx.urls(text) + [u for u in cleaned_extra_links if u.startswith(("http://", "https://"))]))
     gov_links = da.extract_gov_links(text, extra_links=cleaned_extra_links)
@@ -1004,9 +1061,23 @@ def extract(text: str, source: str, post_url: str, posted_at: str | None = None,
     for title, title_text, item_cities, grade, i_url in titles:
         if not _good_title(title) or _only_places(title) or title in tx.CITIES or title in tx.TR_CITIES:
             continue
+        if single:
+            job_cities = item_cities or explicit_cities or cities
+        else:
+            t_cs = [] if item_cities else (tx.tr_cities_from_text(title_text) if target_country == "tr" else tx.cities_from_text(title_text))
+            if item_cities:
+                job_cities = item_cities
+            elif t_cs:
+                job_cities = t_cs
+            elif "غير محدد" in title_text:
+                job_cities = ["عدة ولايات في تركيا"] if target_country == "tr" else ["عدة محافظات"]
+            elif "المقر الرئيسي" in title_text and employer and "الصندوق السيادي" in employer:
+                job_cities = ["دمشق"]
+            else:
+                job_cities = explicit_cities or cities
         per_apply = i_url or apply_url
         job_kw = {**base, "apply_url": per_apply, "phones": list(base["phones"])}
-        job = Job(title=title, cities=item_cities or cities, tags=tags, country=target_country, **job_kw)
+        job = Job(title=title, cities=job_cities, tags=tags, country=target_country, **job_kw)
         _fill_details(job, body, title_text, single, grade, header)
         if source == "syrianjobs" and not job.education:
             job.education, job.education_from = "none", "source"

@@ -747,12 +747,20 @@ _PLACEHOLDER_EMP = {
     "منصة سلام جوبز",
     "منصة وظيفتورك",
 }
+_LOCATION_AS_EMP_RE = re.compile(
+    r"^(?:منطقة|منطقه|حي|شارع|ساحة|ساحه|كراج|خلف|قرب|مقابل|بجانب|بجوار|طريق|أوتوستراد|اوتستراد|دوار|جسر|مفترق|طلعة|نزلة|مشروع\s+دمر)\b|"
+    r"^(?:السليمانية|الجميلية|المزة|المزرعة|الحميدية|القصاع|الزاهرة|الميدان|جرمانا|صحنايا|دوما|باب شرقي|برزة|ركن الدين|كفرسوسة|المالكي|أبو رمانة|الشعلان|البرامكة|المهاجرين|الأشرفية|الموكامبو|الفرقان|الحمدانية|سيف الدولة|صلاح الدين|الأعظمية|ميسلون|السريان|العزيزية|الإذاعة|الكلاسة|أشرفية صحنايا|جمعية الزهراء|الشيخ نجار|حلب الجديدة)$",
+    re.I,
+)
 _SUMMARY_SOURCE_TAIL_RE = re.compile(
     r"(?:\s*[·•\-|]\s*|\s+)(?:💎+\s*)?المصدر\s*[:：]\s*[^·\n]+|"
+    r"(?:\s*[·•\-|]\s*|\s+)(?:للمزيد من فرص العمل|وبإمكانكم متابعة قناتنا|تابعوا قنواتنا|قناة التلغرام|قناة الواتساب|تابعونا على تلغرام)[^·\n]*|"
+    r"(?:\s*[·•\-|]\s*|\s+)تفاصيل المهام في ملف الوصف الوظيفي\s*[:：]?\s*\S*|"
     r"\s*لدى\s+(?:جهة\s*توظيف|منظمة\s*أممية(?:\s*/\s*دولية)?)\s+عبر\s+[^\s·,،.]+[^·\n]*|"
     r"\s*عبر\s+(?:منصة|موقع|قناة|بوابة)\s+(?:فريلانس\s*سوريا|ورك\s*لينك|ساحة\s*المنظمات|سلام\s*جوبز|"
     r"وظائف\s*سوريا|فرص\s*عمل(?:\s+في\s+(?:تركيا|سوريا))?(?:\s+الرسمية)?|ngo(?:s)?\s*syria|job\s*in\s*syria|"
-    r"worklink|salam\s*jobs|jobsintr|reliefweb|unjobnet|syria-?jobs)[^·\n]*",
+    r"worklink|salam\s*jobs|jobsintr|reliefweb|unjobnet|syria-?jobs)[^·\n]*|"
+    r"https?://\S+|(?<!\S)#[^\s]+",
     re.I,
 )
 _PORTAL_TAGS = frozenset({"Job In Syria", "ورك لينك", "NGOs Syria"})
@@ -760,7 +768,7 @@ _PORTAL_TAGS = frozenset({"Job In Syria", "ورك لينك", "NGOs Syria"})
 
 def _clean_employer_val(emp: str | None, official: bool = False) -> str:
     raw = (emp or "").strip()
-    if not raw or raw.lower() in _PLACEHOLDER_EMP or _PORTAL_EMP_RE.search(raw):
+    if not raw or raw.lower() in _PLACEHOLDER_EMP or _PORTAL_EMP_RE.search(raw) or _LOCATION_AS_EMP_RE.search(raw):
         return "جهة حكومية رسمية" if official else ""
     return raw
 
@@ -769,7 +777,8 @@ def _clean_summary_text(text: str | None) -> str:
     if not text:
         return ""
     s = _SUMMARY_SOURCE_TAIL_RE.sub("", text)
-    s = re.sub(r"^(?:\s*[·•\-]\s*)+|(?:\s*[·•\-]\s*)+$", "", s)
+    s = re.sub(r"(?:\s*[:：]?\s*\bht{1,2}p?s?\b|\s*:\s*)$", "", s, flags=re.I)
+    s = re.sub(r"^(?:\s*[·•\-:]\s*)+|(?:\s*[·•\-:]\s*)+$", "", s)
     return re.sub(r"\s{2,}", " ", s).strip()
 
 
@@ -1045,6 +1054,8 @@ _SKIP_SUMMARY_LINE = re.compile(
     r"للتواصل والتقديم عبر الرقم المرفق|"
     r"📢\s*وظيفة جديدة|الوصف المستخرج|🔗|🏢\s*الجهة|📍\s*الموقع|📅\s*آخر موعد|الفئة الوظيفية|محافظة العمل|"
     r"(?:https?://)?[A-Za-z0-9.-]+\.[A-Za-z]{2,}/\S*$|#|\*?\s*(?:للتواصل|الاتصال|مطلوب)\s*:?\s*$)|"
+    r"للمزيد من فرص العمل|وبإمكانكم متابعة قناتنا|تابعوا قنواتنا|قناة التلغرام|قناة الواتساب|تابعونا على تلغرام|"
+    r"تفاصيل المهام في ملف الوصف الوظيفي|"
     r"لنشر ما لديكم|راسلونا دايركت|للتواصل ولمعلومات|الاتصال على الرقم|"
     r"(?:💎+\s*)?المصدر\s*[:：]|عبر\s+(?:Job\s*In\s*Syria|WorkLink|NGOs?\s*Syria|salam\s*jobs|jobsintr)|"
     r"(?:^|[\s(])@[A-Za-z0-9_]{3,}(?!\.[A-Za-z0-9-])",
@@ -1067,9 +1078,10 @@ def _clean_bullets(block: str, limit: int = 5) -> list[str]:
 def _fallback_summary(d: dict) -> str:
     title = (d.get("title") or "شاغر وظيفي").strip()
     emp = _clean_employer_val(d.get("employer"), bool(d.get("official")))
-    cs = "، ".join((d.get("cities") or [])[:3]) or "سوريا"
+    default_country = "تركيا" if d.get("country") == "tr" else "سوريا"
+    cs = "، ".join((d.get("cities") or [])[:3]) or default_country
     dl = f" · آخر موعد للتقديم: {d['deadline']}" if d.get("deadline") else ""
-    head = f"شاغر وظيفي ({title}) لدى {emp} في {cs}{dl}" if emp else f"شاغر وظيفي ({title}) في {cs}{dl}"
+    head = f"شاغر {title} لدى {emp} في {cs}{dl}" if emp else f"شاغر {title} في {cs}{dl}"
 
     has_link = bool(d.get("apply_url") and not str(d["apply_url"]).lower().startswith("https://wa.me/"))
     has_email = bool(d.get("email"))
@@ -1117,7 +1129,7 @@ def _enrich_from_raw(d: dict) -> None:
 
     # Replace any stale synthetic, corrupted, or third-party-source summary
     cur_sum = _clean_summary_text((d.get("summary") or "").replace("\ufffd", "").replace("<PRIVATE_PERSON>", "").strip())
-    if cur_sum and ("التقديم متاح مباشرة عبر الرابط المرفق" in cur_sum or len(cur_sum) < 10):
+    if cur_sum and ("التقديم متاح مباشرة عبر الرابط المرفق" in cur_sum or len(cur_sum) < 20 or cur_sum == title):
         d["summary"] = None
     else:
         d["summary"] = cur_sum or None
@@ -1151,6 +1163,16 @@ def _enrich_from_raw(d: dict) -> None:
         if not d.get("summary"):
             d["summary"] = _fallback_summary(d)
 
+    cur_s = d.get("summary") or ""
+    if not cur_s or len(cur_s) < 20 or cur_s == title:
+        d["summary"] = _fallback_summary(d)
+    elif not re.search(r"[ء-ي]", cur_s):
+        emp_ar = _clean_employer_val(d.get("employer"), bool(d.get("official")))
+        default_country = "تركيا" if d.get("country") == "tr" else "سوريا"
+        cs_ar = "، ".join((d.get("cities") or [])[:2]) or default_country
+        prefix = f"شاغر لدى {emp_ar} في {cs_ar}" if emp_ar else f"شاغر عمل في {cs_ar}"
+        d["summary"] = f"{prefix} — {cur_s}"[:240]
+
 
 def row_to_dict(con, row) -> dict:
     d = json.loads(row["data"])
@@ -1163,6 +1185,7 @@ def row_to_dict(con, row) -> dict:
     d.setdefault("country", row["country"] if "country" in row.keys() else "sy")
     d.setdefault("sector", row["sector"] if "sector" in row.keys() else ("gov" if d.get("official") else "private"))
     d.setdefault("apply_types", [x for x in (row["apply_types"] or "").split("|") if x] if "apply_types" in row.keys() else [])
+    sec = d["sector"]
     srcs = []
     seen_src = set()
     for s in con.execute("SELECT source, post_url FROM job_sources WHERE job_id=? ORDER BY posted_at", (row["id"],)):
@@ -1170,6 +1193,10 @@ def row_to_dict(con, row) -> dict:
         if lbl in seen_src:
             continue
         seen_src.add(lbl)
-        srcs.append(dict(source=s["source"], post_url=s["post_url"], label=lbl))
+        is_official_public = bool(
+            sec in ("gov", "ngo")
+            and (s["source"] in config.OFFICIAL_GOV_SOURCES or s["source"] in config.OFFICIAL_NGO_SOURCES)
+        )
+        srcs.append(dict(source=s["source"], post_url=s["post_url"], label=lbl, official_public=is_official_public))
     d["sources"] = srcs
     return d

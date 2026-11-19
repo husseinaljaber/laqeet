@@ -591,12 +591,15 @@ def job_page(job_id: int, request: Request):
         raise HTTPException(404)
     j = db.row_to_dict(con, row)
     e = html.escape
-    cities = "، ".join(j.get("cities") or []) or "سوريا (عام)"
+    cities = "، ".join(j.get("cities") or []) or ("تركيا (عام)" if j.get("country") == "tr" else "سوريا (عام)")
     edu = tx.EDU_LABEL.get(j.get("education") or "", "غير مشترط / غير مذكور")
     emp_raw = (j.get("employer") or "").strip()
     emp = emp_raw if emp_raw not in db._PLACEHOLDER_EMP else ("جهة حكومية رسمية" if j.get("official") else "")
-    desc_parts = [emp or None, cities, f"المؤهل: {edu}", f"الراتب: {j['salary']}" if j.get("salary") else None,
-                  f"آخر موعد: {j['deadline']}" if j.get("deadline") else None]
+    posted_day = str(j.get("posted_at") or "")[:10]
+    exp_day = str(j.get("deadline") or j.get("expires_on") or "")[:10]
+    desc_parts = [emp or None, cities, f"النشر: {posted_day}" if posted_day else None,
+                  f"الانتهاء: {exp_day}" if exp_day else None, f"المؤهل: {edu}",
+                  f"الراتب: {j['salary']}" if j.get("salary") else None]
     desc = " · ".join(p for p in desc_parts if p)
     og_desc = (f"{desc} — {j['summary']}" if j.get("summary") else desc)[:260]
     share_url = f"{str(request.base_url).rstrip('/')}/j/{job_id}"
@@ -616,8 +619,10 @@ def job_page(job_id: int, request: Request):
         ad_lines.append(f"💰 الراتب / الأجر: {j['salary']}")
     if j.get("shift"):
         ad_lines.append(f"🕒 الدوام: {j['shift']}")
-    if j.get("deadline"):
-        ad_lines.append(f"📅 آخر موعد للتقديم: {j['deadline']}")
+    if posted_day:
+        ad_lines.append(f"🗓️ تاريخ النشر: {posted_day}")
+    if exp_day:
+        ad_lines.append(f"📅 تاريخ الانتهاء: {exp_day}")
     if j.get("summary"):
         ad_lines.append(f"\n📝 وصف وتفاصيل العمل:\n{j['summary']}")
     if j.get("tasks"):
@@ -657,7 +662,9 @@ def job_page(job_id: int, request: Request):
     summary_html = f'<h3>نبذة ووصف الشاغر</h3><p style="line-height:1.7">{e(j["summary"])}</p>' if j.get("summary") else ""
     tasks_html = ("<h3>المهام</h3><ul>" + "".join(f"<li>{e(t)}</li>" for t in j.get("tasks") or []) + "</ul>") if j.get("tasks") else ""
     skills_html = ("<h3>المهارات المطلوبة</h3><ul>" + "".join(f"<li>{e(s)}</li>" for s in j.get("skills") or []) + "</ul>") if j.get("skills") else ""
-    srcs_html = " · ".join(f'<a target="_blank" rel="noopener" href="{e(s["post_url"])}">{e(s["label"])}</a>' for s in j.get("sources") or [])
+    official_srcs = [s for s in (j.get("sources") or []) if s.get("official_public")]
+    srcs_html = " · ".join(f'<a target="_blank" rel="noopener" href="{e(s["post_url"])}">{e(s["label"])}</a>' for s in official_srcs)
+    src_note_html = f'<p class="note" style="color:var(--muted)">المصدر: {srcs_html}</p>' if srcs_html else ""
     return HTMLResponse(f"""<!doctype html>
 <html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{e(j['title'])} · {e(config.SITE_NAME)}</title>
@@ -696,7 +703,7 @@ def job_page(job_id: int, request: Request):
         <a class="btn ghost" target="_blank" rel="noopener" href="{tg_share}">✈️ مشاركة عبر تيليجرام</a>
       </div>
     </div>
-    <p class="note" style="color:var(--muted)">المصدر: {srcs_html}</p>
+    {src_note_html}
   </div>
 </main></body></html>""")
 

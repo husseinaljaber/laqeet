@@ -67,6 +67,18 @@ SOURCE_LABEL = {v["source"]: v["label"] for v in CHANNELS.values()} | {
     "httpOrganizationalExamTemplates": "بنك نماذج امتحانات المنظمات والوظائف",
 }
 
+OFFICIAL_GOV_SOURCES = frozenset({
+    "moad", "SyMOAD", "moi", "mohe", "moe", "moh", "moeai", "mof", "mocait",
+    "moe_energy", "moa", "mopwah", "damascusgovrnorat", "sana", "hiast",
+    "damascus_univ", "svu", "ssf_gov",
+})
+OFFICIAL_NGO_SOURCES = frozenset({
+    "sarc", "syredcrescent", "sema", "ataa", "ida", "srd", "sened", "bahar",
+    "shafak", "drc", "acted", "wfp", "violet", "org_vio", "takaful",
+    "takafulalsham", "un_syria", "reliefweb", "unjobnet_sy", "unjobnet_tr",
+    "impactpool_sy", "impactpool_tr",
+})
+
 HISTORY_DAYS = int(os.getenv("HISTORY_DAYS", 183))      # show the last ~6 months
 QUICK_DAYS = int(os.getenv("QUICK_DAYS", 21))           # quick jobs expire 21 days after posting
 FORMAL_DAYS = int(os.getenv("FORMAL_DAYS", 30))         # formal jobs without a deadline: 30 days

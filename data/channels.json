@@ -398,5 +398,45 @@
     "official": false,
     "country": "mixed",
     "sector": "private"
+  },
+  "jobs963": {
+    "source": "jobs963",
+    "label": "فرص عمل سوريا 963",
+    "kind": "formal",
+    "official": false,
+    "country": "sy",
+    "sector": "private"
+  },
+  "jobsportal1": {
+    "source": "jobsportal1",
+    "label": "بوابة الوظائف السورية",
+    "kind": "formal",
+    "official": false,
+    "country": "sy",
+    "sector": "private"
+  },
+  "ExtraJobs": {
+    "source": "extrajobs",
+    "label": "شغلني - سوريا",
+    "kind": "quick",
+    "official": false,
+    "country": "sy",
+    "sector": "private"
+  },
+  "takatuf2026": {
+    "source": "takatuf",
+    "label": "تكاتف للوظائف في سوريا",
+    "kind": "formal",
+    "official": false,
+    "country": "sy",
+    "sector": "private"
+  },
+  "tawasolsyria": {
+    "source": "tawasol",
+    "label": "تواصل للوظائف",
+    "kind": "formal",
+    "official": false,
+    "country": "sy",
+    "sector": "private"
   }
 }

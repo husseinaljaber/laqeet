@@ -87,9 +87,19 @@ def education_from_title(title: str) -> str | None:
 CITIES = ["دمشق", "ريف دمشق", "حلب", "حمص", "حماة", "اللاذقية", "طرطوس", "إدلب", "درعا", "السويداء", "القنيطرة",
           "دير الزور", "الحسكة", "الرقة"]
 _CITY_ALIASES = {
-    "دمشق": ["دمشق", "الشام", "المزه", "البرامكه", "القيمريه", "باب توما", "المالكي", "جرمانا", "صحنايا", "قدسيا", "دمر", "damascus"],
+    "دمشق": [
+        "دمشق", "الشام", "المزه", "البرامكه", "القيمريه", "باب توما", "المالكي", "جرمانا", "صحنايا", "قدسيا", "دمر",
+        "المزرعه", "الحميديه", "القصاع", "الزاهره", "الميدان", "باب شرقي", "برزه", "ركن الدين", "كفرسوسه",
+        "ابو رمانه", "الشعلان", "المهاجرين", "منطقه التضامن", "حي التضامن", "مشروع دمر", "ساحه المحافظه",
+        "المجتهد", "الصالحيه", "القصور", "damascus",
+    ],
     "ريف دمشق": ["ريف دمشق", "دوما", "حرستا", "مدينه التل", "منطقه التل", "ضاحيه التل", "الكسوه", "يبرود", "النبك", "قطنا", "عدرا", "داريا", "الزبداني", "صيدنايا", "rural damascus"],
-    "حلب": ["حلب", "اعزاز", "منبج", "الباب", "عفرين", "جبل سمعان", "جرابلس", "الاتارب", "مارع", "aleppo"],
+    "حلب": [
+        "حلب", "اعزاز", "منبج", "الباب", "عفرين", "جبل سمعان", "جرابلس", "الاتارب", "مارع",
+        "الفرقان", "الحمدانيه", "سيف الدوله", "الجميليه", "السليمانيه", "العزيزيه", "الموكامبو",
+        "حلب الجديده", "حي صلاح الدين", "السريان", "الليرمون", "الشيخ نجار", "جمعيه الزهراء",
+        "داره عزه", "دارةعزة", "aleppo",
+    ],
     "حمص": ["حمص", "تدمر", "القصير", "تلكلخ", "الرستن", "تلبيسه", "homs"],
     "حماة": ["حماه", "سلميه", "مصياف", "محرده", "السقيلبيه", "hama", "hamah"],
     "اللاذقية": ["اللاذقيه", "لاذقيه", "جبله", "القرداحه", "الحفه", "كسب", "latakia", "lattakia", "jableh"],
@@ -119,12 +129,16 @@ _FALSE_CITY_CONTEXT = re.compile(
 )
 
 
-_HASHTAG_SPAM_LINE = re.compile(r"(?m)^(?:[^\n]*#[^\n]*){5,}$")
+_HASHTAG_SPAM_LINE = re.compile(r"(?m)^(?:[^#\n]*#){5,}[^\n]*$")
+
+
+def _strip_hashtag_spam_lines(text: str) -> str:
+    return "\n".join(ln for ln in (text or "").splitlines() if ln.count("#") < 5)
 
 
 def cities_from_text(text: str) -> list[str]:
     raw_t = text or ""
-    stripped_hashtags = _HASHTAG_SPAM_LINE.sub(" ", raw_t)
+    stripped_hashtags = _strip_hashtag_spam_lines(raw_t)
     cleaned_raw = re.sub(r"(?<![ء-ي])(?:ال)?بصر(?:ي|ية)(?![ء-ي])", " ", stripped_hashtags if stripped_hashtags.strip() else raw_t)
     t = _FALSE_CITY_CONTEXT.sub(" ", fold(cleaned_raw))
     if _ALL_CITIES.search(t):
@@ -237,7 +251,7 @@ def is_foreign_non_target(text: str = "", apply_url: str | None = None, email: s
 def tr_cities_from_text(text: str) -> list[str]:
     """Detect canonical Turkish provinces from Arabic, English, or Turkish text/districts."""
     raw_t = text or ""
-    stripped = _HASHTAG_SPAM_LINE.sub(" ", raw_t)
+    stripped = _strip_hashtag_spam_lines(raw_t)
     t = _fold_tr(stripped if stripped.strip() else raw_t)
     if _ALL_TR_CITIES.search(t):
         return ["عدة ولايات في تركيا"]
@@ -271,38 +285,46 @@ FIELDS = [
 ]
 FIELD_LABEL = dict(FIELDS)
 _FIELD_WORDS = [
-    ("computer", r"مهندس (برمجيات|شبكات|معلوماتيه|حاسوب|اتصالات|ذكاء|بيانات|امن)|دعم (تقني|فني)|\bcto\b|مدير تقني|صيانه (شبكات|حواسيب|كمبيوتر|موبايل)|معلوماتيه|حاسوب|برمج|مطور|developer|software|شبكات|سيبران|ذكاء (صنع|اصطناع)|بيانات رقم|مدخل[هة]? بيانات|ادخال بيانات|data\s*entry|devops|backend|"
-                 r"front|full.?stack|flutter|\bit\b|تقانه|تقنيه المعلومات|تحول رقم|linux|سيرفر"),
+    ("computer", r"مهندس (برمجيات|شبكات|معلوماتيه|حاسوب|اتصالات|ذكاء|بيانات|امن)|دعم (تقني|فني)|\bcto\b|مدير تقني|صيانه (شبكات|حواسيب|كمبيوتر|موبايل)|معلوماتيه|حاسوب|برمج|مطور|developer|software|شبكات|سيبران|ذكاء (صنع|اصطناع)|بيانات رقم|مدخل[هة]? بيانات|ادخال بيانات|محلل\s+بيانات|تحليل\s+ال?بيانات|data\s*entry|devops|backend|"
+                 r"front|full.?stack|flutter|\bit\b|\bdata\s*analyst\b|\bdata\s*scien(?:tist|ce)\b|\bdata\s*engineer\b|\bmachine\s+learning\b|\bsoftware\s+engineer\b|\bit\s+(?:officer|manager|specialist|support|assistant)\b|\binformation\s+management\b|\bprogrammer\b|\bcyber\b|\bweb\s+developer\b|\bqa\s+engineer\b|تقانه|تقنيه المعلومات|تحول رقم|linux|سيرفر"),
     ("health", r"طبيب|ممرض|صيدل|مخبر|مخابر|اشعه|قابله|تمريض|عياده|مشفى|مستشفي|مستشفى|اسنان|\bسني\b|تغذيه|اسعاف|ليزر|"
-               r"علاج فيزيائ|معالج|تخدير|تعقيم|بصريات|نظارات|جراح|تصوير طبقي|رنين|طبي\b|صحي\b|اطراف صناعيه|غسيل كلي"),
+               r"علاج فيزيائ|معالج|تخدير|تعقيم|بصريات|نظارات|جراح|تصوير طبقي|رنين|طبي\b|صحي\b|اطراف صناعيه|غسيل كلي|"
+               r"\b(?:doctor|physician|pediatrician|nurse|midwife|pharmacist|medical|health|nutrition|clinic|medic|paramedic|dentist|physiotherapist)\b"),
     ("engineering", r"\bمهندس|مهندس (مدني|معماري|ميكانيك|كهرب|تنفيذ|اشراف|مساح|طبوغراف|ديكور)|مهندس[هة]?$|هندسه (مدنيه|معماريه|ميكانيك)|"
-                    r"اوتوكاد|autocad|مساح"),
+                    r"اوتوكاد|autocad|مساح|\b(?:civil|mechanical|electrical|architect|architectural|structural|site|environmental|hse|hvac|agronomist|procurement)\s+engineer\b|\barchitect\b|\bagronomist\b"),
     ("business", r"سلسله (التوريد|الامداد)|محاسب|مالي|اداري|سكرتير|سكرتاريا|موارد بشريه|مشتريات|مستودع|امين صندوق|تدقيق|مكتب|لوجست|سلسله الامداد|"
-                 r"توظيف|شؤون الموظفين|تامينات|عمليات"),
+                 r"توظيف|شؤون الموظفين|تامينات|عمليات|\b(?:accountant|finance|financial|audit|auditor|hr|human\s+resources|admin|administration|administrative|procurement|supply\s+chain|logistics|operations|contracts|employee\s+relations|budget)\b"),
     ("translation", r"مترجم|ترجمه|translator|interpreter"),
-    ("sales", r"مبيعات|مندوب|تسويق|ترويج|مروج|خدمه (ال)?(عملاء|زبائن)|كول سنتر|call center|كاشير|استقبال|تذاكر|سياحه(?:\s+علاجيه)?|مستشار\s+(?:طبي|عقاري)|وسيط\s+عقاري|استشارات عقاريه|عقارات|سيلز|\bsales\b"),
-    ("education", rf"مدرس|\bمعلم[هة]\b|معلمات|معلمين(?!\s*{_CRAFT_TAIL})|\bمعلم (صف|ماده|لغه|رياضيات|علوم|حلقه)|مدرب|تعليم|روضه|حضانه|مربي|تدريس|شريعه"),
-    ("media", r"انتاج (و ?مونتاج|فيديو|اعلامي|مرئي)|اعلام|مصمم|تصميم|مونتير|مونتاج|مصور|محتوي|محتوى|سوشال|سوشيال|غراف|graphic|محرر|منصات التواصل|اخبار"),
-    ("law", r"محام|قانون|حقوق"),
-    ("ngo", r"متابعه وتقييم|مراقبه وتقييم|رصد والتقييم|\bmeal\b|حمايه|اداره حال|دعم نفسي|مسؤول تسجيل|توعيه|"
-            r"سبل العيش|المساعدات|النوع الاجتماعي|مرشد مهني|مشاريع|\bمشروع\b|مسؤول برامج|ميداني|ميسر|المأوي|ماوي|الاصحاح|الذخائر"),
-    ("hospitality", r"مطعم|كافيه|كافتيريا|كوفي|شيف|طباخ|نادل|جرسون|غرسون|كابتن\s*صاله|باريستا|فلافل|بوفيه|فندق|حلويات|مشاوي|شاورما|سلطات|عصائر|عصير|مطبخ|كومي|سناك|كفتيريا|كافتيريا|كافيه|كافيتريا|مسبحه|سكيب|(?:معلم|معلمين|معلمي|معلمو|اسطى) (شاورما|فلافل|بيتزا|مشاوي|حلويات|سلطات|معجنات|فطائر|عصائر)"),
-    ("retail", r"محل|صاله|البسه|ألبسه|سوبر\s*ماركت|ماركت|دكان|بائع[هة]?|سوبر|\bمول\b|البان|اجبان|بقاليه|معرض|بوتيك|مكياج|عطور|مبيعات داخل"),
+    ("sales", r"مبيعات|مندوب|تسويق|ترويج|مروج|خدمه (ال)?(عملاء|زبائن)|كول سنتر|call center|كاشير|استقبال|تذاكر|سياحه(?:\s+علاجيه)?|مستشار\s+(?:طبي|عقاري)|وسيط\s+عقاري|استشارات عقاريه|عقارات|سيلز|\b(?:sales|marketing|customer\s+service|business\s+development|account\s+manager|real\s+estate|media\s+buyer|seo)\b"),
+    ("education", rf"مدرس|\bمعلم[هة]\b|معلمات|معلمين(?!\s*{_CRAFT_TAIL})|\bمعلم (صف|ماده|لغه|رياضيات|علوم|حلقه)|مدرب|تعليم|روضه|حضانه|مربي|تدريس|شريعه|\b(?:teacher|trainer|facilitator|educator|instructor|tutor|professor|tvet)\b"),
+    ("media", r"انتاج (و ?مونتاج|فيديو|اعلامي|مرئي)|اعلام|مصمم|تصميم|مونتير|مونتاج|مصور|محتوي|محتوى|سوشال|سوشيال|غراف|graphic|محرر|منصات التواصل|اخبار|\b(?:graphic\s+designer|video\s+editor|photographer|copywriter|content\s+creator|social\s+media|communications?|journalist|ui/ux)\b"),
+    ("law", r"محام|قانون|حقوق|\b(?:lawyer|legal|attorney|compliance)\b"),
+    ("ngo", r"متابعه وتقييم|مراقبه وتقييم|رصد والتقييم|\bmeal\b|\bm&e\b|حمايه\s+(?:الطفل|اجتماعيه|من العنف|انسانيه)|\bprotection\b|اداره حال|case\s*management|دعم نفسي|\bpss\b|\bmhps\b|مسؤول تسجيل|"
+            r"سبل العيش|\blivelihoods?\b|النوع الاجتماعي|\bgbv\b|المساعدات الانسانيه|الامن الغذائي|\bfsl\b|المياه والاصحاح|\bwash\b|\bshelter\b|المأوي|ماوي|الاصحاح|ازاله الالغام|الذخائر|mine\s*action|explosive\s*ordnance|humanitarian|advocacy|مناصره|جامع بيانات|\benumerator\b|استجابه طارئه|العمل الانساني|منسق\s+(?:برنامج|برامج|مشاريع)\s+(?:انساني|اغاث)|"
+            r"\bfood\s+(?:and\s+economic\s+)?security\b|\beconomic\s+opportunities\b|\bgrants?\s+officer\b|\bcountry\s+director\b|\bhead\s+of\s+programme\b|\bprogramme?\s+coordinator\b|\btechnical\s+coordinator\b"),
+    ("hospitality", r"مطعم|كافيه|كافتيريا|كوفي|شيف|طباخ|نادل|جرسون|غرسون|كابتن\s*صاله|باريستا|فلافل|بوفيه|فندق|حلويات|مشاوي|شاورما|سلطات|عصائر|عصير|مطبخ|كومي|سناك|كفتيريا|كافيتريا|مسبحه|سكيب|ساندويش|سندويش|برغر|همبرغر|بيتزا|معجنات|فطائر|كباب|شوايه|مناقيش|مقهي|مقهى|\b(?:steward|waiter|kitchen|chef|cook|barista|hospitality)\b|(?:معلم|معلمين|معلمي|معلمو|اسطى) (شاورما|فلافل|بيتزا|مشاوي|حلويات|سلطات|معجنات|فطائر|عصائر)"),
+    ("retail", r"(?<![ء-يa-z0-9])(?:محل|محلات)(?![ء-يa-z0-9])|صاله|البسه|ألبسه|سوبر\s*ماركت|ماركت|دكان|بائع[هة]?|سوبر|\bمول\b|البان|اجبان|بقاليه|معرض|بوتيك|مكياج|عطور|مبيعات داخل"),
     ("industry", r"معمل|ورشه|خياط|حبكه|درز[هة]|اورطجي|امبلاج|\bكوي\b|قصاص|موديليست|\bاوفر\b|تطريز|رشمه|سنجر|ماكين|انتاج|تصنيع|تلييس|لياسه|جبصين|مكابس|بلوك|بيتون|باطون|سيراميك|بلاط|نجار|حداد|دهان|كهرباء|كهربائي|تمديدات|ميكانيكي|لحام|المنيوم|"
                  r"صيانه|فني\s+تركيب|موبيليا|كوافير|حلاق|نسيج|جوارب|مصنع|صناعه|منشره|مشغل الات|مشغل|فرن|مخبز|سكاكر|(?:معلم|معلمين|معلمي|معلمو) (تلييس|لياسه|بلوك|مكابس|جبصين|دهان|بلاط|سيراميك|حداده|نجاره|المنيوم|بيتون|باطون|عمار|بناء|صحيه)"),
-    ("driving", r"سائق|توصيل|دليفري|ديلفري|ديليفري|كابتن|كباتن|موزع|درايفر"),
-    ("security", r"حارس|ناطور|امن وحمايه|حراسه"),
-    ("cleaning", r"تنظيف|نظافه|نضافه|مستخدم|عامل[هة]? خدم"),
+    ("driving", r"سائق|توصيل|دليفري|ديلفري|ديليفري|كابتن|كباتن|موزع|درايفر|\b(?:driver|chauffeur|delivery)\b"),
+    ("security", r"حارس|ناطور|امن وحمايه|حراسه|(?<!food\s)(?<!economic\s)(?<!social\s)(?<!cyber\s)(?<!information\s)(?<!data\s)\bsecurity\s+(?:guard|officer|manager|coordinator|assistant|specialist|advisor|focal\s+point)\b|\bguard\b|\bsafety\s+officer\b"),
+    ("cleaning", r"تنظيف|نظافه|نضافه|مستخدم|عامل[هة]? خدم|\b(?:cleaner|janitor|housekeeping)\b"),
     ("care", r"رعايه|جليس|مسن|مربي[هة]? اطفال|خادمه|عامله منزل|مدبره منزل"),
 ]
 _FIELD_RE = [(f, re.compile(fold(p), re.I)) for f, p in _FIELD_WORDS]
+_LANDMARK_NOISE_RE = re.compile(
+    r"(?:خلف|قرب|مقابل|بجانب|بجوار|امام|أمام|قريب\s+من)\s+(?:مستشفى|مشفى|جامعة|مدرسة|معهد|صيدلية|فندق|مطعم|معمل)\s+\S+(?:\s+\S+)?|مشروع\s+دمر",
+    re.I,
+)
 
 
 def field_from_text(title: str, context: str = "") -> str:
-    """The main field of a job, from its title first and then the rest of the ad."""
-    for text in (title, context):
-        if f := _first_match(_title_form(text), [(rx, f) for f, rx in _FIELD_RE]):
-            return f
+    """The main field of a job, from its title first and then the cleaned context of the ad."""
+    if f := _first_match(_title_form(title), [(rx, f) for f, rx in _FIELD_RE]):
+        return f
+    cleaned_ctx = _LANDMARK_NOISE_RE.sub(" ", context or "")
+    if f := _first_match(_title_form(cleaned_ctx), [(rx, f) for f, rx in _FIELD_RE]):
+        return f
     return "other"
 
 
@@ -491,8 +513,25 @@ APPLY_LABEL = dict(APPLY_TYPES)
 _NGO_RE = re.compile(fold(
     r"منظم[ةه]|جمعيه|الهلال الاحمر|الصليب الاحمر|الامم المتحده|الاونروا|برنامج الاغذيه|"
     r"\b(unicef|unhcr|wfp|undp|unfpa|iom|who|ocha|msf|irc|care|oxfam|relief|ngo|ingos?)\b|"
-    r"انقاذ الطفل|save the children|mercy corps|شفق|بنفسج|احسان|بهار|الاطباء المستقلين|عمل انساني|مؤسسه خيريه|القطاع الانساني|منظمات دوليه|"
-    r"الهيئه العامه للمنظمات|سوريون بلا حدود"
+    r"world\s*vision|solidarit|avsi|\bdrc\b|\bnrc\b|\bacted\b|\bmedglobal\b|\bsams\b|\bsarc\b|\bsema\b|\bsrd\b|\bsened\b|\bbahar\b|\bataa\b|\bida\b|"
+    r"takaful|hand\.ngo|rescue\.org|gopa|adra|caritas|people\s*in\s*need|islamic\s*relief|human\s*appeal|qatar\s*charity|"
+    r"terre\s*des\s*hommes|action\s*against\s*hunger|welthungerhilfe|relief\s+international|premiere\s+urgence|secours\s+islamique|muslim\s+aid|"
+    r"انقاذ الطفل|save the children|mercy corps|منظمه شفق|جمعيه شفق|شفق للاغاثه|منظمه بنفسج|جمعيه بنفسج|فريق بنفسج|منظمه احسان|جمعيه احسان|احسان للاغاثه|منظمه بهار|جمعيه بهار|"
+    r"الاطباء المستقلين|عمل انساني|مؤسسه خيريه|القطاع الانساني|منظمات دوليه|"
+    r"الهيئه العالميه للاغاثه|مؤسسه نور للاغاثه|مؤسسه سلام للامل|مؤسسه seed|منظمه الجوده|"
+    r"للاغاثه والتنميه|ازاله الالغام|للاغاثه الانسانيه|المجلس الدنماركي|المجلس النرويجي|"
+    r"اللجنه الدوليه للصليب|منظمه الصحه العالميه|منظمه العمل الدوليه|منظمه الهجره الدوليه|"
+    r"منظمه الاغذيه|برنامج الامم المتحده|المفوضيه الساميه|"
+    r"الهيئه العامه للمنظمات|سوريون بلا حدود|جمعية عطاء|"
+    r"international\s+medical\s+corps|\bimc\b|هيئه\s+الاغاثه|معا\s+نبني\s+الوطن|givedirectly|medair|icmpd|\bfao\b|المجلس\s+النرويجي\s+للاجئين|"
+    r"كاريتاس|ميرسي\s*كور|سيف\s*ذا\s*تشيلدرن|أطباء\s*بلا\s*حدود|اطباء\s*بلا\s*حدود|أطباء\s*العالم|اطباء\s*العالم|أوكسفام|اوكسفام|"
+    r"ميدير|وورلد\s*فيجن|هانديكاب|تير\s*دي\s*زوم|انترسوس|إنترسوس|العمل\s*ضد\s*الجوع|ميد\s*غلوبال|الشرق\s*الأدنى|إسعاف\s*أولي|اسعاف\s*اولي|"
+    r"قطر\s*الخيري[ةه]|الإغاثة\s*الإسلامية|الاغاثة\s*الاسلامية"
+), re.I)
+_NON_NGO_PHRASE_RE = re.compile(fold(r"جمعيه\s+(?:الزهراء|سكنيه)"), re.I)
+_PRIVATE_COMMERCIAL_EMP_RE = re.compile(fold(
+    r"^(?:مطعم|كافيه|كافتيريا|محل|بوتيك|سوبر\s*ماركت|صالون|ورشه|معمل\s+(?:البسه|اكياس|شيبس|حلويات|خياطه|نسيج|بلاستيك|احذيه|منظفات)|"
+    r"شركه\s+(?:تجاريه|مقاولات|تجاره|سياحه|توزيع|عقار|المانيا|قائمه|قابضه|محدوده|مستحضرات|تسويق|شحن|غذا|خاصه))|للتجاره|للمقاولات|للصناعات|القابضه|لتسويق|للمواد\s+الغذائيه"
 ), re.I)
 _FORM_RE = re.compile(
     r"docs\.google\.com/forms|forms\.gle|forms\.office\.com|forms\.cloud\.microsoft|"
@@ -501,15 +540,43 @@ _FORM_RE = re.compile(
 )
 
 
-def infer_sector(official: bool, field: str, employer: str | None, text: str = "", hint: str | None = None) -> str:
-    if hint in ("gov", "ngo", "private"):
-        return hint
+def infer_sector(
+    official: bool,
+    field: str,
+    employer: str | None,
+    text: str = "",
+    hint: str | None = None,
+    country: str = "sy",
+    source: str | None = None,
+) -> str:
+    from . import config
+
     emp_f = fold(employer or "")
-    if _NGO_RE.search(emp_f):
+    txt_f = fold((text or "")[:700])
+    emp_clean = _NON_NGO_PHRASE_RE.sub(" ", emp_f)
+    txt_clean = _NON_NGO_PHRASE_RE.sub(" ", txt_f)
+    is_priv_emp = bool(_PRIVATE_COMMERCIAL_EMP_RE.search(emp_f))
+    if country == "tr":
+        if source in config.OFFICIAL_NGO_SOURCES or _NGO_RE.search(emp_clean):
+            return "ngo"
+        if hint == "ngo" and not is_priv_emp:
+            return "ngo"
+        if (field == "ngo" or _NGO_RE.search(txt_clean)) and not is_priv_emp:
+            return "ngo"
+        return "private"
+    if source in config.OFFICIAL_NGO_SOURCES or _NGO_RE.search(emp_clean):
         return "ngo"
-    if official:
+    if (official or source in config.OFFICIAL_GOV_SOURCES) and not is_priv_emp:
         return "gov"
-    if field == "ngo" or _NGO_RE.search(fold(text[:700])):
+    if hint == "gov" and not is_priv_emp:
+        return "gov"
+    if hint == "ngo":
+        return "private" if (is_priv_emp and not _NGO_RE.search(emp_clean)) else "ngo"
+    if hint == "private":
+        if not is_priv_emp and (field == "ngo" or _NGO_RE.search(emp_clean) or _NGO_RE.search(txt_clean)):
+            return "ngo"
+        return "private"
+    if (field == "ngo" or _NGO_RE.search(txt_clean)) and not is_priv_emp:
         return "ngo"
     return "private"
 

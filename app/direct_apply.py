@@ -100,6 +100,7 @@ _IGNORE_EMAIL_SUBSTRS = (
     "info@sema-sy.org", "info@bahar.ngo", "info@sened.ngo",
     "info@jobsintr.net", "info@salamjobs.com", "info@mahereen.com", "info@wazifturk.com",
     "info@ab-ilan.com", "info@adwhit.com", "employee@gmail.com", "kvkk@", "global.inclusion@wfp.org",
+    "tenders@", "tender@",
     "noreply@", "no-reply@", "donotreply@", "webmaster@", "wordpress@", "wixpress",
     "sentry.io", "example.com", "domain.com", ".png", ".jpg", ".svg",
 )
@@ -405,6 +406,11 @@ def extract_apply_from_html(html_text: str, page_url: str, country: str = "sy") 
         "[class*='sidebar'], [class*='related'], [class*='similar'], "
         "header, footer, nav, aside, .site-footer, .site-header"
     ):
+        if getattr(noise, "attrs", None) is None or noise.name in ("html", "body", "main", "article"):
+            continue
+        cls = " ".join(noise.get("class") or []).lower()
+        if "no-sidebar" in cls or "without-sidebar" in cls:
+            continue
         noise.decompose()
     main_node = soup.find("article") or soup.find("main") or soup.select_one(".entry-content,.post-content,.job-description,.ck-content,.content-single") or soup
     main_text = main_node.get_text(" ", strip=True)
@@ -422,9 +428,24 @@ def extract_apply_from_html(html_text: str, page_url: str, country: str = "sy") 
             best_score = sc
             best_url = strip_tracking(urljoin(page_url, href))
 
-    # Also check embedded iframes (JotForm / Google Forms / Kobo) inside main content
+    # Elementor/page-builder templates often place the Apply CTA button outside <article>/<main>
+    if best_score < 90 and main_node is not soup:
+        for a in soup.find_all("a", href=True):
+            href = a["href"].strip()
+            full = strip_tracking(urljoin(page_url, href))
+            if not full or not is_direct_form_or_ats(full):
+                continue
+            sc = _score_candidate_link(href, a.get_text(" ", strip=True), page_url)
+            if sc >= 90 and sc > best_score:
+                best_score = sc
+                best_url = full
+
+    # Also check embedded iframes (JotForm / Google Forms / Kobo) inside main content (or de-noised soup)
     if best_score < 90:
-        for fr in main_node.find_all("iframe", src=True):
+        iframe_nodes = main_node.find_all("iframe", src=True)
+        if not iframe_nodes and main_node is not soup:
+            iframe_nodes = soup.find_all("iframe", src=True)
+        for fr in iframe_nodes:
             src = fr["src"].strip()
             if _DIRECT_FORM_OR_ATS_RE.search(src):
                 best_url = strip_tracking(urljoin(page_url, src))

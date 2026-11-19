@@ -279,31 +279,52 @@
   }
 
   function formatCardCities(j) {
+    const isTr = j.country === 'tr';
+    const multiLbl = isTr ? 'عدة ولايات في تركيا' : 'عدة محافظات';
     const cs = Array.isArray(j.cities) ? [...j.cities] : [];
-    if (!cs.length) return 'سوريا (عام)';
+    if (!cs.length) return isTr ? 'تركيا (عام)' : 'سوريا (عام)';
     const selCities = splitCsv(state.city);
     if (selCities.length) {
       const matched = cs.filter((c) => selCities.includes(c));
       if (matched.length) {
         const rest = cs.filter((c) => !selCities.includes(c));
-        return rest.length ? `${matched.join('، ')} (+${rest.length} محافظات)` : matched.join('، ');
+        return rest.length ? `${matched.join('، ')} (+${rest.length})` : matched.join('، ');
       }
-      if (cs.includes('عدة محافظات')) {
-        return `${selCities.slice(0, 2).join('، ')} (شامل المحافظات)`;
+      if (cs.includes(multiLbl)) {
+        return `${selCities.slice(0, 2).join('، ')} (شامل)`;
       }
     }
     if (cs.length <= 3) return cs.join('، ');
-    return `${cs.slice(0, 2).join('، ')} (+${cs.length - 2} محافظات)`;
+    return `${cs.slice(0, 2).join('، ')} (+${cs.length - 2})`;
+  }
+
+  function formatDate(iso) {
+    const s = String(iso || '').trim();
+    return /^\d{4}-\d{2}-\d{2}/.test(s) ? s.slice(0, 10) : '';
+  }
+
+  function entityMeta(j) {
+    const sec = j.sector || (j.official ? 'gov' : 'private');
+    const emp = cleanEmployer(j);
+    if (sec === 'gov') {
+      return { icon: '🏛️', role: 'الوزارة / الجهة', name: emp || 'جهة حكومية رسمية' };
+    }
+    if (sec === 'ngo') {
+      return { icon: '🤝', role: 'المنظمة', name: emp || 'منظمة دولية / إنسانية' };
+    }
+    return { icon: '🏢', role: 'الشركة / الجهة', name: emp || 'شركة / صاحب عمل (قطاع خاص)' };
+  }
+
+  function visibleSources(j) {
+    const sec = j.sector || (j.official ? 'gov' : 'private');
+    if (sec !== 'gov' && sec !== 'ngo') return [];
+    return (j.sources || []).filter((s) => Boolean(s && s.official_public));
   }
 
   function badges(j) {
     const b = [
-      el('span', { class: 'b city' }, '📍 ' + formatCardCities(j)),
       el('span', { class: 'b exp' }, expText(j.experience))
     ];
-    if (j.sector && SECTOR_UI[j.sector]) {
-      b.push(el('span', { class: 'b sec' }, SECTOR_UI[j.sector].label));
-    }
     if (j.education) {
       b.push(el('span', { class: 'b' }, '🎓 ' + (EDU_LABEL[j.education] || j.education) + (j.education_from === 'grade' && j.grade ? ` (فئة ${j.grade})` : '')));
     }
@@ -324,9 +345,6 @@
     }
     if (j.gender) {
       b.push(el('span', { class: 'b' }, j.gender === 'female' ? '👩 إناث فقط' : '👨 ذكور فقط'));
-    }
-    if (j.deadline) {
-      b.push(el('span', { class: 'b' }, '📅 حتى ' + j.deadline));
     }
     (j.tags || []).forEach((t) => b.push(el('span', { class: 'b' }, t)));
     return b;
@@ -426,13 +444,16 @@
   }
 
   function buildShareText(j) {
-    const emp = cleanEmployer(j);
-    const cities = (j.cities && j.cities.length) ? j.cities.join('، ') : 'سوريا (عام)';
+    const ent = entityMeta(j);
+    const defaultCountry = j.country === 'tr' ? 'تركيا (عام)' : 'سوريا (عام)';
+    const cities = (j.cities && j.cities.length) ? j.cities.join('، ') : defaultCountry;
     const roleLabel = j.field && j.field !== 'other' ? (j.subfield ? subLabel(j.subfield) : fieldLabel(j.field)) : '';
     const edu = j.education ? (EDU_LABEL[j.education] || j.education) : 'غير مشترط / غير مذكور';
+    const pubDay = formatDate(j.posted_at);
+    const endDay = formatDate(j.deadline || j.expires_on);
     const lines = [
       `📢 فرصة عمل: ${j.title}`,
-      emp ? `🏢 الجهة: ${emp}` : null,
+      `${ent.icon} ${ent.role}: ${ent.name}`,
       `📍 المدينة: ${cities}`,
       roleLabel ? `💼 المجال: ${roleLabel}` : null,
       `🎓 المؤهل العلمي: ${edu}`,
@@ -440,7 +461,8 @@
       `⏱️ الخبرة: ${expText(j.experience)}`,
       j.salary ? `💰 الراتب / الأجر: ${j.salary}` : null,
       j.shift ? `🕒 الدوام: ${j.shift}` : null,
-      j.deadline ? `📅 آخر موعد للتقديم: ${j.deadline}` : null
+      pubDay ? `🗓️ تاريخ النشر: ${pubDay}` : null,
+      endDay ? `📅 ${j.deadline ? 'تاريخ الانتهاء' : 'متاح حتى'}: ${endDay}` : null
     ].filter(Boolean);
 
     const shareSummary = cleanSummary(j.summary);
@@ -607,7 +629,7 @@
     if (j.email) {
       out.append(el('a', { href: 'mailto:' + j.email }, 'إرسال CV بالإيميل'));
     }
-    (j.sources || []).slice(0, big ? 9 : 1).forEach((s) => {
+    visibleSources(j).slice(0, big ? 6 : 1).forEach((s) => {
       out.append(el('a', { href: s.post_url, target: '_blank', rel: 'noopener' }, 'المصدر: ' + s.label));
     });
 
@@ -636,19 +658,35 @@
     const band = expBand(j.experience);
     const m = fit(j);
     const style = `--edge:var(--exp-${band});--ebg:var(--exp-${band}-bg);--efg:var(--exp-${band});--i:${Math.min(i, 12)}`;
-    const emp = cleanEmployer(j);
-    const roleLabel = j.field && j.field !== 'other' ? (j.subfield ? subLabel(j.subfield) : fieldLabel(j.field)) : '';
-    const where = ['📍 ' + formatCardCities(j), emp ? '🏢 ' + emp : '', roleLabel ? '💼 ' + roleLabel : ''].filter(Boolean).join(' · ');
+    const sec = j.sector || (j.official ? 'gov' : 'private');
+    const ent = entityMeta(j);
+    const pubDay = formatDate(j.posted_at);
+    const dlDay = formatDate(j.deadline);
+    const expDay = formatDate(j.expires_on);
+    const endDay = dlDay || expDay;
+    const endLabel = dlDay ? 'آخر موعد' : 'تاريخ الانتهاء';
+    const cityTxt = formatCardCities(j);
     const summaryText = cleanSummary(j.summary || (j.tasks && j.tasks.length ? j.tasks.slice(0, 2).join(' · ') : '') || (j.skills && j.skills.length ? j.skills.slice(0, 2).join(' · ') : ''));
     const desc = summaryText ? el('p', { class: 'card-desc' }, ...highlightNodes(summaryText, state.terms)) : null;
 
+    const datesRow = (pubDay || endDay) ? el('div', { class: 'card-dates' },
+      pubDay ? el('span', { class: 'card-date-item' }, `🗓️ تاريخ النشر: ${pubDay}`) : null,
+      endDay ? el('span', { class: 'card-date-item' + (dlDay ? ' is-dl' : '') }, `⏳ ${endLabel}: ${endDay}`) : null
+    ) : null;
+
+    const orgLoc = el('div', { class: 'card-org-loc' },
+      el('span', { class: 'card-org' }, ...highlightNodes(`${ent.icon} ${ent.role}: ${ent.name}`, state.terms)),
+      el('span', { class: 'card-loc' }, ...highlightNodes(`📍 المدينة: ${cityTxt}`, state.terms))
+    );
+
     return el('article', { class: 'card in', style },
       el('div', { class: 'top' },
-        statusOf(j),
-        j.official ? el('span', { class: 'official' }, 'رسمي ✓ حكومي') : null
+        el('span', { class: 'sec-tag sec-' + sec }, (SECTOR_UI[sec] && SECTOR_UI[sec].label) || '🏢 قطاع خاص'),
+        statusOf(j)
       ),
+      datesRow,
       el('h3', null, el('button', { onclick: () => openDetail(j) }, ...highlightNodes(j.title, state.terms))),
-      el('div', { class: 'meta' }, ...highlightNodes(where, state.terms)),
+      orgLoc,
       desc,
       m ? el('div', { class: 'fit ' + m.level }, el('i'), m.text) : null,
       el('div', { class: 'badges' }, badges(j)),
@@ -658,17 +696,24 @@
 
   function openDetail(j) {
     const m = fit(j);
+    const ent = entityMeta(j);
+    const defaultCountry = j.country === 'tr' ? 'تركيا (عام)' : 'سوريا (عام)';
+    const pubDay = formatDate(j.posted_at);
+    const dlDay = formatDate(j.deadline);
+    const expDay = formatDate(j.expires_on);
     const kv = [
-      ['الجهة المشغلة', cleanEmployer(j)],
-      ['المحافظات والمدن', (j.cities || []).join('، ') || 'سوريا (عام)'],
+      [ent.role, ent.name],
+      ['المدينة / المحافظة', (j.cities || []).join('، ') || defaultCountry],
+      ['تاريخ النشر', pubDay],
+      [dlDay ? 'آخر موعد للتقديم' : 'تاريخ الانتهاء المتوقع', dlDay || expDay],
+      ['القطاع', (SECTOR_UI[j.sector] && SECTOR_UI[j.sector].label) || 'قطاع خاص'],
       ['مجال العمل', j.field && j.field !== 'other' ? fieldLabel(j.field) : null],
       ['المؤهل العلمي', j.education ? (EDU_LABEL[j.education] || j.education) : 'غير مشترط / غير مذكور'],
       ['التخصص الدقيق', j.specialty],
       ['الخبرة المطلوبة', expText(j.experience)],
       ['العمر', j.age_min || j.age_max ? `${j.age_min || '؟'}–${j.age_max || '؟'} سنة` : null],
       ['نظام الدوام', j.shift],
-      ['الأجر والراتب', j.salary],
-      ['آخر موعد للتقديم', j.deadline]
+      ['الأجر والراتب', j.salary]
     ].filter(([, v]) => v);
 
     const listBlock = (title, items) => (items && items.length) ? [el('h4', null, title), el('ul', null, items.map((x) => el('li', null, x)))] : [];
@@ -686,6 +731,12 @@
       )
     );
 
+    const offSrcs = visibleSources(j);
+    const sourcesSection = offSrcs.length ? [
+      el('h4', null, 'جهات نشر وتوثيق الشاغر:'),
+      el('ul', null, offSrcs.map((s) => el('li', null, el('a', { href: s.post_url, target: '_blank', rel: 'noopener' }, s.label))))
+    ] : [];
+
     $('sheetBody').replaceChildren(...[
       el('button', { class: 'close', 'aria-label': 'إغلاق', onclick: () => $('sheet').close() }, '×'),
       el('h2', { id: 'sheetTitle' }, j.title),
@@ -696,8 +747,7 @@
       listBlock('المهام والمسؤوليات الرئيسية', j.tasks),
       listBlock('الشروط والمهارات المطلوبة', j.skills),
       shareSection,
-      el('h4', null, 'جهات نشر وتوثيق الشاغر:'),
-      el('ul', null, (j.sources || []).map((s) => el('li', null, el('a', { href: s.post_url, target: '_blank', rel: 'noopener' }, s.label)))),
+      ...sourcesSection,
       links(j, true),
       el('div', { class: 'row', style: 'margin-top:10px' },
         el('a', { class: 'btn primary', href: 'cv.html?job=' + j.id }, 'إنشاء سيرة ذاتية لهذا الشاغر'),
@@ -922,7 +972,11 @@
     Object.values(mselRegistry).forEach((w) => { if (w) w.sync(); });
     if ($('lower')) $('lower').checked = state.lower;
     if ($('sortOrder')) $('sortOrder').value = state.sort;
-    document.querySelectorAll('#sectorTabs .sector-card').forEach((c) => c.setAttribute('aria-selected', String(c.dataset.sector === state.sector)));
+    if (state.country === 'tr' && state.sector === 'gov') state.sector = '';
+    document.querySelectorAll('#sectorTabs .sector-card').forEach((c) => {
+      c.hidden = c.dataset.sector === 'gov' && state.country === 'tr';
+      c.setAttribute('aria-selected', String(c.dataset.sector === state.sector));
+    });
     document.querySelectorAll('#eduGroupChips .chip').forEach((c) => c.setAttribute('aria-pressed', String(c.dataset.eduGroup === state.edu_group)));
     const selApplies = splitCsv(state.apply);
     document.querySelectorAll('#applyRow .chip').forEach((c) => {
@@ -1321,7 +1375,6 @@
     // Select dropdowns & Green Search Button
     const runSearchAction = (scrollToResults = false) => {
       if ($('q')) state.q = $('q').value.trim();
-      state.edu_group = '';
       closeSuggest();
       Object.values(mselRegistry).forEach((w) => { if (w) w.closeMenu(); });
       refresh().then(() => {

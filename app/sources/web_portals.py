@@ -6,6 +6,7 @@ import json
 import logging
 import re
 import threading
+import time
 import warnings
 import xml.etree.ElementTree as ET
 from concurrent.futures import ThreadPoolExecutor
@@ -109,6 +110,28 @@ def _is_recent_iso(iso_str: str | None, max_days: int | None = None) -> bool:
     return iso_str[:10] >= cutoff
 
 
+def _extract_clean_html_text(content_html: str) -> str:
+    """Extract clean visible body text from HTML, stripping CSS, JS, and header/footer/nav chrome."""
+    if not content_html:
+        return ""
+    low = content_html.lower()
+    if any(tag in low for tag in ("<style", "<script", "<html", "<body")):
+        soup = BeautifulSoup(content_html, "html.parser")
+        for t in soup(["script", "style", "noscript", "svg", "header", "footer", "nav"]):
+            t.decompose()
+        main_el = soup.find("article") or soup.find("main")
+        if main_el is not None:
+            main_txt = main_el.get_text("\n", strip=True)
+            raw_txt = main_txt if len(main_txt) >= 80 else soup.get_text("\n", strip=True)
+        else:
+            raw_txt = soup.get_text("\n", strip=True)
+        txt = html.unescape(raw_txt)
+    else:
+        txt = html.unescape(re.sub(r"<[^>]+>", " ", content_html))
+    lines = [re.sub(r"[ \t]+", " ", ln).strip() for ln in txt.splitlines()]
+    return "\n".join(ln for ln in lines if ln)
+
+
 def _make_wp_job(
     *,
     title: str,
@@ -127,8 +150,8 @@ def _make_wp_job(
     clean_t = ex.normalize_title_display(html.unescape(re.sub(r"<[^>]+>", " ", title or "")), keep_matlob=True)
     if len(clean_t) < 3 or not ex._good_title(clean_t):
         return None
-    body_txt = html.unescape(re.sub(r"<[^>]+>", " ", content_html or "")).strip()
-    combined = f"{clean_t} {body_txt}"
+    body_txt = _extract_clean_html_text(content_html)
+    combined = f"{clean_t} {body_txt[:4000]}"
     title_cities = tx.cities_from_text(clean_t.split("—", 1)[-1] if "—" in clean_t else clean_t)
     cities = title_cities or tx.cities_from_text(combined)
     if re.search(r"في تركيا|غازي عنتاب|إسطنبول|اسطنبول|مرسين|هاتاي|أضنة|أورفا|gaziantep|istanbul|hatay|mersin", combined, re.I) and not cities:
@@ -834,12 +857,19 @@ def scrape_nsjobs_web(client: httpx.Client) -> list[Job]:
     return _scrape_laravel_api_board(client, "https://api.nsjobs.net/api/jobs", "nsjobs_web", ["الحسكة", "دير الزور"], "ngo", max_pages=12)
 
 
+_JOBINSYRIA_LOC_EMP_RE = re.compile(
+    r"^(?:منطقة|منطقه|حي|شارع|ساحة|ساحه|كراج|خلف|قرب|مقابل|بجانب|بجوار|طريق|أوتوستراد|اوتستراد|دوار|جسر|مفترق|طلعة|نزلة|مشروع\s+دمر)\b|"
+    r"^(?:السليمانية|الجميلية|المزة|المزرعة|الحميدية|القصاع|الزاهرة|الميدان|جرمانا|صحنايا|دوما|باب شرقي|برزة|ركن الدين|كفرسوسة|المالكي|أبو رمانة|الشعلان|البرامكة|المهاجرين|الأشرفية|الموكامبو|الفرقان|الحمدانية|سيف الدولة|صلاح الدين|الأعظمية|ميسلون|السريان|العزيزية|الإذاعة|الكلاسة|أشرفية صحنايا|جمعية الزهراء|الشيخ نجار|حلب الجديدة)$",
+    re.I,
+)
+
+
 def _extract_jobinsyria_employer(raw_title: str) -> str:
     clean = html.unescape(re.sub(r"<[^>]+>", " ", raw_title or "")).strip()
     if "—" in clean:
         tail = clean.split("—", 1)[1].strip()
         first = re.split(r"[،,\-–]", tail)[0].strip()
-        if 3 <= len(first) <= 60 and not tx.cities_from_text(first):
+        if 3 <= len(first) <= 60 and not tx.cities_from_text(first) and not _JOBINSYRIA_LOC_EMP_RE.search(first):
             return first
     return ""
 
@@ -911,32 +941,109 @@ def scrape_jobinsyria(client: httpx.Client, max_pages: int = 25) -> list[Job]:
 
 
 def scrape_srd(client: httpx.Client) -> list[Job]:
-    """Scrape active Syria Relief and Development (SRD) vacancies via WP API."""
+    """Scrape active Syria Relief and Development (SRD) vacancies via EN & AR WP APIs."""
+    t_start = time.monotonic()
+    endpoints = (
+        "https://srd.org.tr/wp-json/wp/v2/jobs-vacancies?per_page=30",
+        "https://srd.org.tr/ar/wp-json/wp/v2/jobs-vacancies?per_page=30",
+    )
     jobs: list[Job] = []
-    try:
-        r = client.get("https://srd.org.tr/wp-json/wp/v2/jobs-vacancies?per_page=50", timeout=20)
-        if r.status_code != 200 or not r.text.lstrip().startswith("["):
-            return []
-        for it in r.json():
-            posted = (it.get("date_gmt") or it.get("date") or "")[:19]
-            posted_iso = (posted + "+00:00") if posted else None
-            if not _is_recent_iso(posted_iso):
+    seen: set[str] = set()
+    today_str = datetime.now(timezone.utc).date().isoformat()
+    candidates: list[dict] = []
+    for url in endpoints:
+        try:
+            r = client.get(url, timeout=20)
+            if r.status_code != 200 or not r.text.lstrip().startswith("["):
                 continue
-            job = _make_wp_job(
-                title=(it.get("title") or {}).get("rendered") or "",
-                source="srd",
-                link=(it.get("link") or "").strip(),
-                posted_iso=posted_iso,
-                employer="منظمة سوريا للإغاثة والتنمية (SRD)",
-                content_html=(it.get("content") or {}).get("rendered") or "",
-                default_cities=["إدلب", "حلب"],
-                default_field="health",
-                tags=["قطاع إنساني", "SRD"],
-            )
-            if job:
-                jobs.append(job)
-    except Exception as e:
-        log.warning("SRD scrape failed: %s", e)
+            for it in r.json():
+                link = (it.get("link") or "").strip()
+                if not link or link in seen:
+                    continue
+                seen.add(link)
+                posted = (it.get("date_gmt") or it.get("date") or "")[:19]
+                posted_iso = (posted + "+00:00") if posted else None
+                if not _is_recent_iso(posted_iso):
+                    continue
+                raw_t = (it.get("title") or {}).get("rendered") or ""
+                plain_t = html.unescape(re.sub(r"<[^>]+>", " ", raw_t)).strip()
+                if not plain_t or _TENDER_NOTICE_RE.search(plain_t) or re.search(r"متطوع|تطوع|volunteer", plain_t, re.I):
+                    continue
+                candidates.append({
+                    "link": link,
+                    "posted_iso": posted_iso,
+                    "raw_t": raw_t,
+                    "content_html": (it.get("content") or {}).get("rendered") or "",
+                })
+        except Exception as e:
+            log.warning("SRD scrape (%s) failed: %s", url, e)
+
+    need_fetch = [c for c in candidates if not c["content_html"]]
+    if need_fetch:
+        if isinstance(client, httpx.Client):
+            def _fetch_detail(item: dict) -> tuple[str, str | None]:
+                try:
+                    with httpx.Client(
+                        headers={"User-Agent": USER_AGENT, "Connection": "close"},
+                        timeout=httpx.Timeout(8.0, connect=4.0, read=8.0, write=4.0, pool=4.0),
+                        verify=False,
+                        follow_redirects=True,
+                    ) as c:
+                        pr = c.get(item["link"])
+                        if pr.status_code == 200:
+                            clean_txt = _extract_clean_html_text(pr.text)
+                            dl = ex.parse_deadline(clean_txt, item["posted_iso"])
+                            return pr.text, dl
+                except Exception as pe:
+                    log.debug("SRD detail fetch (%s) failed: %s", item["link"], pe)
+                return "", None
+
+            pool = ThreadPoolExecutor(max_workers=2)
+            try:
+                futures = [(item, pool.submit(_fetch_detail, item)) for item in need_fetch]
+                for item, fut in futures:
+                    if time.monotonic() - t_start > 45:
+                        log.warning("SRD detail fetch hit 45s budget; stopping remaining fetches")
+                        break
+                    try:
+                        html_body, dl = fut.result(timeout=12)
+                        item["content_html"] = html_body
+                        item["deadline"] = dl
+                    except Exception as pe:
+                        log.debug("SRD detail future (%s) timed out/failed: %s", item["link"], pe)
+            finally:
+                pool.shutdown(wait=False, cancel_futures=True)
+        else:
+            for item in need_fetch:
+                if time.monotonic() - t_start > 45:
+                    break
+                try:
+                    pr = client.get(item["link"], timeout=8)
+                    if pr.status_code == 200:
+                        item["content_html"] = pr.text
+                        clean_txt = _extract_clean_html_text(pr.text)
+                        item["deadline"] = ex.parse_deadline(clean_txt, item["posted_iso"])
+                except Exception as pe:
+                    log.debug("SRD detail fetch (%s) failed: %s", item["link"], pe)
+
+    for c in candidates:
+        deadline = c.get("deadline")
+        if deadline and deadline < today_str:
+            continue
+        job = _make_wp_job(
+            title=c["raw_t"],
+            source="srd",
+            link=c["link"],
+            posted_iso=c["posted_iso"],
+            employer="منظمة سوريا للإغاثة والتنمية (SRD)",
+            content_html=c["content_html"],
+            default_cities=["إدلب", "حلب"],
+            default_field="health",
+            tags=["قطاع إنساني", "SRD"],
+            deadline=deadline,
+        )
+        if job:
+            jobs.append(job)
     return jobs
 
 
@@ -1284,7 +1391,7 @@ def scrape_unjobnet_country(
             edu = tx.education_from_text(desc_txt) or tx.education_from_title(title) or "bachelor"
             fld = tx.field_from_text(title, desc_txt[:600])
             if fld == "other":
-                fld = "management"
+                fld = "ngo"
             sub = computer_subfield(title, desc_txt[:400])
             if sub:
                 fld = "computer"
@@ -1544,7 +1651,7 @@ def scrape_acted(client: httpx.Client, country: str = "sy") -> list[Job]:
                     title = html.unescape(h1.get_text(" ", strip=True)) if h1 else du.rstrip("/").split("/")[-1].replace("-", " ").title()
                     if not title or len(title) < 4 or re.search(r"\b(?:volunteer|intern(?:ship)?)\b", title, re.I):
                         continue
-                    body_txt = (ds.select_one("main") or ds).get_text("\n", strip=True)
+                    body_txt = _extract_clean_html_text(rd.text)
                     if country == "tr" and spam.is_tr_citizenship_only(f"{title}\n{body_txt[:800]}"):
                         continue
                     dl = ex.parse_deadline(body_txt)
@@ -1730,6 +1837,7 @@ def scrape_impactpool_country(
             lines = [ln.strip() for ln in main.get_text("\n", strip=True).splitlines() if ln.strip()]
             h1 = ds.select_one("h1")
             title = html.unescape(h1.get_text(" ", strip=True)) if h1 else (lines[0] if lines else "")
+            title = re.sub(r"(?<=[A-Za-z0-9])Remote$", "", title).strip()
             if not title or len(title) < 3 or _TENDER_NOTICE_RE.search(title):
                 return None
             if re.search(r"\b(?:volunteer|unv|intern(?:ship)?)\b", title, re.I):
@@ -1750,7 +1858,7 @@ def scrape_impactpool_country(
             if re.search(r"\b(?:unv|united nations volunteers)\b", employer, re.I):
                 return None
 
-            body_txt = "\n".join(lines[:60])
+            body_txt = re.sub(r"(?<=[A-Za-z0-9])Remote\b", "", "\n".join(lines[:60]))
             if spam.is_spam(f"{title}\n{body_txt[:500]}"):
                 return None
             if country == "tr" and spam.is_tr_citizenship_only(f"{title}\n{body_txt[:1200]}"):
@@ -1761,11 +1869,16 @@ def scrape_impactpool_country(
                 return None
 
             loc_hay = f"{city_line} {title} {body_txt[:500]}"
-            cities = (
-                tx.tr_cities_from_text(loc_hay) or ["عدة ولايات في تركيا"]
-                if country == "tr"
-                else tx.cities_from_text(loc_hay) or ["عدة محافظات"]
-            )
+            if country == "tr":
+                tr_cs = tx.tr_cities_from_text(loc_hay)
+                if not tr_cs and not re.search(r"\b(?:turkey|turkiye|türkiye|تركيا)\b", loc_hay, re.I):
+                    return None
+                cities = tr_cs or ["عدة ولايات في تركيا"]
+            else:
+                sy_cs = tx.cities_from_text(loc_hay)
+                if not sy_cs and not re.search(r"\b(?:syria|سوريا)\b", loc_hay, re.I):
+                    return None
+                cities = sy_cs or ["عدة محافظات"]
             fld = tx.field_from_text(title, body_txt[:600])
             sub = computer_subfield(title, body_txt[:400])
             if sub or fld == "computer":

@@ -1135,3 +1135,378 @@ def test_step2_new_direct_apply_sources_and_depth():
     wfp_tr = wp.scrape_wfp(cli, country="tr")
     assert len(wfp_tr) == 1
     assert "أنقرة" in wfp_tr[0].cities
+
+
+def test_step3_channels_requirement_title_guard_and_srd_ar():
+    from datetime import datetime, timezone
+    from app import config, extract as ex
+    from app.sources import web_portals as wp
+
+    channels = config.load_channels()
+    for handle in ("jobs963", "jobsportal1", "ExtraJobs", "takatuf2026", "tawasolsyria"):
+        assert handle in channels
+        assert channels[handle]["country"] == "sy"
+
+    now_iso = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    today_iso = datetime.now(timezone.utc).date().isoformat()
+
+    post_txt = (
+        "تعلن شركة بحري للصناعات الدوائية عن توفر الشواغر التالية:\n"
+        "مندوب علمي _ طرطوس _\n"
+        "- شهادة في الصيدلة\n"
+        "- التفرغ التام للعمل\n"
+        "E-mail : marketing@bahripharm.com"
+    )
+    jobs = ex.extract(post_txt, "jobsportal1", "https://t.me/jobsportal1/16862", now_iso, "formal", country="sy")
+    assert len(jobs) == 1
+    assert "مندوب علمي" in jobs[0].title
+    assert "طرطوس" in jobs[0].cities
+    assert jobs[0].email == "marketing@bahripharm.com"
+
+    assert ex._good_title("خبرة قوية في إدارة وتنظيم المستودعات") is False
+    assert ex._good_title("أمين مستودع") is True
+
+    class _Resp:
+        def __init__(self, status_code: int, text: str = "", json_data=None):
+            self.status_code = status_code
+            self.text = text
+            self._json = json_data
+
+        def json(self):
+            return self._json
+
+    calls = []
+
+    class _FakeSrdClient:
+        def get(self, url, **kw):
+            calls.append(url)
+            if "/ar/wp-json/" in url:
+                return _Resp(
+                    200,
+                    "[{}]",
+                    json_data=[
+                        {
+                            "date_gmt": f"{today_iso}T09:00:00",
+                            "link": "https://srd.org.tr/ar/jobs-vacancies-ar/nurse-2422/",
+                            "title": {"rendered": "ممرضة — إدلب"},
+                            "content": {"rendered": '<p><a href="https://forms.gle/srdtest1">Apply</a></p>'},
+                        },
+                        {
+                            "date_gmt": f"{today_iso}T09:00:00",
+                            "link": "https://srd.org.tr/jobs-vacancies/shared-1/",
+                            "title": {"rendered": "Shared EN Link"},
+                            "content": {"rendered": '<p><a href="https://forms.gle/srdshared">Apply</a></p>'},
+                        },
+                    ],
+                )
+            return _Resp(
+                200,
+                "[{}]",
+                json_data=[
+                    {
+                        "date_gmt": f"{today_iso}T09:00:00",
+                        "link": "https://srd.org.tr/jobs-vacancies/shared-1/",
+                        "title": {"rendered": "Medical Officer - Idlib"},
+                        "content": {"rendered": '<p><a href="https://forms.gle/srdshared">Apply</a></p>'},
+                    }
+                ],
+            )
+
+    srd_jobs = wp.scrape_srd(_FakeSrdClient())
+    assert len(calls) == 2
+    assert len(srd_jobs) == 2
+    assert {j.post_url for j in srd_jobs} == {
+        "https://srd.org.tr/jobs-vacancies/shared-1/",
+        "https://srd.org.tr/ar/jobs-vacancies-ar/nurse-2422/",
+    }
+
+    from app import direct_apply as da
+
+    # 1. Tail "تليغرام\nhttps://t.me/JobsPortal1" never yields title "تليغرام"
+    tg_tail_post = (
+        "تعلن شركة النور عن توفر الشاغر التالي:\n"
+        "محاسب مالي\n"
+        "التقديم عبر البريد: hr@alnoor-co.com\n"
+        "تليغرام\n"
+        "https://t.me/JobsPortal1\n"
+    )
+    tg_jobs = ex.extract(tg_tail_post, "jobsportal1", "https://t.me/jobsportal1/16627", now_iso, "formal", country="sy")
+    assert len(tg_jobs) == 1
+    assert tg_jobs[0].title == "محاسب مالي"
+    assert all("تليغرام" not in j.title for j in tg_jobs)
+
+    # 2. Hierarchical numbered roles extract ONLY top-level roles, never sub-bullets
+    hier_post = (
+        "تعلن شركة في دمشق عن الشواغر الوظيفية التالية:\n"
+        "🔹 1- موظف/ة سكرتاريا\n"
+        "• إجادة برامج Microsoft Office، وخاصة Word وExcel.\n"
+        "• تنظيم الملفات والأرشفة الورقية.\n"
+        "🔹 2- مسؤول مشتريات\n"
+        "• خبرة عملية في مجال المشتريات.\n"
+        "للتواصل: hr@pharma-example.com"
+    )
+    hier_jobs = ex.extract(hier_post, "jobs963", "https://t.me/jobs963/12190", now_iso, "formal", country="sy")
+    assert [j.title for j in hier_jobs] == ["موظف/ة سكرتاريا", "مسؤول مشتريات"]
+
+    # 3. Section stop before "المميزات المقدمة:" stops list extraction cleanly
+    perks_post = (
+        "تعلن شركة الحافظ عن حاجتها لتوظيف فنيين بالاختصاصات التالية:\n"
+        "• كهرباء صناعية\n"
+        "• لحام\n"
+        "💼 المميزات المقدمة:\n"
+        "• تأمين النقل.\n"
+        "• تدريب وتطوير مهني وفني.\n"
+        "للتقديم واتساب: 0991444559"
+    )
+    perks_jobs = ex.extract(perks_post, "jobs963", "https://t.me/jobs963/12220", now_iso, "formal", country="sy")
+    assert [j.title for j in perks_jobs] == ["كهرباء صناعية", "لحام"]
+
+    # 4. English multi-role header ("following positions:") parses list items
+    en_multi = (
+        "HAND is currently recruiting for the following positions:\n"
+        "🔹 Field Officer - Syria - Hama\n"
+        "🔹 Counselor - Syria - Aleppo\n"
+        "Apply: career.sy@hand.ngo"
+    )
+    en_jobs = ex.extract(en_multi, "jobsportal1", "https://t.me/jobsportal1/16700", now_iso, "formal", country="sy")
+    assert len(en_jobs) == 2
+    assert {j.title for j in en_jobs} == {"Field Officer", "Counselor"}
+
+    # 5. Tenders and e-commerce promos return [], and tender emails are blocked
+    tender_post = "طلب عروض للتعاقد مع شركة متخصصة لتنفيذ مبادرات مجتمعية\nللتواصل: fcasyriatender@kirkonulkomaanapu.fi"
+    promo_post = (
+        "LIMITLESS Shopping\n"
+        "منصة تسوق إلكتروني تهدف إلى جمع المتاجر والتجار لعرض منتجاتهم\n"
+        "الفئات المستهدفة\n"
+        "• أصحاب المحلات التجارية\n"
+        "• المتسوقون\n"
+        "للتواصل: 0933111222"
+    )
+    assert ex.extract(tender_post, "jobsportal1", "https://t.me/jobsportal1/16710", now_iso, "formal", country="sy") == []
+    assert ex.extract(promo_post, "extrajobs", "https://t.me/ExtraJobs/5157", now_iso, "quick", country="sy") == []
+    assert da._good_email("tenders@ashticenter.org") is False
+
+    # 6. Elementor / Astra ast-no-sidebar layout with CTA outside <article> still extracts direct Google Form URL
+    elementor_html = (
+        "<html><body class='rtl ast-no-sidebar elementor-default'>"
+        "<div class='site-content'><div class='elementor-section'>"
+        "<a href='https://forms.gle/2QeAMNLcj9e7Dgih6'>قدم الآن</a>"
+        "</div></div>"
+        "</body></html>"
+    )
+    info = da.extract_apply_from_html(elementor_html, "https://srd.org.tr/ar/jobs-vacancies-ar/test/")
+    assert info["apply_url"] == "https://forms.gle/2QeAMNLcj9e7Dgih6"
+
+    # 7. Re-announcement header extracts the real role rather than "انضم إلى..."
+    reann_post = "إعادة اعلان - مدربة خياطة نسائية\nانضم إلى مؤسسة سلام للأمل!\nللتقديم: hr@salam-sy.org"
+    reann_jobs = ex.extract(reann_post, "jobsportal1", "https://t.me/jobsportal1/16720", now_iso, "formal", country="sy")
+    assert len(reann_jobs) == 1
+    assert reann_jobs[0].title == "مدربة خياطة نسائية"
+
+
+def test_sector_field_official_public_sources_and_filter_matrix(tmp_path):
+    from datetime import datetime, timezone
+    from fastapi.testclient import TestClient
+    from app import api, db, extract as ex, taxonomy as tx
+    from app.models import Job
+    from app.sources import web_portals as wp
+
+    now_iso = datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+    # 1. Sector purity
+    mashro_job = ex.extract(
+        "مطلوب بائعة لمحل ألبسة في مشروع دمر، دمشق\n0933123456",
+        "jobinsyria",
+        "https://t.me/jobinsyria/1",
+        now_iso,
+        "quick",
+        country="sy",
+    )
+    assert len(mashro_job) == 1
+    assert mashro_job[0].sector == "private"
+
+    assert tx.infer_sector(False, "media", "World Vision", country="sy", source="worklink") == "ngo"
+    assert tx.infer_sector(False, "business", "الهيئة العالمية للإغاثة والتنمية (انسر)", country="sy", source="jobsportal1") == "ngo"
+    priv_idlib = ex.extract(
+        "تعلن شركة زمرد القابضة في محافظة إدلب عن حاجتها إلى موظفة موارد بشرية\nhr@zumurrud.com",
+        "wazafne",
+        "https://t.me/wazafne175/99001",
+        now_iso,
+        "formal",
+        country="sy",
+    )
+    assert len(priv_idlib) == 1
+    assert priv_idlib[0].official is False
+    assert priv_idlib[0].sector == "private"
+    assert ex.extract("تدعوكم مديرية التنمية الإدارية في حلب لحضور ندوة تفاعلية حول التحول الرقمي\nhttps://forms.gle/abc123", "SyMOAD", "https://t.me/SyMOAD/9999", now_iso, "formal", country="sy") == []
+    assert ex.extract("مطلوب مشغل ببجي و فري فاير و جواكر\n0933444555", "syrianjobs", "https://t.me/syrianjobs2/9999", now_iso, "quick", country="sy") == []
+
+    # 2. Field purity + no 'management' leak in UNjobnet
+    assert tx.field_from_text("كابتن صالة", "مطعم وكافيه في دمشق") == "hospitality"
+    assert tx.field_from_text("معلم ساندويش فلافل", "دوام مسائي") == "hospitality"
+    assert tx.field_from_text("محلل بيانات", "عمل مكتبي في دمشق") == "computer"
+    assert tx.field_from_text("بائعة", "محل منظفات خلف مستشفى المجتهد، دمشق") == "retail"
+
+    class _UnResp:
+        def __init__(self, status_code: int, text: str):
+            self.status_code = status_code
+            self.text = text
+
+    class _FakeUnClient:
+        def get(self, url, **kw):
+            if "www.unjobnet.org/jobs/detail/" in url:
+                return _UnResp(
+                    200,
+                    "<html><head><script type='application/ld+json'>"
+                    '{"@type":"JobPosting","title":"Senior Coordination Fellow",'
+                    '"hiringOrganization":{"name":"UNDP"},'
+                    '"description":"<p>Damascus, Syria https://forms.gle/untest1</p>"}'
+                    "</script></head><body><h1>Senior Coordination Fellow</h1></body></html>",
+                )
+            return _UnResp(
+                200,
+                "<html><body><a href='/jobs/detail/senior-coordination-fellow-999001'>Senior Coordination Fellow</a></body></html>",
+            )
+
+    un_jobs = wp.scrape_unjobnet_country(_FakeUnClient(), slug="syria", country="sy", source="unjobnet_sy", max_pages=1, max_details=5)
+    assert len(un_jobs) == 1
+    assert un_jobs[0].field != "management"
+    assert un_jobs[0].field == "ngo"
+
+    # 3. official_public source visibility + /j/{id} + /api/jobs filter matrix
+    test_con = db.connect(tmp_path / "filter_matrix.db")
+    orig_con = api.con
+    api.con = test_con
+    try:
+        j_gov = Job(
+            title="مهندس مدني",
+            source="moad",
+            post_url="https://t.me/SyMOAD/100",
+            posted_at=now_iso,
+            employer="وزارة الإدارة المحلية والبيئة",
+            cities=["دمشق"],
+            field="engineering",
+            official=True,
+            country="sy",
+            sector="gov",
+            apply_url="https://forms.gle/govform1",
+            education="bachelor",
+        )
+        j_ngo = Job(
+            title="منسق صحة مجتمعية",
+            source="srd",
+            post_url="https://srd.org.tr/ar/jobs-vacancies-ar/100",
+            posted_at=now_iso,
+            employer="منظمة سوريا للإغاثة والتنمية (SRD)",
+            cities=["إدلب"],
+            field="health",
+            country="sy",
+            sector="ngo",
+            apply_url="https://forms.gle/srdform1",
+            education="bachelor",
+        )
+        j_priv = Job(
+            title="محاسب",
+            source="wazafne",
+            post_url="https://t.me/wazafne175/100",
+            posted_at=now_iso,
+            employer="شركة النور التجارية",
+            cities=["حلب"],
+            field="business",
+            country="sy",
+            sector="private",
+            phones=["0933123456"],
+            education="none",
+        )
+        j_tr = Job(
+            title="خياط درزة",
+            source="jobsintr",
+            post_url="https://t.me/jobsintr/100",
+            posted_at=now_iso,
+            employer="ورشة الأناضول",
+            cities=["إسطنبول"],
+            field="industry",
+            country="tr",
+            sector="private",
+            phones=["05331234567"],
+            education="none",
+        )
+        id_gov, _ = db.upsert(test_con, j_gov)
+        id_ngo, _ = db.upsert(test_con, j_ngo)
+        id_priv, _ = db.upsert(test_con, j_priv)
+        db.upsert(test_con, j_tr)
+        test_con.commit()
+
+        c = TestClient(api.app)
+        assert c.get(f"/api/jobs/{id_gov}").json()["sources"][0]["official_public"] is True
+        assert c.get(f"/api/jobs/{id_ngo}").json()["sources"][0]["official_public"] is True
+        assert c.get(f"/api/jobs/{id_priv}").json()["sources"][0]["official_public"] is False
+
+        assert "المصدر:" in c.get(f"/j/{id_gov}").text
+        assert "المصدر:" in c.get(f"/j/{id_ngo}").text
+        assert "المصدر:" not in c.get(f"/j/{id_priv}").text
+
+        assert [x["id"] for x in c.get("/api/jobs", params={"country": "sy", "sector": "gov"}).json()["jobs"]] == [id_gov]
+        assert [x["id"] for x in c.get("/api/jobs", params={"country": "sy", "sector": "ngo"}).json()["jobs"]] == [id_ngo]
+        assert [x["id"] for x in c.get("/api/jobs", params={"country": "sy", "sector": "private"}).json()["jobs"]] == [id_priv]
+        tr_res = c.get("/api/jobs", params={"country": "tr", "edu_group": "nodegree"}).json()["jobs"]
+        assert len(tr_res) == 1 and tr_res[0]["country"] == "tr" and tr_res[0]["cities"] == ["إسطنبول"]
+    finally:
+        api.con = orig_con
+        test_con.close()
+
+
+def test_hashtag_line_no_redos_and_wp_job_strips_css_footer():
+    import time
+    from app.sources import web_portals as wp
+
+    css_colors = "; ".join(f"color:#a{i:05d}" for i in range(500))
+    sy_payload = f"{css_colors}\nمطلوب ممرضة في إدلب"
+    tr_payload = f"{css_colors}\nمطلوب خياط في إسطنبول"
+
+    t0 = time.monotonic()
+    sy_cities = tx.cities_from_text(sy_payload)
+    tr_cities = tx.tr_cities_from_text(tr_payload)
+    elapsed = time.monotonic() - t0
+
+    assert elapsed < 0.2
+    assert sy_cities == ["إدلب"]
+    assert tr_cities == ["إسطنبول"]
+
+    html_doc = (
+        f"<html><head><style>body{{{css_colors};}}</style></head>"
+        "<body><footer>Gaziantep, Turkey</footer>"
+        "<main><p>مطلوب ممرضة للعمل في إدلب</p>"
+        '<a href="https://forms.gle/abc123XYZ">تقديم</a></main></body></html>'
+    )
+    t1 = time.monotonic()
+    job = wp._make_wp_job(
+        title="ممرضة",
+        source="srd",
+        link="https://srd.org.tr/ar/jobs-vacancies-ar/nurse-idlib/",
+        posted_iso="2026-11-18T10:00:00+00:00",
+        employer="منظمة سوريا للإغاثة والتنمية (SRD)",
+        content_html=html_doc,
+        default_cities=["إدلب"],
+        default_field="health",
+    )
+    assert time.monotonic() - t1 < 0.5
+    assert job is not None
+    assert job.cities == ["إدلب"]
+    assert job.apply_url == "https://forms.gle/abc123XYZ"
+    assert "#a00000" not in (job.raw or "")
+    assert "body{" not in (job.raw or "")
+    assert "Gaziantep" not in (job.raw or "")
+
+
+def test_zero_sector_mixing_food_security_and_aleppo_neighborhoods():
+    assert tx.infer_sector(False, "ngo", None, "فرصة عمل لدى المجلس النرويجي للاجئين (NRC)", hint="private") == "ngo"
+    assert tx.infer_sector(False, "business", "International Medical Corps (IMC)", "HR Officer", hint="private") == "ngo"
+    assert tx.infer_sector(False, "hospitality", "جمعية الزهراء", "موظفة كافيه في جمعية الزهراء حلب", hint="private") == "private"
+    assert tx.field_from_text("Food Security & Livelihood Officer") == "ngo"
+    assert tx.field_from_text("Senior Data Scientist, MNO Data") == "computer"
+    assert tx.cities_from_text("كافيه لوسيل في حي الفرقان") == ["حلب"]
+    assert tx.infer_sector(False, "other", None, "كاريتاس سورية - المكتب التنفيذي تعلن عن شاغر", hint="private") == "ngo"
+    assert ex._good_title("دارة عزة") is False
+    assert ex._good_title("ادعمولنا البوست لانو في ناس عبتستفيد") is False
+    assert ex._good_title("إلى من يهمه الأمر") is False

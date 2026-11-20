@@ -739,6 +739,7 @@ dialog::backdrop{
   display:flex;flex-direction:column;gap:14px;
   box-shadow:0 20px 44px rgba(0,0,0,.3);backdrop-filter:blur(14px);
 }
+.lp-wizard-compact{display:grid;grid-template-columns:1fr auto;align-items:center;gap:12px;padding:10px 12px;border-radius:16px}
 .lp-wiz-tabs{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:4px;border-radius:14px;background:rgba(0,0,0,.22)}
 .lp-wiz-tab{
   all:unset;cursor:pointer;text-align:center;padding:10px 12px;border-radius:11px;
@@ -1005,6 +1006,8 @@ dialog::backdrop{
   .filter-label{min-width:auto;width:100%}
   .bar{grid-template-columns:7rem 1fr 2.2rem}
   .lp-wiz-controls{grid-template-columns:1fr}
+  .lp-wizard-compact{grid-template-columns:1fr}
+  .lp-wizard-compact .lp-wiz-submit{width:100%}
   .nav-icon-btn .theme-lbl,.nav-icon-btn .prof-lbl{display:none}
 }
 

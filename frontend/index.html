@@ -12,7 +12,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Alexandria:wght@500;600;700;800&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="app.css?v=32">
+<link rel="stylesheet" href="app.css?v=33">
 <script src="ui.js?v=32"></script>
 </head>
 <body>
@@ -88,8 +88,8 @@
             أول محرك توظيف ذكي يمسح البوابات الحكومية، المنظمات الدولية والأممية، والشركات الخاصة في <b>جميع المحافظات السورية الـ 14</b> و<b>الولايات التركية الكبرى</b>.
           </p>
 
-          <!-- Interactive 3-Step Quick Finder Wizard -->
-          <div class="lp-wizard rise" style="--d:4" role="search" aria-label="المستكشف السريع للوظائف">
+          <!-- Compact Country Switcher & Direct CTA -->
+          <div class="lp-wizard lp-wizard-compact rise" style="--d:4" role="region" aria-label="اختيار سوق العمل">
             <div class="lp-wiz-tabs" role="tablist">
               <button type="button" role="tab" class="lp-wiz-tab active" data-wiz-country="sy" aria-selected="true">
                 <span>🇸🇾 البحث في سوريا (14 محافظة)</span>
@@ -98,33 +98,10 @@
                 <span>🇹🇷 البحث في تركيا (الولايات التركية)</span>
               </button>
             </div>
-            <div class="lp-wiz-controls">
-              <div class="lp-wiz-field">
-                <label for="lpWizCity"><i data-ico="map-pin" data-ico-cls="ico-sm"></i> المحافظة / الولاية</label>
-                <select id="lpWizCity">
-                  <option value="">كل المدن والمحافظات</option>
-                </select>
-              </div>
-              <div class="lp-wiz-field">
-                <label for="lpWizSector"><i data-ico="building" data-ico-cls="ico-sm"></i> القطاع أو المؤهل</label>
-                <select id="lpWizSector">
-                  <option value="">كل القطاعات والمؤهلات</option>
-                  <option value="ngo">منظمات دولية وإنسانية (NGOs)</option>
-                  <option value="private">شركات وقطاع خاص</option>
-                  <option value="gov">قطاع حكومي ومسابقات</option>
-                  <option value="nodegree">فرص سريعة وبدون شهادة</option>
-                </select>
-              </div>
-              <div class="lp-wiz-field lp-wiz-q-wrap">
-                <label for="lpWizQ"><i data-ico="search" data-ico-cls="ico-sm"></i> المسمى أو الاختصاص</label>
-                <input type="search" id="lpWizQ" placeholder="مثال: محاسب، مهندس، مبيعات، خياط، مترجم..." autocomplete="off">
-              </div>
-              <button type="button" id="lpWizSubmit" class="btn primary lp-wiz-submit">
-                <i data-ico="search" data-ico-cls="ico-sm"></i>
-                <span>استعرض الفرص الآن</span>
-              </button>
-            </div>
-            <div class="lp-wiz-sectors-bar" id="lpWizSectorsBar" aria-live="polite"></div>
+            <button type="button" id="lpWizSubmit" class="btn primary lp-wiz-submit">
+              <i data-ico="search" data-ico-cls="ico-sm"></i>
+              <span>استعرض الفرص الآن</span>
+            </button>
           </div>
 
           <!-- Live Counters Strip -->

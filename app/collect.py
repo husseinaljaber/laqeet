@@ -214,7 +214,7 @@ def collect(offline: bool = False, quick: bool = False) -> dict:
             for key, fn in (
                 ("reliefweb", fetch_reliefweb_jobs),
                 ("web_portals", lambda c, cache=None: fetch_all_web_portal_jobs(c, cache=cache, quick=quick)),
-                ("turkey_portals", lambda c, cache=None: fetch_all_tr_portal_jobs(c, cache=cache, max_pages=2 if quick else 8, quick=quick)),
+                ("turkey_portals", lambda c, cache=None: fetch_all_tr_portal_jobs(c, cache=cache, max_pages=2 if quick else 12, quick=quick)),
             ):
                 try:
                     batch = fn(resolve_client, cache=resolve_cache)
@@ -348,6 +348,12 @@ def verify_live_jobs(con, cache: dict | None = None, max_checks: int = 120) -> d
             else:
                 new_u = None
                 changed = True
+        elif res.get("status") in (401, 403) and res.get("apply_url") and da.is_direct_form_or_ats(res["apply_url"]):
+            cand = res["apply_url"]
+            if cand != orig_u:
+                unwrapped += 1
+                changed = True
+            new_u = cand
         elif da.is_shortener(orig_u) or da.is_strict_portal_wrapper(orig_u):
             new_u = None
             changed = True

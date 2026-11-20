@@ -64,6 +64,7 @@ SOURCE_LABEL = {v["source"]: v["label"] for v in CHANNELS.values()} | {
     "adwhit_web": "موقع أدويت للوظائف",
     "salamjobs": "منصة سلام جوبز",
     "wazifturk": "منصة وظيفتورك",
+    "abilan_tr": "بوابة وظائف المنظمات في تركيا (AB-İlan)",
     "httpOrganizationalExamTemplates": "بنك نماذج امتحانات المنظمات والوظائف",
 }
 

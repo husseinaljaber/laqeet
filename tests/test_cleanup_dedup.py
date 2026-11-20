@@ -1560,3 +1560,144 @@ def test_city_title_isolation_two_tier_neighborhoods_and_multi_job_summaries(tmp
     assert ex._split_item_city("Program Officer / Damascus", "sy") == ("Program Officer", ["دمشق"])
     assert ex._good_title("وظيفي") is False
     assert ex._good_title("مطعم") is False
+
+
+def test_direct_apply_google_forms_401_tagdiv_cfemail_and_data_quality():
+    import httpx
+    from app.models import Job
+
+    # 1. Google Forms 401 + accounts.google.com unwrap + /closedform rejection
+    def _transport(req: httpx.Request) -> httpx.Response:
+        u = str(req.url)
+        if u == "https://tinyurl.com/cvform401":
+            return httpx.Response(
+                302,
+                headers={"location": "https://docs.google.com/forms/d/e/1FAIpQLSfUpload401/viewform"},
+            )
+        if "docs.google.com/forms/d/e/1FAIpQLSfUpload401/viewform" in u:
+            return httpx.Response(401, text="Unauthorized", headers={"content-type": "text/html"})
+        if u == "https://tinyurl.com/acctwrap":
+            return httpx.Response(
+                302,
+                headers={
+                    "location": "https://accounts.google.com/ServiceLogin?service=wise&continue=https://docs.google.com/forms/d/e/1FAIpQLSfWrapped/viewform"
+                },
+            )
+        if "accounts.google.com/ServiceLogin" in u:
+            return httpx.Response(200, text="<html>Sign in</html>", headers={"content-type": "text/html"})
+        if u == "https://tinyurl.com/closed1":
+            return httpx.Response(
+                302,
+                headers={"location": "https://docs.google.com/forms/d/e/1FAIpQLSfClosed/closedform"},
+            )
+        if "closedform" in u:
+            return httpx.Response(200, text="<html>Closed</html>", headers={"content-type": "text/html"})
+        return httpx.Response(404)
+
+    with httpx.Client(transport=httpx.MockTransport(_transport), follow_redirects=True) as client:
+        j_401 = Job(
+            title="مهندس مدني",
+            source="takaful",
+            post_url="https://t.me/takafulalsham/6031",
+            posted_at="2026-11-18T10:00:00+00:00",
+            cities=["إدلب"],
+            apply_url="https://tinyurl.com/cvform401",
+        )
+        assert da.resolve_job_apply(j_401, client=client, cache={}) is True
+        assert j_401.apply_url == "https://docs.google.com/forms/d/e/1FAIpQLSfUpload401/viewform"
+
+        j_wrap = Job(
+            title="أخصائي حماية",
+            source="takaful",
+            post_url="https://t.me/takafulalsham/6032",
+            posted_at="2026-11-18T10:00:00+00:00",
+            cities=["إدلب"],
+            apply_url="https://tinyurl.com/acctwrap",
+        )
+        assert da.resolve_job_apply(j_wrap, client=client, cache={}) is True
+        assert j_wrap.apply_url == "https://docs.google.com/forms/d/e/1FAIpQLSfWrapped/viewform"
+
+        j_closed = Job(
+            title="منسق مشاريع",
+            source="takaful",
+            post_url="https://t.me/takafulalsham/6033",
+            posted_at="2026-11-18T10:00:00+00:00",
+            cities=["إدلب"],
+            apply_url="https://tinyurl.com/closed1",
+        )
+        assert da.resolve_job_apply(j_closed, client=client, cache={}) is False
+
+    # 2. TagDiv outside-<article> [data-cfemail] and .tdb-sacff-type-url extraction
+    k = 0x42
+    cf_share = f"{k:02x}" + "".join(f"{ord(c) ^ k:02x}" for c in "?subject=Share&body=https://ab-ilan.com/x")
+    tagdiv_html = f"""
+    <html><body>
+      <article><h1>Field Coordinator</h1><p>Apply below.</p></article>
+      <a href="/cdn-cgi/l/email-protection#{cf_share}">Share</a>
+      <div class="tdb_single_custom_field tdb-sacff-type-email">
+        <span class="tdb-sacff-txt"><span class="__cf_email__" data-cfemail="630a0d050c230a57074d000c0e4d1711">[email&#160;protected]</span></span>
+      </div>
+      <div class="tdb_single_custom_field tdb-sacff-type-url">
+        <a href="https://cv.inoportal.com/HayataDestek/ilanlar?utm_source=ab">Apply</a>
+      </div>
+    </body></html>
+    """
+    info = da.extract_apply_from_html(tagdiv_html, "https://ab-ilan.com/is-ilani/test/", country="tr")
+    assert info["email"] == "info@i4d.com.tr"
+    assert info["apply_url"] == "https://cv.inoportal.com/HayataDestek/ilanlar"
+
+    # 3. City normalization, Takaful Al-Sham, foreign bold Unicode rejection
+    assert tx.cities_from_text("منظمة تكافل الشام تعلن عن شاغر في إدلب") == ["إدلب"]
+    assert tx.cities_from_text("مطلوب صيدلاني/ة للعمل بصيدلية زملكا بريف دمشق") == ["ريف دمشق"]
+    assert tx.cities_from_text("موظفة بوفيه في التل") == ["ريف دمشق"]
+    assert tx.cities_from_text("باب مصلى") == ["دمشق"]
+    assert tx.cities_from_text("معضمية الشام") == ["ريف دمشق"]
+    assert tx.is_foreign_non_target("📍 Location: 𝐂𝐚𝐢𝐫𝐨, 𝐄𝐠𝐲𝐩𝐭 | 𝐎𝐧-𝐬𝐢𝐭𝐞", has_local_city=False) is True
+    assert tx.is_foreign_non_target("Location: Cairo, Egypt (Remote - عمل عن بعد)", has_local_city=False) is False
+
+    # 4. Title rescue, garbage rejection, channel promo phone stripping & city fallback
+    rescued = ex.extract(
+        "تعلن وزارة الداخلية عن حاجتها لتعيين\nالمسمى الوظيفي: دعم فني تقني\nفي دمشق\nالتقديم: https://forms.gle/moi123",
+        source="tawasol",
+        post_url="https://t.me/tawasolsyria/5538",
+        posted_at="2026-11-18T10:00:00+00:00",
+    )
+    assert [j.title for j in rescued] == ["دعم فني تقني"]
+
+    for garbage in ("عن الوظيفة", "الخبرات", "مهاد", "امتلاك", "عيلة", "مطبعة"):
+        assert ex._good_title(garbage) is False
+
+    coast_post = (
+        "مطلوب محاسبة للعمل في مكتب\n"
+        "للتواصل: 0944112233\n"
+        "للإعلانات التواصل واتساب\n"
+        "👇\n"
+        "0930022551\n"
+        "تابعونا على واتساب https://whatsapp.com/channel/0029VbDS14G"
+    )
+    coast_jobs = ex.extract(
+        coast_post,
+        source="lattakiajobs",
+        post_url="https://t.me/lattakiajobs/12",
+        posted_at="2026-11-19T10:00:00+00:00",
+        default_kind="quick",
+        sector="private",
+    )
+    assert len(coast_jobs) == 1
+    assert coast_jobs[0].cities == ["اللاذقية"]
+    assert coast_jobs[0].phones == ["0944112233"]
+    assert "0930022551" not in coast_jobs[0].phones
+
+    # 5. Field classification improvements
+    assert tx.field_from_text("Fleet Officer") == "business"
+    assert tx.field_from_text("عاملة صحة مجتمعية") == "health"
+    assert tx.field_from_text("مدير حالة") == "ngo"
+    assert tx.field_from_text("عامل توعية") == "ngo"
+    assert tx.field_from_text("منسق المنح (وطني أو دولي)") == "ngo"
+    assert tx.field_from_text("مساعد فني الكترون") == "engineering"
+    assert tx.field_from_text("مشرفين عمال") == "industry"
+    assert tx.field_from_text("مشرف إدارة الحالة") == "ngo"
+    assert spam.is_tr_citizenship_only("Mesleki Yeterlilik Kurumu 5 Uzman Yardımcısı Alacak") is True
+    assert tx.cities_from_text("SRD\nطبيب عام\nقباسين") == ["حلب"]
+    assert tx.cities_from_text("SRD\nاختصاصية تغذية\nاخترين") == ["حلب"]
+    assert ex._good_title("كاريتاس سورية") is False

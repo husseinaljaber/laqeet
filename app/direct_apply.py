@@ -79,7 +79,9 @@ _DIRECT_FORM_OR_ATS_RE = re.compile(
     r"recruitee\.com|taleo\.net|successfactors\.(?:com|eu)|oraclecloud\.com|ultipro\.com|csod\.com|"
     r"zohorecruit\.com|odoo\.com/jobs|webcruiter\.no|employ\.acf-e\.org|careers-page\.com|"
     r"sams-hr\.com|talkpu\.sh|erp\.bonyan-ngo\.org|sssd-ngo\.net|alignerr\.com|mercor\.com|creativetaskflow\.com|"
-    r"sened\.org\.tr/job_ad/|ee\.moi-sy\.com)",
+    r"sened\.org\.tr/job_ad/|ee\.moi-sy\.com|"
+    r"inoportal\.com|careers\.ifrc\.org|lumesse|icims\.com|applytojob\.com|"
+    r"breezy\.hr|ashbyhq\.com|career\d*\.successfactors\.eu|fa\.em\d+\.oraclecloud\.com)",
     re.I,
 )
 
@@ -305,11 +307,13 @@ def is_wrapper_portal(url: str) -> bool:
 
 
 def is_direct_form_or_ats(url: str) -> bool:
+    h = _host(url)
+    if h in ("accounts.google.com", "login.microsoftonline.com", "login.live.com"):
+        return False
     if is_social_or_channel(url) or is_aggregator_or_wall(url) or is_file_folder_or_viewer(url) or is_strict_portal_wrapper(url):
         return False
     if _DIRECT_FORM_OR_ATS_RE.search(url):
         return True
-    h = _host(url)
     return h.startswith(("apply.", "career.", "careers.", "jobs.", "hire.", "hiring.", "recruitment."))
 
 
@@ -345,7 +349,7 @@ def _good_email(em: str) -> bool:
     low = em.lower().strip(".,;:")
     if any(bad in low for bad in _IGNORE_EMAIL_SUBSTRS):
         return False
-    return bool(re.fullmatch(r"[\w.+-]+@[\w-]+\.[a-z]{2,}", low, re.I))
+    return bool(re.fullmatch(r"[\w.+-]+@(?:[\w-]+\.)+[a-z]{2,}", low, re.I))
 
 
 def _has_application_form(soup: BeautifulSoup, page_url: str = "") -> bool:
@@ -382,11 +386,11 @@ def _score_candidate_link(href: str, text: str, page_url: str) -> int:
     # Avoid self links, pagination, language switchers, category pages, and cross-portal promo cards
     page_host = _host(page_url)
     full_host = _host(full)
-    if is_strict_portal_wrapper(full) and full_host != page_host:
+    if is_strict_portal_wrapper(full):
         return 0
     if urlparse(full).path.rstrip("/") == urlparse(page_url).path.rstrip("/"):
         return 0
-    if re.search(r"[?&](?:lang|replytocom|share)=|/category/|/tag/|/jobs/?$|/vacancies/?$|/wp-login|/login|/account/|/register|/signin|/ngocareers/?$", low_href):
+    if re.search(r"[?&](?:lang|replytocom|share)=|/category/|/tag/|/jobs/?$|/vacancies/?$|/wp-login|/login|/account/|/register|/signin|/ngocareers/?$|/advertise", low_href):
         return 0
     if is_direct_form_or_ats(full):
         return 100
@@ -439,6 +443,24 @@ def extract_apply_from_html(html_text: str, page_url: str, country: str = "sy") 
             if sc >= 90 and sc > best_score:
                 best_score = sc
                 best_url = full
+        if best_score < 85:
+            page_h = _host(page_url)
+            for a in soup.select(".tdb-sacff-type-url a[href]"):
+                href = a["href"].strip()
+                full = strip_tracking(urljoin(page_url, href))
+                if (
+                    not full
+                    or not full.startswith(("http://", "https://"))
+                    or _host(full) == page_h
+                    or is_disallowed_offline_url(full)
+                    or is_strict_portal_wrapper(full)
+                ):
+                    continue
+                sc = max(_score_candidate_link(href, a.get_text(" ", strip=True), page_url), 85)
+                if sc > best_score:
+                    best_score = sc
+                    best_url = full
+                    break
 
     # Also check embedded iframes (JotForm / Google Forms / Kobo) inside main content (or de-noised soup)
     if best_score < 90:
@@ -484,6 +506,24 @@ def extract_apply_from_html(html_text: str, page_url: str, country: str = "sy") 
         if _good_email(em) and em not in emails:
             emails.append(em)
 
+    # TagDiv/template themes place custom contact/email fields outside <article>/<main>
+    if not emails and main_node is not soup:
+        for el in soup.find_all(attrs={"data-cfemail": True}):
+            cand = _decode_cf_email(el.get("data-cfemail") or "")
+            if _good_email(cand) and cand not in emails:
+                emails.append(cand)
+        for a in soup.find_all("a", href=True):
+            href = a["href"].strip()
+            low = href.lower()
+            if "/cdn-cgi/l/email-protection#" in low:
+                cand = _decode_cf_email(href.split("#", 1)[1].split("?", 1)[0])
+                if _good_email(cand) and cand not in emails:
+                    emails.append(cand)
+            elif low.startswith("mailto:"):
+                cand = unquote(href[7:].split("?", 1)[0]).strip()
+                if _good_email(cand) and cand not in emails:
+                    emails.append(cand)
+
     # Prefer career/hr/job emails first
     emails.sort(key=lambda e: 0 if re.search(r"career|hr|job|recruit|apply|cv|talent|وظ|توظيف", e, re.I) else 1)
     phones = sorted(p for p in set(phone_fn(main_text) + wa_phones) if p not in ("05385844484",))
@@ -523,6 +563,13 @@ def _resolve_url_live(url: str, client: httpx.Client, cache: dict, depth: int = 
         r = client.get(url, headers=_BROWSER_HEADERS, timeout=12, follow_redirects=True)
         res["status"] = r.status_code
         final = strip_tracking(str(r.url)) or url
+        if _host(final) == "accounts.google.com":
+            qs = parse_qs(urlparse(final).query)
+            cont_list = qs.get("continue") or []
+            if cont_list:
+                cont = strip_tracking(cont_list[0])
+                if cont.startswith("https://docs.google.com/forms/") and "/closedform" not in cont.lower():
+                    final = cont
         res["final_url"] = final
         if r.status_code in (404, 410):
             res["dead"] = True
@@ -539,7 +586,7 @@ def _resolve_url_live(url: str, client: httpx.Client, cache: dict, depth: int = 
             cache[cache_key] = res
             return res
         if is_direct_form_or_ats(final):
-            if is_html:
+            if is_html or (r.status_code in (401, 403) and "html" in ct):
                 page_html = r.content.decode("utf-8", "replace") if (r.encoding or "").lower() in ("", "iso-8859-1", "latin-1") else r.text
                 if _CLOSED_PAGE_RE.search(page_html):
                     res["closed"] = True
@@ -668,6 +715,11 @@ def resolve_job_apply(job: Job, client: httpx.Client | None = None, cache: dict 
             else:
                 # Page returned 200 OK and had NO form, NO apply link, NO email, NO phone.
                 job.apply_url = None
+        elif res["status"] in (401, 403) and res["apply_url"] and is_direct_form_or_ats(res["apply_url"]):
+            if orig != res["apply_url"] and not job.details_url and not is_shortener(orig):
+                job.details_url = orig
+            job.apply_url = res["apply_url"]
+            verified_live = True
         else:
             # Non-200 / WAF 202 / timeout on wrapper or shortener or unverified portal: never expose unverified wrapper as apply_url.
             if is_shortener(orig) or is_wrapper_portal(orig) or not is_direct_form_or_ats(orig):

@@ -95,6 +95,7 @@ _EMPLOYER = [
                r"معهد|جامعة|مدارس|مدرسة|بوابة|منصة|هيئة|وزارة|مديرية|محافظة|صندوق|الصندوق|الهلال|مصرف|بنك|وحدة|الرهبانية|"
                r"عائلة|فريق|مكتب|مطعم|مجمع|اتحاد|نقابة|مؤسسه|شركه)[^\n،,.:]{2,70}?)[،,]?\s+(?:عن\s|بالتنسيق|بحاجتها|حاجتها|حاجته|بالتعاقد|ب?رفد|الشواغر|ترحّب|بكل)"),
     re.compile(r"(?:لدى|الجهة\s+الموظِّ?فة\s*:)\s*((?:ال)?(?:شركة|منظمة|جمعية|مؤسسة|مشفى|مستشفى|مجموعة|مركز|مصرف|بنك|مطعم|فندق|معهد|جامعة|صندوق|الصندوق|وزارة|مديرية|محافظة|هيئة|أمانة|مجلس)\s+[^\n،,.:]{2,50}?)(?:\s+في\s|\s*$|\s*[\n،,.])"),
+    re.compile(r"(?:للعمل[ \t]+(?:في|لدى|ضمن|ب)[ \t]*|ب)(صيدلي[ةه][ \t]+[^\n،,.]{2,35}|(?:شرك[ةه]|معمل|مطعم|مكتب|عياد[ةه]|مشفى|مستشفى|مركز|منظم[ةه]|جمعي[ةه]|مؤسس[ةه]|لجن[ةه]|المجلس)[ \t]+(?!الدوام\b|دوام\b|الراتب\b|راتب\b)[^\n،,.:]{2,45}?)(?=[ \t]+(?:في|بريف|بمدينة|بمنطقة|بدوام|دوام|للتواصل|للتقديم)\b|[ \t]*[\n،,.]|$)"),
 ]
 _MONTHS = {"كانون الثاني": 1, "شباط": 2, "آذار": 3, "اذار": 3, "نيسان": 4, "أيار": 5, "ايار": 5, "حزيران": 6, "تموز": 7, "آب": 8, "اب": 8,
            "أيلول": 9, "ايلول": 9, "تشرين الأول": 10, "تشرين الاول": 10, "تشرين الثاني": 11, "كانون الأول": 12, "كانون الاول": 12,
@@ -304,6 +305,11 @@ def parse_deadline(text: str, posted_at: str | None = None) -> str | None:
 
 
 _PORTAL_EMPLOYER = re.compile(F(r"^(?:منصه|بوابه|خدمات|قناه)\s+التوظيف|وظفني|فرص عمل في سوريا"))
+_GENERIC_EMP_RE = re.compile(
+    F(r"^(?:ال)?(?:شركه|مؤسسه|منظمه|جمعيه|مركز|مطعم|معمل|مكتب|مشفى|مستشفى)\s+"
+      r"(?:رائده|كبري|كبيره|حديثه|مختصه|متخصصه|تعمل|خاصه|مشهوره|عريقه|معروفه|ناشئه|محليه|دوليه|للحج)\b"),
+    re.I,
+)
 
 
 def _employer(text: str) -> str | None:
@@ -315,7 +321,7 @@ def _employer(text: str) -> str | None:
                 continue
             name = re.sub(r"\s+(?:فرع|في)\s+\S+$", "", name) if len(name) > 40 else name
             name = _strip_emoji(name)
-            if _PORTAL_EMPLOYER.search(F(name)):
+            if _PORTAL_EMPLOYER.search(F(name)) or _GENERIC_EMP_RE.search(F(name)):
                 continue
             return name
     return None
@@ -595,7 +601,7 @@ def _split_item_city(item: str, country: str = "sy") -> tuple[str, list[str]]:
 # Lines that are greetings or duties («إعداد التقارير المالية…»), never job titles.
 _NOT_TITLE = re.compile(r"^(?:ال)?سلام عليكم|^مرحبا|^من (?:بيتك|البيت|المنزل)|"
                         r"^(?:تحديد|إعداد|اعداد|متابعة|تنفيذ|القيام|المساهمة|ضمان|تقديم|التواصل|التنسيق|المشاركة|مراجعة|"
-                        r"كتابة|بناء|دعم|إدارة|ادارة)\s+\S+\s+\S+|"
+                        r"كتابة|بناء)\s+\S+\s+\S+|^(?:دعم\s+(?!فني|تقني|نفسي|لوجستي)|(?:إدارة|ادارة)\s+(?!موارد|حسابات|مالية|مشاريع|عمليات|مبيعات|مكاتب|جودة|حالة|الموارد|المشاريع|الحسابات))\S+\s+\S+|"
                         r"^\(|^(?:مطلوب[ةه]?|بهار|نارة|فريق|صبية|شاب|فرصة|كوادر)$|^عرض خاص|^الزملاء|^للجنسي?ين|^اكيد|^أكيد|^كفاءات|^الهندسية$|^تلفزيون|^قناة|^إذاعة|"
                         r"^الموعد|^صدور|نتائج|^لتقديم|قم بالدخول|^نواصل|بترحب|^حرصا|^نسبة|^تسجيل و|^دعوة|^من جميع المتقدمين|ممن تنطبق|"
                         r"^يوجد|^الهلال الأحمر|^مشفى(?![^\n]*(?:بحاج[ةه]|مطلوب|تطلب|يلزم|شاغر|توظيف))|^مستشفى(?![^\n]*(?:بحاج[ةه]|مطلوب|تطلب|يلزم|شاغر|توظيف))|^رابط|^الطبية$|^الشركات|^(?:ما\s+(?:هو|هي)|النجاح\s+هو|التوظيف\s+هو)|"
@@ -616,7 +622,8 @@ _NOT_TITLE = re.compile(r"^(?:ال)?سلام عليكم|^مرحبا|^من (?:ب�
                         r"^(?:العمل\s+(?:من\s+البيت|حضوري|عن\s+بعد|24\s+ساعة)|وظيف[ةه]\s+عن\s+بعد|لا\s+تشترط\s+شهاد[ةه]|متاح\s+للشباب\s+فقط|خبر[ةه]\s+(?:جيد[ةه]|عملي[ةه]|قوي[ةه]|سابق[ةه]|مثبت[ةه]|متقدم[ةه]|كافي[ةه]|مميز[ةه]|ممتاز[ةه]|ميداني[ةه])|امتلاك\s+(?:رخص[ةه]|خبر[ةه]|حس)|حديث\s+تخرج|معرف[ةه]\s+ب(?:مبادئ|معايير)|مستو[ىي]\s+جيد\s+باللغ[ةه]|مونتاج\s+و[إا]نتاج|تصميم\s+وتنفيذ\s+Reels|تخطيط\s+و(?:متابع[ةه]|تنفيذ)|الرغب[ةه]\s+في\s+التعلم|تتاح\s+الفرص[ةه]\s+لحديثي|فرص[ةه]\s+تعاون\s+مهن[يى]|تبحث\s+شرك[ةه]\s+.{1,40}\s+عن\s+كوادر|[إا]لمام\s+جيد|[إا]جادة\s+(?:استخدام|برامج|جيد[ةه])|الأفضلي[ةه]\s+لمن|الدق[ةه]\s+(?:وتحمل|والاهتمام)|الجدي[ةه]\s+والالتزام|الالتزام\s+(?:وتحمل|والدق[ةه])|العمل\s+ضمن\s+نقط[ةه]|تنظيم\s+الملفات|استقبال\s+المكالمات|ال[إا]شراف\s+على\s+ال[أا]عمال|أن\s+يتراوح\s+العمر|أن\s+يكون\s+نشيط|حاصل/?[ةه]?\s+على\s+شهاد[ةه]|الحصول\s+على\s+شهاد[ةه]|شهاد[ةه]\s+(?:في|جامعي[ةه]|بكالوريوس|[إا]جاز[ةه])|التفرغ\s+(?:التام|الكامل)|مهار(?:ات|ة)\s+(?:التواصل|عالي[ةه]|قوي[ةه]|قيادي[ةه]|تنظيمي[ةه])|متفرغ/?[ةه]?\s+للعمل|خريجون\s+جدد\s+مرحب|المطلوب\s+أصحاب\s+الخبر[ةه])|"
                         r"^(?:تليغرام|تيليجرام|تلغرام|تليجرام|واتساب|واتس\s*اب|فيسبوك|انستغرام|انستقرام|لينكد[إا]ن|الموقع\s+الرسمي|شغلني|تكاتف\s+للوظائف|بواب[ةه]\s+الوظائف|متقدم$|كوادر\s+جديد[ةه]|مظهر\s+لائق|نحن\s+نوسع\s+فريق|توسيع\s+فريق\s+عملها|يفضل\s+وجود|عم\s+نبحث\s+عن\s+موظفين|موظفين\s+من\s+أصحاب|أصحاب\s+المحلات|التجار\s+وأصحاب|العلامات\s+التجاري[ةه]|المتسوقون|الأطباء$|طب\s+الفم\s+والأسنان$|الشواغر\s+الوظيفي[ةه]\s+المطلوب[ةه]|الوظائف\s+المتاح[ةه]$|تأمين\s+النقل|تدريب\s+وتطوير|مجال\s+للتطور|قسم\s+(?:المبيعات|الصيانة|الخدمات|الموارد|المحاسبة|المالية)$|^الخدمات$|^(?:ميكانيك|تصميم\s+وإنتاج|تصميم\s+ميكانيكي|كهرباء|طاقة\s+كهربائية|أتمتة\s+وتحكم\s+آلي|أنظمة\s+التحكم\s+الصناعية)$|أيام\s+العمل\s*:|ساعات\s+العمل\s*:|الراتب\s+والمزايا\s*:|3D\s*Max$|Corona\s*/\s*V-Ray$|HKN\s+Syria$|اترك\s+تعليق|إذا\s+كنت\s+بتتمتع|اذا\s+كنت\s+تتمتع|التزام\s+وقدر[ةه]\s+على\s+العمل|نتمنى\s+التوفيق|الفريق\s+ال[إا]داري\s+والفني$|موظف[ةه]?\s+للانضمام\s+[إا]ل[ىي]\s+فريق|كوادر\s+نسائي[ةه]\s+متخصص[ةه]|كفاء[ةه]\s+متميز[ةه]\s+لشغل\s+وظيف[ةه]|انضم\s+[إا]ل[ىي]\s+|جميع\s+تفاصيل\s+الوظيف[ةه]|شهاد[ةه]\s+معتمد[ةه]\s+عند\s+[إا]تمام\s+التدريب|^الجه[ةه]\s+\S+$|يتم\s+استبعاد\s+الطلبات|سيتم\s+النظر\s+فقط|يمكن\s+(?:للمهتمين|تقديم)|يرجى\s+تقديم|للمهتمين\s+بالانضمام|منص[ةه]\s+خطو[ةه]|تدعوكم\s+|قطاع\s+بيع\s+التجزئ[ةه]$|الشواغر\s+الوظيفي[ةه]\s+المتاح[ةه]$|الشرك[ةه]\s+ومجالها$|صاحبات$|يتوفر\s+لدينا\s+شاغر$|بالتنسيق\s+والتعاون|يهدف\s+هذا\s+التدريب|"
                         r"إلى\s+من\s+يهمه|الى\s+من\s+يهمه|ادعمولنا|ادعمونا|شاب\s+عندو?|صبي[ةه]\s+عندها?|(?:الالتزام|الانضباط)\s+و)|"
-                        r"^(?:وظيف[يى]|مطعم|كافيه|محل|شرك[ةه]|مؤسس[ةه])$|"
+                        r"^(?:تق[يّ]?يم\s+الطلبات|نتمنى\s+(?:أن|ان)\s+تكونوا|كاريتاس\s+سوري[ةه]$|(?:شخص|أشخاص|اشخاص)\s+(?:يجمع|متحمس|شغوف)|م\.وظ\.فات$|اتصالات\s+سوريا$)|"
+                        r"^(?:وظيف[يى]|مطعم|كافيه|محل|شرك[ةه]|مؤسس[ةه]|عن\s+الوظيف[ةه]|الخبرات|مهاد|امتلاك|عيلة|مطبعة)$|"
                         r"(?:^|\s)(?:يطلب|تطلب|تعلن\s+عن\s+وظائف\s+شاغر[ةه])\s*$|"
                         r"(?i:^(?:organization|closes|closing\s*date|deadline|duty\s*station|location|son\s+başvuru\s+tarihi)\s*[:：]|"
                         r"^(?:current\s+salary|expected\s+salary|notice\s+period|competitive\s+salary|internet\s+allowance|job\s+opportunity|university\s+graduates|age\s+up\s+to|very\s+good\s+english|available\s+to\s+join|stable\s+and\s+reliable|comfortable\s+in\s+a\s+target|creative\s+thinking|opportunities\s+for\s+professional|performance-based\s+bonuses|stay\s+updated|plan\s+and\s+coordinate|track\s+growth|present\s+product|handle\s+inquiries|follow\s+up\s+on\s+leads|achieve\s+monthly|building\s+and\s+maintaining|mobile\s+shooting|reel\s+editing)\b|"
@@ -738,18 +745,31 @@ _NOT_FALLBACK = re.compile(F(r"^(لجنه|منظمه|جمعيه|مؤسسه|ال�
                              r"المحافظ(?:ات|ه)\s*المطلوب|محافظه العمل|بطاقه الوصف|رابط التقديم|^كفاءات|^نبحث عن كفاءات"), re.I)
 
 
-def _only_places(t: str) -> bool:
-    """A line that is just city or town names («إدلب _ سرمدا», «دارة عزة»)."""
-    rest = F(t)
-    for city in tx.CITIES + tx.TR_CITIES + [
+_PLACE_ONLY_EXTRA = sorted(
+    tx.CITIES + tx.TR_CITIES + [
         "سرمدا", "اعزاز", "الباب", "عفرين", "منبج",
         "دارة عزة", "دارةعزة", "قباسين", "اخترين", "أخترين", "صوران", "جنديرس", "تل رفعت",
         "مارع", "الأتارب", "الاتارب", "الدانا", "سلقين", "حارم", "جرابلس", "الطبقة",
         "القامشلي", "قامشلو", "رأس العين", "دوما", "حرستا", "داريا", "جرمانا", "صحنايا",
-        "قدسيا", "جبلة", "بانياس", "سلمية", "مصياف",
-        "لبنان", "بيروت", "سوريا", "سورية", "لرقة", "ريف", "الاردن", "عمان", "العراق", "اربيل", "تركيا", "turkiye", "turkey",
-    ]:
-        rest = rest.replace(F(city), " ")
+        "قدسيا", "جبلة", "بانياس", "سلمية", "مصياف", "هاتاي", "أنطاكيا", "انطاكيا",
+        "كيليس", "سكاريا", "صقاريا", "قوجالي", "كوجالي", "شانلي اورفا", "أضنه", "اضنه", "إزمير", "ازمير",
+        "لبنان", "بيروت", "سوريا", "سورية", "لرقة", "ريف", "الاردن", "عمان", "العراق", "اربيل",
+        "تركيا", "turkiye", "turkey", "istanbul", "gaziantep", "mersin", "ankara", "bursa",
+        "hatay", "antakya", "izmir", "konya", "sanliurfa", "urfa", "adana", "kayseri",
+        "kilis", "trabzon", "antalya", "kocaeli", "sakarya", "samsun", "damascus", "aleppo",
+        "homs", "hama", "latakia", "lattakia", "tartous", "idlib", "daraa", "sweida",
+        "quneitra", "deir ezzor", "hasakah", "raqqa",
+    ],
+    key=len,
+    reverse=True,
+)
+
+
+def _only_places(t: str) -> bool:
+    """A line that is just city or town names («إدلب _ سرمدا», «دارة عزة»)."""
+    rest = F(t).lower()
+    for city in _PLACE_ONLY_EXTRA:
+        rest = rest.replace(F(city).lower(), " ")
     return not re.sub(r"[\W_\d]+", "", rest)
 
 
@@ -905,6 +925,17 @@ def _resolve_target_country(text: str, links: list[str] | None, country: str | N
     return "sy"
 
 
+_CHANNEL_PROMO_BLOCK_RE = re.compile(
+    r"(?m)^[^\n]{0,12}(?:لل[إا]علانات\s+(?:التواصل|ضمن\s+القناة|عبر|يرجى)|ل[إا]علاناتكم|لنشر\s+(?:[إا]علاناتكم|ما\s+لديكم\s+من\s+فرص))[^\n]*(?:\n[^\n]{0,60}){0,3}",
+    re.I,
+)
+_CHANNEL_PROMO_PHONES = frozenset({"0930022551"})
+_CHANNEL_DEFAULT_CITY = {
+    "lattakiajobs": ["اللاذقية"],
+    "tartous_jobs": ["طرطوس"],
+}
+
+
 def extract(text: str, source: str, post_url: str, posted_at: str | None = None, default_kind: str = "formal",
             links: list[str] | None = None, country: str | None = None, sector: str | None = None) -> list[Job]:
     """All the jobs in one channel post. Returns [] for posts that are not job ads."""
@@ -952,6 +983,8 @@ def extract(text: str, source: str, post_url: str, posted_at: str | None = None,
         cities = explicit_cities or tx.tr_cities_from_text(city_text) or (["غازي عنتاب"] if source == "gaziantepis" else ["عدة ولايات في تركيا"])
     else:
         cities = explicit_cities or tx.cities_from_text(city_text)
+        if not cities and source in _CHANNEL_DEFAULT_CITY:
+            cities = list(_CHANNEL_DEFAULT_CITY[source])
     cleaned_extra_links = [da.clean_url(l) for l in (links or []) if l]
     all_links = list(dict.fromkeys(tx.urls(text) + [u for u in cleaned_extra_links if u.startswith(("http://", "https://"))]))
     gov_links = da.extract_gov_links(text, extra_links=cleaned_extra_links)
@@ -966,10 +999,12 @@ def extract(text: str, source: str, post_url: str, posted_at: str | None = None,
         apply_url = da.strip_tracking(valid_links[0]) if valid_links else None
     if details_url and details_url == apply_url:
         details_url = None
-    phones = tx.phones_tr(body) if target_country == "tr" else tx.phones(body)
+    phone_body = _CHANNEL_PROMO_BLOCK_RE.sub("", body)
+    raw_phones = tx.phones_tr(phone_body) if target_country == "tr" else tx.phones(phone_body)
+    phones = [p for p in raw_phones if p not in _CHANNEL_PROMO_PHONES]
     for u in all_links:
         for p in da.extract_phone_from_wa(u, country=target_country):
-            if p not in phones:
+            if p not in _CHANNEL_PROMO_PHONES and p not in phones:
                 phones.append(p)
     phones.sort()
     raw_emails = tx.emails(body)
@@ -994,7 +1029,7 @@ def extract(text: str, source: str, post_url: str, posted_at: str | None = None,
     employer = resolve_employer(employer, source, official, body, hint=sector)
     tasks, skills = _extract_tasks_and_skills(body)
     base = dict(source=source, post_url=post_url, posted_at=posted_at, employer=employer, deadline=deadline,
-                apply_url=apply_url, details_url=details_url, phones=phones, whatsapp=tx.whatsapp_only(body) and bool(phones),
+                apply_url=apply_url, details_url=details_url, phones=phones, whatsapp=tx.whatsapp_only(phone_body) and bool(phones),
                 email=emails[0] if emails else None, spam=spam, official=official, tasks=tasks, skills=skills, raw=text[:2500])
 
     items, header = _list_items(lines)

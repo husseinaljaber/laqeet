@@ -42,7 +42,7 @@ _ANTI_SCAM_WARNING_RE = re.compile(
 THRESHOLD = 3
 _JOB_WORDS = re.compile(fold(r"مطلوب|شواغر|شاغر|وظيف|توظيف|بحاجه (الى|الي|ل)|حاجت(ها|ه)|رغبت(ها|ه) (في|ب)|ترغب .{0,40}ب(رفد|تعيين|توظيف|استقطاب)|نبحث عن|فرصه عمل|فرص عمل|للعمل|يلزمنا|"
                                r"بالانضمام (الى|ل)|الانضمام (الى|ل)(فريق|كادر|اسره)|يرغب بالانضمام|التعاقد مع|اعاده اعلان|استقطاب|المسمي الوظيفي|المنصب\s*:|closing date|vacancy|job|hiring|position|"
-                               r"iş ilanı|is ilani|personel alımı|\b(?:officer|coordinator|manager|advisor|assistant|specialist)\b"), re.I)
+                               r"iş ilanı|is ilani|personel alımı|son başvuru tarihi|başvuru formu|görev alacak|işe alım|\b(?:officer|coordinator|manager|advisor|assistant|specialist)\b"), re.I)
 
 
 def spam_score(text: str) -> int:
@@ -86,7 +86,7 @@ _NON_JOB_EXCLUDES = re.compile(
 )
 _TR_GOV_CIVIL_RE = re.compile(
     r"\bkpss\b|\bt\.?c\.?\s*vatanda[şs][ıi]\b|\btürkiye cumhuriyeti vatanda[şs][ıi]\b|"
-    r"\b(?:kamu|memur|uzman yard[ıi]mc[ıi]s[ıi]|müfettiş yard[ıi]mc[ıi]s[ıi]|kontrolörü|sözleşmeli\s+(?:personel|bilişim\s+personeli|mühendis|tekniker))\b[^\n]{0,40}\b(?:al[ıi]m[ıi]|duyuru)|"
+    r"\b(?:kamu|memur|uzman yard[ıi]mc[ıi]s[ıi]|müfettiş yard[ıi]mc[ıi]s[ıi]|kontrolörü|sözleşmeli\s+(?:personel|bilişim\s+personeli|mühendis|tekniker))\b[^\n]{0,40}\b(?:al[ıi]m[ıi]|alacak|al[ıi]yor|duyuru)|"
     r"(?:kalk[ıi]nma ajans[ıi]|bakanl[ıi]ğ[ıi]|cumhurbaşkanl[ıi]ğ[ıi]|genel müdürlüğü|valiliğ[ıi]|kaymakaml[ıi]ğ[ıi]|belediye[^\n]{0,30}al[ıi]m[ıi]|\bsgk\b|\bytb\b|işkur devlet memur|kamu ihale kurumu|savunma sanayii başkanl[ıi]ğ[ıi])",
     re.I,
 )

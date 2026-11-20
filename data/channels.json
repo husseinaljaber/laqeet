@@ -438,5 +438,21 @@
     "official": false,
     "country": "sy",
     "sector": "private"
+  },
+  "lattakiajobs": {
+    "source": "lattakiajobs",
+    "label": "وظائف اللاذقية والساحل",
+    "kind": "quick",
+    "official": false,
+    "country": "sy",
+    "sector": "private"
+  },
+  "tartous_jobs": {
+    "source": "tartous_jobs",
+    "label": "وظائف طرطوس",
+    "kind": "formal",
+    "official": false,
+    "country": "sy",
+    "sector": "private"
   }
 }

@@ -313,3 +313,84 @@ def test_expanded_turkey_feeds_dedup_and_direct_apply_only():
         assert wt_jobs[0].source == "wazifturk"
         assert wt_jobs[0].email == "hr@company.tr"
         assert wt_jobs[0].apply_url is None
+
+
+def test_scrape_abilan_tr_extracts_ngo_email_apply_url_and_filters_expired():
+    from datetime import datetime, timedelta, timezone
+    import httpx
+    from app.sources import turkey_portals as tp
+
+    now_dt = datetime.now(timezone.utc)
+    posted_recent = now_dt.isoformat(timespec="seconds")
+    fut_d = (now_dt + timedelta(days=12)).strftime("%d/%m/%Y")
+    fut_iso = (now_dt + timedelta(days=12)).date().isoformat()
+    past_d = (now_dt - timedelta(days=3)).strftime("%d/%m/%Y")
+
+    k = 0x51
+    encoded_hr = f"{k:02x}" + "".join(f"{ord(ch) ^ k:02x}" for ch in "hr@i4d.org.tr")
+
+    wp_items = [
+        {
+            "id": 1001,
+            "date_gmt": posted_recent,
+            "link": "https://ab-ilan.com/is-ilani/field-coordinator-gaziantep/",
+            "title": {"rendered": "Field Coordinator"},
+            "content": {"rendered": "<p>Humanitarian programme coordination role in Gaziantep.</p>"},
+        },
+        {
+            "id": 1002,
+            "date_gmt": posted_recent,
+            "link": "https://ab-ilan.com/is-ilani/expired-officer/",
+            "title": {"rendered": "Project Officer"},
+            "content": {"rendered": "<p>Expired NGO vacancy in Ankara.</p>"},
+        },
+        {
+            "id": 1003,
+            "date_gmt": posted_recent,
+            "link": "https://ab-ilan.com/is-ilani/ihale-duyurusu/",
+            "title": {"rendered": "Satın Alma İhale Duyurusu (RFQ)"},
+            "content": {"rendered": "<p>Hizmet alımı ihale teklif çağrısı.</p>"},
+        },
+    ]
+
+    detail_live = f"""
+    <html><body>
+      <div class="tdb_single_custom_field tdb-sacff-type-text"><span class="tdb-sacff-txt">Referans Numarası: REF-99</span></div>
+      <div class="tdb_single_custom_field tdb-sacff-type-text"><span class="tdb-sacff-txt">Innovation for Development (I4D)</span></div>
+      <div class="tdb_single_custom_field tdb-sacff-type-date_picker"><span class="tdb-sacff-txt">Son Başvuru Tarihi: {fut_d}</span></div>
+      <div class="tdb_single_custom_field tdb-sacff-type-select"><span class="tdb-sacff-txt">Gaziantep</span></div>
+      <div class="tdb_single_custom_field tdb-sacff-type-email"><a href="/cdn-cgi/l/email-protection#{encoded_hr}">Email</a></div>
+      <div class="tdb_single_custom_field tdb-sacff-type-url"><a href="https://cv.inoportal.com/I4D/ilan?utm_source=ab">Başvur</a></div>
+    </body></html>
+    """
+    detail_expired = f"""
+    <html><body>
+      <div class="tdb_single_custom_field tdb-sacff-type-text"><span class="tdb-sacff-txt">Example NGO</span></div>
+      <div class="tdb_single_custom_field tdb-sacff-type-date_picker"><span class="tdb-sacff-txt">{past_d}</span></div>
+      <div class="tdb_single_custom_field tdb-sacff-type-select"><span class="tdb-sacff-txt">Ankara</span></div>
+      <div class="tdb_single_custom_field tdb-sacff-type-url"><a href="https://cv.inoportal.com/Example/ilan">Başvur</a></div>
+    </body></html>
+    """
+
+    def handler(req: httpx.Request) -> httpx.Response:
+        u = str(req.url)
+        if "wp-json/wp/v2/job" in u:
+            return httpx.Response(200, json=wp_items)
+        if "field-coordinator-gaziantep" in u:
+            return httpx.Response(200, text=detail_live)
+        if "expired-officer" in u:
+            return httpx.Response(200, text=detail_expired)
+        return httpx.Response(404)
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as c:
+        res = tp.scrape_abilan_tr(c, max_items=10)
+        assert len(res) == 1
+        job = res[0]
+        assert job.source == "abilan_tr"
+        assert job.sector == "ngo"
+        assert job.country == "tr"
+        assert job.employer == "Innovation for Development (I4D)"
+        assert job.cities == ["غازي عنتاب"]
+        assert job.deadline == fut_iso
+        assert job.email == "hr@i4d.org.tr"
+        assert job.apply_url == "https://cv.inoportal.com/I4D/ilan"

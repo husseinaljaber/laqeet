@@ -217,7 +217,17 @@ def _build_tr_job(
 
 
 _JOBSINTR_EXTRA_PATHS = (
+    "/jobs/state/" + quote("اسطنبول-istanbul"),
     "/jobs/state/" + quote("غازي-عنتاب-gaziantep"),
+    "/jobs/state/" + quote("مرسين-mersin"),
+    "/jobs/state/" + quote("بورصة-bursa"),
+    "/jobs/state/" + quote("انقرة-ankara"),
+    "/jobs/state/" + quote("هاتاي-hatay"),
+    "/jobs/state/" + quote("أضنة-adana"),
+    "/jobs/state/" + quote("أنطاليا-antalya"),
+    "/jobs/state/" + quote("إزمير-izmir"),
+    "/jobs/state/" + quote("قونيا-konya"),
+    "/jobs/state/" + quote("أورفا-urfa"),
     "/job-cat/" + quote("خياطة"),
     "/job-cat/" + quote("المطاعم"),
     "/job-cat/" + quote("عامل"),
@@ -263,7 +273,7 @@ def scrape_jobsintr_web(client: httpx.Client, max_pages: int = 5, extra_limit: i
     seen_urls: set[str] = set()
     now_dt = datetime.now(timezone.utc)
     today_str = now_dt.date().isoformat()
-    main_pages = min(max_pages, 5)
+    main_pages = min(max_pages, 8)
     extras = _JOBSINTR_EXTRA_PATHS[:extra_limit] if extra_limit else _JOBSINTR_EXTRA_PATHS
     feed_urls = [
         f"https://jobsintr.net/jobs?page={page}" if page > 1 else "https://jobsintr.net/jobs"
@@ -538,8 +548,8 @@ def scrape_salamjobs_tr(client: httpx.Client, max_pages: int = 8) -> list[Job]:
     jobs: list[Job] = []
     seen_urls: set[str] = set()
     today_str = datetime.now(timezone.utc).date().isoformat()
-    ist_pages = min(3, max_pages)
-    gaz_pages = min(2, max_pages)
+    ist_pages = min(5, max_pages)
+    gaz_pages = min(3, max_pages)
     feed_urls = (
         [f"https://salamjobs.com/search?country_id=1&page={page}" for page in range(1, max_pages + 1)]
         + [f"https://salamjobs.com/search?country_id=1&city_id=4&page={page}" for page in range(1, ist_pages + 1)]
@@ -857,6 +867,183 @@ def scrape_sened_tr(client: httpx.Client) -> list[Job]:
     return jobs
 
 
+_ABILAN_HEADERS = {
+    **_HEADERS,
+    "Accept": "application/json, text/html, */*;q=0.8",
+    "Accept-Language": "tr,en-US;q=0.9,en;q=0.8",
+}
+_ABILAN_TENDER_RE = re.compile(r"\b(?:ihale|teklif|rfq|rfp|itb|hizmet alımı|mal alımı|satın alma|tedarik)\b", re.I)
+
+
+def scrape_abilan_tr(client: httpx.Client, max_items: int = 80) -> list[Job]:
+    """Scrape active humanitarian/NGO vacancies in Turkey from ab-ilan.com WP REST API + detail fields."""
+    jobs: list[Job] = []
+    today_str = datetime.now(timezone.utc).date().isoformat()
+    try:
+        r = client.get("https://ab-ilan.com/wp-json/wp/v2/job?per_page=100", headers=_ABILAN_HEADERS, timeout=20, follow_redirects=True)
+        if r.status_code != 200:
+            return []
+        items = r.json()
+        if not isinstance(items, list):
+            return []
+    except Exception as e:
+        log.warning("ab-ilan WP API fetch failed: %s", e)
+        return []
+
+    candidates: list[tuple[dict, str, str, str, str]] = []
+    seen_links: set[str] = set()
+    for it in items:
+        if not isinstance(it, dict):
+            continue
+        link = da.strip_tracking(str(it.get("link") or ""))
+        if not link or link in seen_links:
+            continue
+        posted_raw = str(it.get("date_gmt") or it.get("date") or "")
+        posted_at = (posted_raw[:19] + "+00:00") if len(posted_raw) >= 19 else datetime.now(timezone.utc).isoformat(timespec="seconds")
+        if not _is_recent_iso(posted_at, max_days=config.FORMAL_DAYS):
+            continue
+        raw_title_html = (it.get("title") or {}).get("rendered") or ""
+        title = BeautifulSoup(raw_title_html, "html.parser").get_text(" ", strip=True)
+        content_html = (it.get("content") or {}).get("rendered") or ""
+        content_text = BeautifulSoup(content_html, "html.parser").get_text("\n", strip=True)
+        if not title or _ABILAN_TENDER_RE.search(f"{title}\n{content_text}"):
+            continue
+        if spam.is_spam(f"{title}\n{content_text}") or spam.is_tr_citizenship_only(f"{title}\n{content_text}"):
+            continue
+        seen_links.add(link)
+        candidates.append((it, link, posted_at, title, content_text))
+        if len(candidates) >= max_items:
+            break
+
+    def _fetch_detail(entry: tuple[dict, str, str, str, str], http_c: httpx.Client) -> Job | None:
+        _it, link, posted_at, title, content_text = entry
+        try:
+            dr = http_c.get(link, headers=_ABILAN_HEADERS, timeout=18, follow_redirects=True)
+            if dr.status_code != 200:
+                return None
+            dhtml = _decode_html(dr)
+            ds = BeautifulSoup(dhtml, "html.parser")
+
+            emp: str | None = None
+            deadline: str | None = None
+            city_hints: list[str] = []
+            apply_u: str | None = None
+            emails: list[str] = []
+
+            for blk in ds.select(".tdb_single_custom_field"):
+                cls = " ".join(blk.get("class") or [])
+                txt_el = blk.select_one(".tdb-sacff-txt")
+                txt_val = txt_el.get_text(" ", strip=True) if txt_el else blk.get_text(" ", strip=True)
+                if "tdb-sacff-type-date_picker" in cls and not deadline:
+                    dm = re.search(r"(\d{2})/(\d{2})/(\d{4})", txt_val)
+                    if dm:
+                        dd, mm, yyyy = dm.group(1), dm.group(2), dm.group(3)
+                        try:
+                            dt_d = datetime.strptime(f"{yyyy}-{mm}-{dd}", "%Y-%m-%d").date()
+                            dl_iso = dt_d.isoformat()
+                            if dl_iso < today_str:
+                                return None
+                            deadline = dl_iso
+                        except ValueError:
+                            pass
+                elif "tdb-sacff-type-select" in cls and txt_val:
+                    if txt_val not in city_hints:
+                        city_hints.append(txt_val)
+                elif "tdb-sacff-type-url" in cls and not apply_u:
+                    a_tag = blk.select_one("a[href]")
+                    if a_tag:
+                        cu = da.strip_tracking((a_tag.get("href") or "").strip())
+                        if cu.startswith(("http://", "https://")) and not da.is_disallowed_offline_url(cu) and not da.is_strict_portal_wrapper(cu):
+                            apply_u = cu
+                elif "tdb-sacff-type-email" in cls:
+                    for el in blk.select("[data-cfemail]"):
+                        cand = da._decode_cf_email(el.get("data-cfemail") or "")
+                        if da._good_email(cand) and cand not in emails:
+                            emails.append(cand)
+                    for a_tag in blk.select("a[href]"):
+                        href = (a_tag.get("href") or "").strip()
+                        low = href.lower()
+                        if "/cdn-cgi/l/email-protection#" in low:
+                            cand = da._decode_cf_email(href.split("#", 1)[1].split("?", 1)[0])
+                            if da._good_email(cand) and cand not in emails:
+                                emails.append(cand)
+                        elif low.startswith("mailto:"):
+                            cand = href[7:].split("?", 1)[0].strip()
+                            if da._good_email(cand) and cand not in emails:
+                                emails.append(cand)
+                elif "tdb-sacff-type-text" in cls and not emp and txt_val:
+                    full_b = blk.get_text(" ", strip=True)
+                    if not re.search(r"referans|referans numaras|ref\s*[:：]", full_b, re.I) and len(txt_val) >= 2:
+                        emp = txt_val
+
+            info = da.extract_apply_from_html(dhtml, link, country="tr")
+            if info.get("closed"):
+                return None
+            if not apply_u and info.get("apply_url") and not da.is_strict_portal_wrapper(info["apply_url"]):
+                apply_u = info["apply_url"]
+            if not emails and info.get("email"):
+                emails.append(info["email"])
+            phones = info.get("phones") or []
+            if not apply_u and not emails and not phones:
+                return None
+
+            body_for_job = content_text
+            if deadline:
+                body_for_job = f"{content_text}\nSon Başvuru Tarihi: {deadline}".strip()
+
+            job = _build_tr_job(
+                title=title,
+                source="abilan_tr",
+                post_url=link,
+                posted_at=posted_at,
+                body_text=body_for_job,
+                employer=emp,
+                city_hint=" ".join(city_hints),
+                deadline=deadline,
+                apply_url=apply_u,
+                details_url=link,
+                phones=phones,
+                email=emails[0] if emails else None,
+                sector="ngo",
+                tags=["منظمات إنسانية", "تركيا"],
+            )
+            if job and ex.expires_on(job) >= today_str:
+                return job
+            return None
+        except Exception as e:
+            log.debug("ab-ilan detail %s failed: %s", link, e)
+            return None
+
+    if isinstance(client, httpx.Client) and len(candidates) > 4:
+        tl = threading.local()
+        lock = threading.Lock()
+        pool_clients: list[httpx.Client] = []
+
+        def _worker(entry: tuple[dict, str, str, str, str]) -> Job | None:
+            c = getattr(tl, "client", None)
+            if c is None:
+                c = httpx.Client(headers=_ABILAN_HEADERS, timeout=18, verify=False, follow_redirects=True)
+                tl.client = c
+                with lock:
+                    pool_clients.append(c)
+            return _fetch_detail(entry, c)
+
+        try:
+            with ThreadPoolExecutor(max_workers=6) as pool:
+                for j in pool.map(_worker, candidates):
+                    if j is not None:
+                        jobs.append(j)
+        finally:
+            for c in pool_clients:
+                c.close()
+    else:
+        for entry in candidates:
+            j = _fetch_detail(entry, client)
+            if j is not None:
+                jobs.append(j)
+    return jobs
+
+
 def fetch_all_tr_portal_jobs(
     client: httpx.Client | None = None,
     cache: dict | None = None,
@@ -877,11 +1064,12 @@ def fetch_all_tr_portal_jobs(
     jobs: list[Job] = []
     try:
         for name, fn in (
-            ("jobsintr_web", lambda c: scrape_jobsintr_web(c, max_pages=min(max_pages, 5), extra_limit=10 if quick else None)),
+            ("jobsintr_web", lambda c: scrape_jobsintr_web(c, max_pages=min(max_pages, 8), extra_limit=14 if quick else None)),
             ("adwhit_web", lambda c: scrape_adwhit_web(c, max_pages=min(max_pages, 4))),
             ("salamjobs", lambda c: scrape_salamjobs_tr(c, max_pages=max_pages)),
             ("wazifturk", scrape_wazifturk_tr),
             ("sened_tr", scrape_sened_tr),
+            ("abilan_tr", lambda c: scrape_abilan_tr(c, max_items=25 if quick else 80)),
             ("unjobnet_tr", scrape_unjobnet_turkey),
             ("impactpool_tr", scrape_impactpool_turkey),
             ("drc_tr", lambda c: scrape_drc(c, country="tr")),

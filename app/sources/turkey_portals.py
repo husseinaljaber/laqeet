@@ -410,13 +410,13 @@ def _extract_next_data(html_text: str) -> dict:
         return {}
 
 
-def scrape_adwhit_web(client: httpx.Client, max_pages: int = 4) -> list[Job]:
+def scrape_adwhit_web(client: httpx.Client, max_pages: int = 8) -> list[Job]:
     """Scrape structured active jobs from Adwhit main listings and categories via Next.js SSR JSON."""
     jobs: list[Job] = []
     seen_ids: set[str] = set()
     shift_map = {"fulltime": "دوام كامل", "parttime": "دوام جزئي", "freelance": "عمل حر"}
     today_str = datetime.now(timezone.utc).date().isoformat()
-    main_pages = min(max_pages, 4)
+    main_pages = min(max_pages, 8)
     feed_urls = [
         f"https://www.adwhit.com/ar/jobs?page={page}" if page > 1 else "https://www.adwhit.com/ar/jobs"
         for page in range(1, main_pages + 1)
@@ -626,11 +626,33 @@ def scrape_salamjobs_tr(client: httpx.Client, max_pages: int = 8) -> list[Job]:
                     if da.is_disallowed_offline_url(final_u):
                         return None
                     if ro.status_code == 200:
-                        info = da.extract_apply_from_html(_decode_html(ro), final_u, country="tr")
-                        phones.extend(info.get("phones") or [])
-                        if info.get("email"):
-                            emails.append(info["email"])
-                        apply_url = info.get("apply_url") or (final_u if (info.get("has_internal_form") or da.is_direct_form_or_ats(final_u)) else None)
+                        out_html = _decode_html(ro)
+                        if "adwhit.com" in final_u.lower():
+                            jdata = _extract_next_data(out_html).get("props", {}).get("pageProps", {}).get("data", {}).get("job") or {}
+                            if jdata.get("contactPhone"):
+                                phones.extend(tx.phones_tr(str(jdata["contactPhone"])))
+                            if jdata.get("contactEmail") and da._good_email(str(jdata["contactEmail"])):
+                                emails.append(str(jdata["contactEmail"]).strip())
+                            dsc_sp = BeautifulSoup(jdata.get("dsc") or "", "html.parser")
+                            for ca in dsc_sp.select("a[href*='whatsapp'], a[href*='wa.me'], a[href^='tel:'], a[href^='mailto:']"):
+                                href_c = (ca.get("href") or "").strip()
+                                low_c = href_c.lower()
+                                if low_c.startswith("tel:"):
+                                    phones.extend(tx.phones_tr(href_c[4:]))
+                                elif low_c.startswith("mailto:"):
+                                    em_c = href_c[7:].split("?", 1)[0].strip()
+                                    if da._good_email(em_c):
+                                        emails.append(em_c)
+                                else:
+                                    phones.extend(da.extract_phone_from_wa(href_c, country="tr"))
+                            if not phones and not emails:
+                                return None
+                        else:
+                            info = da.extract_apply_from_html(out_html, final_u, country="tr")
+                            phones.extend(info.get("phones") or [])
+                            if info.get("email"):
+                                emails.append(info["email"])
+                            apply_url = info.get("apply_url") or (final_u if (info.get("has_internal_form") or da.is_direct_form_or_ats(final_u)) else None)
                 except Exception:
                     pass
 
@@ -1065,7 +1087,7 @@ def fetch_all_tr_portal_jobs(
     try:
         for name, fn in (
             ("jobsintr_web", lambda c: scrape_jobsintr_web(c, max_pages=min(max_pages, 8), extra_limit=14 if quick else None)),
-            ("adwhit_web", lambda c: scrape_adwhit_web(c, max_pages=min(max_pages, 4))),
+            ("adwhit_web", lambda c: scrape_adwhit_web(c, max_pages=min(max_pages, 8))),
             ("salamjobs", lambda c: scrape_salamjobs_tr(c, max_pages=max_pages)),
             ("wazifturk", scrape_wazifturk_tr),
             ("sened_tr", scrape_sened_tr),

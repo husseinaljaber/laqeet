@@ -854,7 +854,7 @@ def scrape_jobsyria(client: httpx.Client) -> list[Job]:
 
 def scrape_nsjobs_web(client: httpx.Client) -> list[Job]:
     """Scrape active open jobs in North-East Syria from NSJobs REST API."""
-    return _scrape_laravel_api_board(client, "https://api.nsjobs.net/api/jobs", "nsjobs_web", ["الحسكة", "دير الزور"], "ngo", max_pages=12)
+    return _scrape_laravel_api_board(client, "https://api.nsjobs.net/api/jobs", "nsjobs_web", ["الحسكة", "دير الزور"], "ngo", max_pages=20)
 
 
 _JOBINSYRIA_LOC_EMP_RE = re.compile(
@@ -944,8 +944,8 @@ def scrape_srd(client: httpx.Client) -> list[Job]:
     """Scrape active Syria Relief and Development (SRD) vacancies via EN & AR WP APIs."""
     t_start = time.monotonic()
     endpoints = (
-        "https://srd.org.tr/wp-json/wp/v2/jobs-vacancies?per_page=30",
-        "https://srd.org.tr/ar/wp-json/wp/v2/jobs-vacancies?per_page=30",
+        "https://srd.org.tr/wp-json/wp/v2/jobs-vacancies?per_page=60",
+        "https://srd.org.tr/ar/wp-json/wp/v2/jobs-vacancies?per_page=60",
     )
     jobs: list[Job] = []
     seen: set[str] = set()
@@ -1002,8 +1002,8 @@ def scrape_srd(client: httpx.Client) -> list[Job]:
             try:
                 futures = [(item, pool.submit(_fetch_detail, item)) for item in need_fetch]
                 for item, fut in futures:
-                    if time.monotonic() - t_start > 45:
-                        log.warning("SRD detail fetch hit 45s budget; stopping remaining fetches")
+                    if time.monotonic() - t_start > 60:
+                        log.warning("SRD detail fetch hit 60s budget; stopping remaining fetches")
                         break
                     try:
                         html_body, dl = fut.result(timeout=12)
@@ -1162,10 +1162,10 @@ def scrape_bahar(client: httpx.Client) -> list[Job]:
 
 
 def scrape_ngossyria(client: httpx.Client) -> list[Job]:
-    """Scrape recent UN & INGO vacancies across pages 1-12 of NGOsSyria.com."""
+    """Scrape recent UN & INGO vacancies across pages 1-19 of NGOsSyria.com."""
     jobs: list[Job] = []
     seen: set[str] = set()
-    for page in range(1, 13):
+    for page in range(1, 20):
         url = "https://ngossyria.com/" if page == 1 else f"https://ngossyria.com/?page={page}"
         try:
             r = client.get(url, timeout=20)
@@ -2155,7 +2155,7 @@ def fetch_all_web_portal_jobs(client: httpx.Client | None = None, cache: dict | 
         scrape_ida,
         scrape_shafak,
         scrape_worklink,
-        (lambda c: scrape_ngosquare(c, max_pages=5 if quick else 15)),
+        (lambda c: scrape_ngosquare(c, max_pages=5 if quick else 25)),
         scrape_sarc,
         scrape_jobsyria,
         scrape_nsjobs_web,

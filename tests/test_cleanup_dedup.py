@@ -1701,3 +1701,80 @@ def test_direct_apply_google_forms_401_tagdiv_cfemail_and_data_quality():
     assert tx.cities_from_text("SRD\nطبيب عام\nقباسين") == ["حلب"]
     assert tx.cities_from_text("SRD\nاختصاصية تغذية\nاخترين") == ["حلب"]
     assert ex._good_title("كاريتاس سورية") is False
+
+
+def test_kobo_custom_host_multilink_fallback_bahaja_and_glued_titles():
+    import httpx
+    from app.models import Job
+
+    # 1. Custom Kobo/Enketo domain on worklink
+    kobo_u = "https://sy-koboviews.lmms.org/x/uRwAVxYL"
+    assert da.is_direct_form_or_ats(kobo_u) is True
+    wl_html = f"<html><body><main><a href='{kobo_u}'>Apply</a></main></body></html>"
+    assert da.extract_apply_from_html(wl_html, "https://worklink.sy/jobs/wvi-test")["apply_url"] == kobo_u
+
+    # 2. Multi-link fallback: SharePoint brochure first, live Google Form (401) backup
+    def handler(req: httpx.Request) -> httpx.Response:
+        u = str(req.url)
+        if u == "https://tinyurl.com/pdfbrochure":
+            return httpx.Response(302, headers={"location": "https://org-my.sharepoint.com/personal/hr/doc.pdf"})
+        if "sharepoint.com" in u:
+            return httpx.Response(200, text="PDF viewer", headers={"content-type": "text/html"})
+        if u == "https://forms.gle/RealForm123":
+            return httpx.Response(302, headers={"location": "https://docs.google.com/forms/d/e/1FAIpQLSfBackup/viewform"})
+        if "1FAIpQLSfBackup" in u:
+            return httpx.Response(401, text="Login required for file upload", headers={"content-type": "text/html"})
+        if u == "https://tinyurl.com/closedonly":
+            return httpx.Response(302, headers={"location": "https://docs.google.com/forms/d/e/1FAIpQLSfClosedOnly/closedform"})
+        if "closedform" in u:
+            return httpx.Response(200, text="Closed", headers={"content-type": "text/html"})
+        return httpx.Response(404)
+
+    with httpx.Client(transport=httpx.MockTransport(handler), follow_redirects=True) as client:
+        j_multi = Job(
+            title="منسق حماية",
+            source="sy_jobb",
+            post_url="https://t.me/syrian_jobb/28365",
+            posted_at="2026-11-20T10:00:00+00:00",
+            cities=["إدلب"],
+            apply_url="https://tinyurl.com/pdfbrochure",
+            raw="تفاصيل: https://tinyurl.com/pdfbrochure\nللتقديم: https://forms.gle/RealForm123",
+        )
+        j_multi._candidate_urls = ["https://forms.gle/RealForm123"]
+        assert da.resolve_job_apply(j_multi, client=client, cache={}) is True
+        assert j_multi.apply_url == "https://docs.google.com/forms/d/e/1FAIpQLSfBackup/viewform"
+
+        # Single closed form still rejected even if _candidate_urls is empty
+        j_closed_only = Job(
+            title="محاسب",
+            source="takatuf",
+            post_url="https://t.me/takatuf2026/1",
+            posted_at="2026-11-20T10:00:00+00:00",
+            cities=["حلب"],
+            apply_url="https://tinyurl.com/closedonly",
+        )
+        assert da.resolve_job_apply(j_closed_only, client=client, cache={}) is False
+
+    # 3. Colloquial 'بحاجة' without preposition & glued 'توفرالشاغر'
+    coast_ad = "#اللاذقية\nصالون بالمشروع العاشر\nبحاجة صبية اختصاص سشوار\n0932915822"
+    assert spam.is_job_post(coast_ad) is True
+    coast_res = ex.extract(coast_ad, "lattakiajobs", "https://t.me/lattakiajobs/320", "2026-11-19T10:00:00+00:00", "quick")
+    assert len(coast_res) == 1
+    assert coast_res[0].cities == ["اللاذقية"]
+    assert coast_res[0].phones == ["0932915822"]
+
+    glued_ad = "تعلن منظمة إنسان الخيرية عن توفرالشاغر الوظيفي: منسق مشاريع في إدلب\nhttps://forms.gle/glued1"
+    glued_res = ex.extract(glued_ad, "takatuf", "https://t.me/takatuf2026/67855", "2026-11-17T10:00:00+00:00")
+    assert [j.title for j in glued_res] == ["منسق مشاريع"]
+
+    # 4. 'عن شاغر <role>' without colon & first-person 'حاجتنا'
+    rowad_ad = (
+        "تعلن مؤسسة الرواد للتعاون والتنمية عن شاغر مشرفة أنشطة في مكتب عفرين\n"
+        "رابط الإعلان: https://ee-eu.kobotoolbox.org/x/bc9ljNga"
+    )
+    rowad_res = ex.extract(rowad_ad, "wazafne", "https://t.me/wazafne175/71287", "2026-11-18T10:00:00+00:00")
+    assert len(rowad_res) == 1
+    assert "مشرفة أنشطة" in rowad_res[0].title
+    assert rowad_res[0].cities == ["حلب"]
+    assert rowad_res[0].apply_url == "https://ee-eu.kobotoolbox.org/x/bc9ljNga"
+    assert spam.is_job_post("نعلن عن حاجتنا لانضمام أعضاء جدد لفريق التسويق\nhttps://forms.gle/test99") is True

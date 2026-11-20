@@ -22,8 +22,8 @@ log = logging.getLogger("reliefweb")
 
 RELIEFWEB_RSS_URL = "https://reliefweb.int/jobs/rss.xml?country=226"
 RELIEFWEB_TARGETS = (
-    ("sy", 226, 10),
-    ("tr", 236, 5),
+    ("sy", 226, 15),
+    ("tr", 236, 10),
 )
 USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "

@@ -65,6 +65,8 @@ _WRAPPER_HOSTS = _STRICT_PORTAL_HOSTS | {
 _DIRECT_FORM_OR_ATS_RE = re.compile(
     r"(?:docs\.google\.com/forms|forms\.gle|forms\.office\.com|forms\.cloud\.microsoft|"
     r"(?:ee(?:-eu)?|kf|kc)\.kobotoolbox\.org|(?:ee|kf|kc)\.humanitarianresponse\.info|enketo\.ona\.io|"
+    r"(?:[a-z0-9-]+\.)*(?:kobo[a-z0-9-]*|enketo[a-z0-9-]*)\.[a-z0-9.-]+/x/|lmms\.org/x/|"
+    r"formstack\.com|wufoo\.com|cognitoforms\.com|smartsheet\.com/b/form|survey123\.arcgis\.com|forms\.zohopublic\.com|"
     r"(?:form\.)?jotform\.com|typeform\.com|airtable\.com/(?:app|shr)|tally\.so|surveymonkey\.com|"
     r"zfrmz\.com|script\.google\.com/macros/|form\.goldyol\.com|"
     r"apply\.hiring\.moad\.gov\.sy|moad\.gov\.sy/recruitment/(?:jobs|main)|"
@@ -72,6 +74,7 @@ _DIRECT_FORM_OR_ATS_RE = re.compile(
     r"hr\.mofaex\.gov\.sy|career\.moenergy\.gov\.sy|"
     r"solidarites\.org/.+/submit-your-application|acted\.org/en/jobs/[^/]+/?(?:#form)?|"
     r"career\.ihsanrd\.org|jobs\.unicef\.org|careers\.un\.org|careers\.unops\.org|jobs\.oxfam\.org|"
+    r"careers\.rescue\.org|careers\.mercycorps\.org|jobs\.savethechildren\.net|careers\.msf\.org|careers\.wvi\.org|"
     r"jobs\.undp\.org/cj_view_job\.cfm|careers\.ilo\.org|jobs\.fao\.org|careers\.who\.int|careers\.wfp\.org|careers\.unhcr\.org|jobs\.iom\.int|"
     r"inspira\.un\.org/psp/.+HRS_JOB_OPENING_ID|"
     r"bamboohr\.com|hrpeak\.com|hr-manager\.net|baseilowcloud\.com|emply\.com|jobs\.tdh\.org|jobvite\.com|"
@@ -629,6 +632,64 @@ def _resolve_url_live(url: str, client: httpx.Client, cache: dict, depth: int = 
     return res
 
 
+def _try_live_candidate(cand: str, job: Job, client: httpx.Client, cache: dict, country: str) -> tuple[bool, bool, bool]:
+    """Attempt live resolution of one candidate URL; return (verified_live, got_apply_path, is_closed)."""
+    res = _resolve_url_live(cand, client, cache, country=country)
+    if res["closed"]:
+        return False, False, True
+    if res["dead"] or res["status"] in (404, 410):
+        return False, False, False
+    if res["status"] == 200:
+        if res["email"] and not job.email:
+            job.email = res["email"]
+        for p in res["phones"]:
+            if p not in job.phones:
+                job.phones.append(p)
+        job.phones = sorted(set(job.phones))
+
+        if res["apply_url"] and not is_strict_portal_wrapper(res["apply_url"]):
+            if cand != res["apply_url"] and not job.details_url and not is_shortener(cand):
+                job.details_url = cand
+            job.apply_url = res["apply_url"]
+            return True, True, False
+        if (res["has_internal_form"] and not is_strict_portal_wrapper(res["final_url"])) or is_direct_form_or_ats(res["final_url"]):
+            job.apply_url = res["final_url"]
+            return True, True, False
+        if res["email"] or res["phones"]:
+            # Applying is via email or phone on the detail page; move article link to details_url.
+            if not job.details_url:
+                job.details_url = res["final_url"]
+            job.apply_url = None
+            return False, True, False
+        return False, False, False
+    if res["status"] in (401, 403) and res["apply_url"] and is_direct_form_or_ats(res["apply_url"]):
+        if cand != res["apply_url"] and not job.details_url and not is_shortener(cand):
+            job.details_url = cand
+        job.apply_url = res["apply_url"]
+        return True, True, False
+    # Non-200 / WAF 202 / timeout on wrapper or shortener or unverified portal: never expose unverified wrapper as apply_url.
+    if is_wrapper_portal(cand) and (job.email or job.phones) and not job.details_url:
+        job.details_url = cand
+    return False, False, False
+
+
+def _backup_candidates(job: Job, exclude_urls: set[str]) -> list[str]:
+    """Gather up to 3 backup apply URLs attached by extract() or present in raw text, ordered best-first."""
+    raw_cands = list(getattr(job, "_candidate_urls", None) or []) + tx.urls(getattr(job, "raw", "") or "")
+    out: list[str] = []
+    seen = set(exclude_urls)
+    for raw_u in raw_cands:
+        u = strip_tracking(raw_u)
+        if not u or u in seen or not u.startswith(("http://", "https://")):
+            continue
+        seen.add(u)
+        if is_disallowed_offline_url(u) or _host(u) in ("wa.me", "api.whatsapp.com"):
+            continue
+        out.append(u)
+    out.sort(key=lambda u: 0 if is_direct_form_or_ats(u) else (1 if is_shortener(u) else 2))
+    return out[:3]
+
+
 def resolve_job_apply(job: Job, client: httpx.Client | None = None, cache: dict | None = None, strict: bool = True) -> bool:
     """Normalize/unwrap a job's apply link and return True iff it has a real way to apply."""
     cache = cache if cache is not None else {}
@@ -668,7 +729,7 @@ def resolve_job_apply(job: Job, client: httpx.Client | None = None, cache: dict 
     if job.apply_url and is_disallowed_offline_url(job.apply_url):
         job.apply_url = None
 
-    # 3. Live resolution for shorteners, wrapper pages, and unverified generic URLs when online client is passed
+    # 3. Live resolution for shorteners, wrapper pages, unverified generic URLs, and multi-link backup recovery
     verified_live = False
     should_resolve = (
         client is not None
@@ -681,51 +742,32 @@ def resolve_job_apply(job: Job, client: httpx.Client | None = None, cache: dict 
             or not is_direct_form_or_ats(job.apply_url)
         )
     )
-    if should_resolve:
+    tried_urls: set[str] = set()
+    primary_closed = False
+    primary_ok = True
+    if should_resolve and job.apply_url:
         orig = job.apply_url
-        res = _resolve_url_live(orig, client, cache, country=country)
-        if res["closed"]:
+        tried_urls.add(orig)
+        verified_live, primary_ok, primary_closed = _try_live_candidate(orig, job, client, cache, country)
+        if not primary_ok:
+            job.apply_url = None
+
+    if client is not None and not job.apply_url and (not should_resolve or not primary_ok):
+        if job.details_url:
+            tried_urls.add(job.details_url)
+        recovered = False
+        for alt in _backup_candidates(job, tried_urls):
+            tried_urls.add(alt)
+            v_live, ok, _closed = _try_live_candidate(alt, job, client, cache, country)
+            if ok:
+                verified_live = v_live
+                recovered = True
+                break
+        if primary_closed and not recovered:
             job.apply_url = None
             job.email = None
             job.phones = []
             return False
-        if res["dead"] or res["status"] in (404, 410):
-            job.apply_url = None
-        elif res["status"] == 200:
-            if res["email"] and not job.email:
-                job.email = res["email"]
-            for p in res["phones"]:
-                if p not in job.phones:
-                    job.phones.append(p)
-            job.phones = sorted(set(job.phones))
-
-            if res["apply_url"] and not is_strict_portal_wrapper(res["apply_url"]):
-                if orig != res["apply_url"] and not job.details_url and not is_shortener(orig):
-                    job.details_url = orig
-                job.apply_url = res["apply_url"]
-                verified_live = True
-            elif (res["has_internal_form"] and not is_strict_portal_wrapper(res["final_url"])) or is_direct_form_or_ats(res["final_url"]):
-                job.apply_url = res["final_url"]
-                verified_live = True
-            elif res["email"] or res["phones"]:
-                # Applying is via email or phone on the detail page; move article link to details_url.
-                if not job.details_url:
-                    job.details_url = res["final_url"]
-                job.apply_url = None
-            else:
-                # Page returned 200 OK and had NO form, NO apply link, NO email, NO phone.
-                job.apply_url = None
-        elif res["status"] in (401, 403) and res["apply_url"] and is_direct_form_or_ats(res["apply_url"]):
-            if orig != res["apply_url"] and not job.details_url and not is_shortener(orig):
-                job.details_url = orig
-            job.apply_url = res["apply_url"]
-            verified_live = True
-        else:
-            # Non-200 / WAF 202 / timeout on wrapper or shortener or unverified portal: never expose unverified wrapper as apply_url.
-            if is_shortener(orig) or is_wrapper_portal(orig) or not is_direct_form_or_ats(orig):
-                if is_wrapper_portal(orig) and (job.email or job.phones) and not job.details_url:
-                    job.details_url = orig
-                job.apply_url = None
 
     # 4. Final strict guarantee: apply_url must NEVER remain a shortener or intermediary wrapper portal
     # Never treat portal-wide floating support numbers (e.g. Adwhit's 05385844484) as employer contact

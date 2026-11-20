@@ -394,3 +394,69 @@ def test_scrape_abilan_tr_extracts_ngo_email_apply_url_and_filters_expired():
         assert job.deadline == fut_iso
         assert job.email == "hr@i4d.org.tr"
         assert job.apply_url == "https://cv.inoportal.com/I4D/ilan"
+
+
+def test_salamjobs_unwraps_adwhit_out_links_and_skips_login_only():
+    from datetime import datetime, timedelta, timezone
+    import json
+    import httpx
+    from app.sources import turkey_portals as tp
+
+    now_iso = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    fut_iso = (datetime.now(timezone.utc) + timedelta(days=20)).date().isoformat()
+
+    list_html = '<a href="/jobs/sales-adwhit-16582">A</a><a href="/jobs/login-adwhit-16583">B</a>'
+    detail_tmpl = (
+        '<script type="application/ld+json">'
+        + json.dumps({
+            "@type": "JobPosting",
+            "title": "{title}",
+            "datePosted": now_iso,
+            "validThrough": fut_iso,
+            "jobLocation": {"name": "إسطنبول"},
+        }, ensure_ascii=False)
+        + '</script>'
+        + '<article class="min-w-0"><div class="job-description">مطلوب موظف مبيعات للعمل في إسطنبول</div>'
+        + '<a href="/out/jobs/{jid}">تقديم</a></article>'
+    )
+    detail_a = detail_tmpl.replace("{title}", "موظف مبيعات 1").replace("{jid}", "16582")
+    detail_b = detail_tmpl.replace("{title}", "موظف مبيعات 2").replace("{jid}", "16583")
+
+    adwhit_with_phone = '<script id="__NEXT_DATA__" type="application/json">' + json.dumps({
+        "props": {"pageProps": {"data": {"job": {
+            "contactPhone": "+90 534 222 33 44",
+            "dsc": "<p>التواصل عبر الواتساب</p>",
+        }}}}
+    }, ensure_ascii=False) + "</script>"
+
+    adwhit_login_only = '<script id="__NEXT_DATA__" type="application/json">' + json.dumps({
+        "props": {"pageProps": {"data": {"job": {
+            "contactPhone": "",
+            "contactEmail": "",
+            "dsc": "<p>يرجى التقديم عبر الحساب</p>",
+        }}}}
+    }, ensure_ascii=False) + "</script>"
+
+    def handler(req: httpx.Request) -> httpx.Response:
+        u = str(req.url)
+        if "salamjobs.com/search" in u:
+            return httpx.Response(200, text=list_html if "page=1&" in u or u.endswith("page=1") else "")
+        if "adwhit.com/ar/sales-16582" in u:
+            return httpx.Response(200, text=adwhit_with_phone)
+        if "adwhit.com/ar/sales-16583" in u:
+            return httpx.Response(200, text=adwhit_login_only)
+        if "salamjobs.com/jobs/" in u and "16582" in u:
+            return httpx.Response(200, text=detail_a)
+        if "salamjobs.com/jobs/" in u and "16583" in u:
+            return httpx.Response(200, text=detail_b)
+        if u.endswith("/out/jobs/16582"):
+            return httpx.Response(302, headers={"location": "https://www.adwhit.com/ar/sales-16582"})
+        if u.endswith("/out/jobs/16583"):
+            return httpx.Response(302, headers={"location": "https://www.adwhit.com/ar/sales-16583"})
+        return httpx.Response(404)
+
+    with httpx.Client(transport=httpx.MockTransport(handler), follow_redirects=True) as c:
+        jobs = tp.scrape_salamjobs_tr(c, max_pages=1)
+        assert len(jobs) == 1
+        assert jobs[0].phones == ["05342223344"]
+        assert jobs[0].apply_url is None

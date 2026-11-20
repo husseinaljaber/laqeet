@@ -127,7 +127,7 @@ def post_jobs(post: Post, client, con) -> list[Job]:
     jobs = extract(post.text, ch["source"], post.url, post.date, ch["kind"], post.links,
                    country=ch.get("country"), sector=ch.get("sector"))
     for j in jobs:
-        if len(j.title.split()) > 9 or len(j.title) > 70:
+        if len(j.title.split()) > 14 or len(j.title) > 95:
             j.confidence = min(j.confidence, 0.4)  # reads like a sentence: a person checks it before it shows
     return [j for j in jobs if not j.spam]
 
@@ -214,7 +214,7 @@ def collect(offline: bool = False, quick: bool = False) -> dict:
             for key, fn in (
                 ("reliefweb", fetch_reliefweb_jobs),
                 ("web_portals", lambda c, cache=None: fetch_all_web_portal_jobs(c, cache=cache, quick=quick)),
-                ("turkey_portals", lambda c, cache=None: fetch_all_tr_portal_jobs(c, cache=cache, max_pages=2 if quick else 12, quick=quick)),
+                ("turkey_portals", lambda c, cache=None: fetch_all_tr_portal_jobs(c, cache=cache, max_pages=2 if quick else 14, quick=quick)),
             ):
                 try:
                     batch = fn(resolve_client, cache=resolve_cache)

@@ -964,6 +964,41 @@
     return out;
   }
 
+  function cleanCardSummary(j, ent, cityTxt) {
+    const raw = cleanSummary(
+      j.summary ||
+      (j.tasks && j.tasks.length ? j.tasks.slice(0, 2).join(' · ') : '') ||
+      (j.skills && j.skills.length ? j.skills.slice(0, 2).join(' · ') : '')
+    );
+    let txt = String(raw || '')
+      .replace(/[💼📍🏢📢✨🔹🔸📌🎯🟣🟢🔵🟡🟠🔺🔻⚡🔥💎✅✔]+/g, ' ')
+      .replace(/^\s*فرص\s+عمل[^|·\n]*[|·]\s*(?:[^|·\n]*[|·]\s*)?/i, '')
+      .replace(/^(?:\s*[·•\-|،,:]\s*)+/g, '')
+      .replace(/\s{2,}/g, ' ')
+      .trim();
+    if (!txt || txt.length < 16) {
+      txt = `شاغر ${j.title} لدى ${ent.name} في ${cityTxt} — اضغط على المسمى الوظيفي لعرض كامل التفاصيل والشروط.`;
+    }
+    return txt;
+  }
+
+  function cardBadges(j) {
+    const b = [
+      el('span', { class: 'b exp' }, expText(j.experience))
+    ];
+    if (j.education) {
+      b.push(el('span', { class: 'b' }, ico('graduation-cap', 'ico-sm'), EDU_LABEL[j.education] || j.education));
+    }
+    if (j.salary) {
+      b.push(el('span', { class: 'b b-sal' }, ico('coins', 'ico-sm'), j.salary.slice(0, 22)));
+    } else if (j.field && j.field !== 'other') {
+      b.push(el('span', { class: 'b' }, ico('briefcase', 'ico-sm'), j.subfield ? subLabel(j.subfield) : fieldLabel(j.field)));
+    } else if (j.shift) {
+      b.push(el('span', { class: 'b' }, ico('clock', 'ico-sm'), j.shift.slice(0, 22)));
+    }
+    return b;
+  }
+
   function card(j, i) {
     const band = expBand(j.experience);
     const m = fit(j);
@@ -971,28 +1006,79 @@
     const sec = j.sector || (j.official ? 'gov' : 'private');
     const secMeta = SECTOR_UI[sec] || SECTOR_UI.private;
     const ent = entityMeta(j);
-    const pubDay = formatDate(j.posted_at);
     const dlDay = formatDate(j.deadline);
-    const expDay = formatDate(j.expires_on);
-    const endDay = dlDay || expDay;
-    const endLabel = dlDay ? 'آخر موعد' : 'تاريخ الانتهاء';
     const cityTxt = formatCardCities(j);
-    const summaryText = cleanSummary(j.summary || (j.tasks && j.tasks.length ? j.tasks.slice(0, 2).join(' · ') : '') || (j.skills && j.skills.length ? j.skills.slice(0, 2).join(' · ') : ''));
-    const desc = summaryText ? el('p', { class: 'card-desc' }, ...highlightNodes(summaryText, state.terms)) : null;
-
-    const datesRow = (pubDay || endDay) ? el('div', { class: 'card-dates' },
-      pubDay ? el('span', { class: 'card-date-item' }, ico('calendar', 'ico-sm'), `تاريخ النشر: ${pubDay}`) : null,
-      endDay ? el('span', { class: 'card-date-item' + (dlDay ? ' is-dl' : '') }, ico('hourglass', 'ico-sm'), `${endLabel}: ${endDay}`) : null
-    ) : null;
-
-    const orgLoc = el('div', { class: 'card-org-loc' },
-      el('span', { class: 'card-org' }, ico(ent.ico, 'ico-sm'), ...highlightNodes(`${ent.role}: ${ent.name}`, state.terms)),
-      el('span', { class: 'card-loc' }, ico('map-pin', 'ico-sm'), ...highlightNodes(`المدينة: ${cityTxt}`, state.terms))
-    );
+    const summaryText = cleanCardSummary(j, ent, cityTxt);
+    const desc = el('p', { class: 'card-desc' }, ...highlightNodes(summaryText, state.terms));
 
     const trk = getTrack(j.id);
+    const isSav = Boolean(trk && trk.stage === 'saved');
+    const isApp = Boolean(trk && trk.stage !== 'saved');
+    const appDay = isApp ? formatShortDay(trk.appliedAt || trk.updatedAt) : '';
     const stageInfo = trk ? STAGE_MAP[trk.stage] : null;
     const trackSlot = el('div', { class: 'card-track-slot' }, ...buildCardTrackBadges(j));
+
+    let topSaveBtn = null;
+    let footerAppliedBtn = null;
+
+    const syncCardTrackUI = () => {
+      const nowTrk = getTrack(j.id);
+      const nowSav = Boolean(nowTrk && nowTrk.stage === 'saved');
+      const nowApp = Boolean(nowTrk && nowTrk.stage !== 'saved');
+      const nowDay = nowApp ? formatShortDay(nowTrk.appliedAt || nowTrk.updatedAt) : '';
+      if (topSaveBtn) {
+        topSaveBtn.classList.toggle('is-saved', nowSav);
+        topSaveBtn.title = nowSav ? 'محفوظة للتقديم (اضغط للإزالة)' : 'حفظ الوظيفة للتقديم لاحقاً';
+        topSaveBtn.setAttribute('aria-label', topSaveBtn.title);
+        topSaveBtn.replaceChildren(ico(nowSav ? 'bookmark-filled' : 'bookmark', 'ico-sm'));
+      }
+      if (footerAppliedBtn) {
+        footerAppliedBtn.classList.toggle('is-applied', nowApp);
+        footerAppliedBtn.replaceChildren(
+          ico('check-circle', 'ico-sm'),
+          el('span', null, nowApp ? (nowDay ? `قدّمت (${nowDay})` : 'قدّمت') : 'قدّمت')
+        );
+      }
+      if (!state.saved) {
+        trackSlot.replaceChildren(...buildCardTrackBadges(j));
+      }
+    };
+
+    topSaveBtn = el('button', {
+      type: 'button',
+      class: 'card-icon-btn save-toggle' + (isSav ? ' is-saved' : ''),
+      title: isSav ? 'محفوظة للتقديم (اضغط للإزالة)' : 'حفظ الوظيفة للتقديم لاحقاً',
+      'aria-label': isSav ? 'محفوظة للتقديم' : 'حفظ الوظيفة',
+      onclick: () => {
+        toggleSave(j);
+        syncCardTrackUI();
+      }
+    }, ico(isSav ? 'bookmark-filled' : 'bookmark', 'ico-sm'));
+
+    const topShareBtn = el('button', {
+      type: 'button',
+      class: 'card-icon-btn share-btn',
+      title: 'مشاركة ونسخ الإعلان',
+      'aria-label': 'مشاركة ونسخ الإعلان',
+      onclick: () => shareJob(j)
+    }, ico('share', 'ico-sm'));
+
+    footerAppliedBtn = el('button', {
+      type: 'button',
+      class: 'card-applied-btn applied-toggle' + (isApp ? ' is-applied' : ''),
+      title: 'تعليم الوظيفة كـ «قدّمت عليها» لحفظ تاريخ التقديم',
+      onclick: () => {
+        toggleApplied(j);
+        syncCardTrackUI();
+      }
+    }, ico('check-circle', 'ico-sm'), el('span', null, isApp ? (appDay ? `قدّمت (${appDay})` : 'قدّمت') : 'قدّمت'));
+
+    const subMeta = el('div', { class: 'card-submeta' },
+      el('span', { class: 'card-org', title: ent.name }, ico(ent.ico, 'ico-sm'), ...highlightNodes(ent.name, state.terms)),
+      el('span', { class: 'card-dot', 'aria-hidden': 'true' }, '·'),
+      el('span', { class: 'card-loc', title: cityTxt }, ico('map-pin', 'ico-sm'), ...highlightNodes(cityTxt, state.terms)),
+      dlDay ? el('span', { class: 'card-dl-pill', title: `آخر موعد للتقديم: ${dlDay}` }, ico('hourglass', 'ico-sm'), dlDay) : null
+    );
 
     let trackerRow = null;
     if (state.saved && trk) {
@@ -1015,20 +1101,105 @@
       );
     }
 
+    // Build clean single-row footer actions
+    const applyActions = [];
+    const hasDirectLink = Boolean(j.apply_url && !/^https?:\/\/(?:wa\.me\/|api\.whatsapp\.com\/)/i.test(j.apply_url) && !(j.deadline && daysLeft(j.deadline) < 0));
+    const wa = waLink(j);
+    const phone = (j.phones || [])[0];
+    if (hasDirectLink) {
+      const isForm = (j.apply_types || []).includes('form');
+      applyActions.push({
+        cls: 'is-apply',
+        icon: isForm ? 'file-text' : 'external-link',
+        label: isForm ? 'تعبئة استمارة التقديم' : 'التقديم عبر الموقع',
+        title: isForm ? 'تعبئة استمارة التقديم المباشر' : 'التقديم المباشر عبر الموقع',
+        href: j.apply_url,
+        external: true
+      });
+    }
+    if (wa) {
+      applyActions.push({
+        cls: 'is-wa',
+        icon: 'whatsapp',
+        label: 'راسل واتساب',
+        title: 'التقديم عبر واتساب (مع رسالة تقديم جاهزة)',
+        href: wa,
+        external: true
+      });
+    }
+    if (j.email) {
+      applyActions.push({
+        cls: 'is-email',
+        icon: 'mail',
+        label: 'إرسال CV بالإيميل',
+        title: `إرسال CV بالإيميل مع رسالة جاهزة (${j.email})`,
+        href: mailtoHref(j),
+        external: false
+      });
+    }
+    if (phone && !j.whatsapp) {
+      applyActions.push({
+        cls: 'is-call',
+        icon: 'phone',
+        label: 'اتصل ' + phone,
+        title: `اتصال هاتفي مباشر (${phone})`,
+        href: 'tel:' + phone,
+        external: false
+      });
+    }
+
+    const footerEl = el('div', { class: 'card-footer' });
+    if (applyActions.length) {
+      const primary = applyActions[0];
+      footerEl.append(
+        el('a', {
+          class: 'card-cta-main ' + primary.cls,
+          href: primary.href,
+          title: primary.title,
+          ...(primary.external ? { target: '_blank', rel: 'noopener' } : {})
+        }, ico(primary.icon, 'ico-sm'), el('span', null, primary.label))
+      );
+      applyActions.slice(1, 3).forEach((secAct) => {
+        footerEl.append(
+          el('a', {
+            class: 'card-cta-icon ' + secAct.cls,
+            href: secAct.href,
+            title: secAct.title,
+            'aria-label': secAct.title,
+            ...(secAct.external ? { target: '_blank', rel: 'noopener' } : {})
+          }, ico(secAct.icon, 'ico-sm'))
+        );
+      });
+    } else {
+      footerEl.append(
+        el('button', {
+          type: 'button',
+          class: 'card-cta-main is-apply',
+          onclick: () => openDetail(j)
+        }, ico('external-link', 'ico-sm'), el('span', null, 'عرض التفاصيل والتقديم'))
+      );
+    }
+    footerEl.append(footerAppliedBtn);
+
     return el('article', { class: 'card in', style },
       el('div', { class: 'top' },
-        el('span', { class: 'sec-tag sec-' + sec }, ico(secMeta.ico, 'ico-sm'), secMeta.label),
-        statusOf(j)
+        el('div', { class: 'card-top-badges' },
+          el('span', { class: 'sec-tag sec-' + sec }, ico(secMeta.ico, 'ico-sm'), secMeta.label),
+          statusOf(j)
+        ),
+        el('div', { class: 'card-top-tools' },
+          topSaveBtn,
+          topShareBtn
+        )
       ),
       trackSlot,
-      datesRow,
-      el('h3', null, el('button', { onclick: () => openDetail(j) }, ...highlightNodes(j.title, state.terms))),
-      orgLoc,
+      el('h3', { class: 'card-title' }, el('button', { onclick: () => openDetail(j) }, ...highlightNodes(j.title, state.terms))),
+      subMeta,
       trackerRow,
       desc,
       m ? el('div', { class: 'fit ' + m.level }, el('i'), m.text) : null,
-      el('div', { class: 'badges' }, badges(j)),
-      links(j)
+      el('div', { class: 'badges card-specs' }, cardBadges(j)),
+      footerEl
     );
   }
 

@@ -635,7 +635,7 @@ def test_pitch_generator_and_tracker_ui():
     assert 'id="savedOnly"' in index_html
     assert 'id="appliedOnly"' in index_html
     assert 'id="expiringSavedBanner"' in index_html
-    assert "?v=34" in index_html
+    assert "?v=35" in index_html
 
     for fn in (
         "function toggleApplied(",
@@ -643,11 +643,21 @@ def test_pitch_generator_and_tracker_ui():
         "function isExpiringWithin48h(",
         "function renderExpiringSavedBanner(",
         "function buildCardTrackBadges(",
+        "function cleanCardSummary(",
+        "function cardBadges(",
         "tpl-subject-input",
     ):
         assert fn in app_js
 
-    for cls in (".expiring-saved-banner", ".tracker-expiring-pill", ".tpl-subject-row", ".applied-toggle.is-applied"):
+    for cls in (
+        ".expiring-saved-banner",
+        ".tracker-expiring-pill",
+        ".tpl-subject-row",
+        ".card-footer",
+        ".card-submeta",
+        ".card-cta-main",
+        ".card-applied-btn",
+    ):
         assert cls in app_css
 
     assert 'id="pitchSubjectText"' in api_py

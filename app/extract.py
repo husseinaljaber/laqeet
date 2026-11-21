@@ -59,6 +59,7 @@ _NEED_LINE = re.compile(r"(?:^|\n)[^\w\n]{0,6}\*?\s*(?:(?:\d+|[٠-٩]+)[.)\-–]
 _HAJA_RX = re.compile(r"(?:حاجت(?:ها|ه)|بحاجة|رغبت(?:ها|ه))\s*(?:إلى|الى|ل|لـ|في|بـ?)?\s*(?:رفد\s+(?:كوادرها|فريقها)\s+ب(?:منصب\s+)?|تعيين|توظيف|استقطاب|ل?التعاقد\s+مع|لتعاقد\s+مع|ضم|شغل\s+وظيفة|ملء\s+الشاغر\s+التالي)?\s*[:：(]?\s*([^\n)]+)")
 _TITLE_PATTERNS = [
     re.compile(r"(?:(?:المسم[ىي]|المنصب|الشاغر)\s*الوظيف[يى]|المنصب)\s*[:：]\s*([^\n]+)"),
+    re.compile(r"(?:^|\n)[^\w\n]{0,6}(?:المسم[ىي]\s*الوظيف[يى]|Job\s*Title)\s*(?:[:：]\s*)?\n\s*([^\n]+)", re.I),
     re.compile(r"إعلان\s+توظيف\s*[|–\-:]\s*([^\n]+)"),
     re.compile(r"(?:إعلان|اعلان)\s+(?:شاغر|توظيف|فرص[ةه]\s+عمل)\s*[:：\-–|]\s*([^\n]+)"),
     re.compile(r"(?:^|\n)\s*(?:إعادة|اعادة)\s+(?:إعلان|اعلان)\s*[-–:|]\s*([^\n]+)"),
@@ -632,7 +633,7 @@ _NOT_TITLE = re.compile(r"^(?:ال)?سلام عليكم|^مرحبا|^من (?:ب�
                         r"إلى\s+من\s+يهمه|الى\s+من\s+يهمه|ادعمولنا|ادعمونا|شاب\s+عندو?|صبي[ةه]\s+عندها?|(?:الالتزام|الانضباط)\s+و)|"
                         r"^(?:تق[يّ]?يم\s+الطلبات|نتمنى\s+(?:أن|ان)\s+تكونوا|كاريتاس\s+سوري[ةه]$|(?:شخص|أشخاص|اشخاص)\s+(?:يجمع|متحمس|شغوف)|م\.وظ\.فات$|اتصالات\s+سوريا$)|"
                         r"^(?:إذا|اذا)\s+عندك\b|^ل[أا]ن\s+الفرص\b|"
-                        r"^(?:وظيف[يى]|مطعم|كافيه|محل|شرك[ةه]|مؤسس[ةه]|عن\s+الوظيف[ةه]|الخبرات|مهاد|امتلاك|عيلة|مطبعة)$|"
+                        r"^(?:الجه[ةه]|وظيف[يى]|مطعم|كافيه|محل|شرك[ةه]|مؤسس[ةه]|عن\s+الوظيف[ةه]|الخبرات|مهاد|امتلاك|عيلة|مطبعة)$|"
                         r"(?:^|\s)(?:يطلب|تطلب|تعلن\s+عن\s+وظائف\s+شاغر[ةه])\s*$|"
                         r"(?i:^(?:organization|closes|closing\s*date|deadline|duty\s*station|location|son\s+başvuru\s+tarihi)\s*[:：]|"
                         r"^(?:current\s+salary|expected\s+salary|notice\s+period|competitive\s+salary|internet\s+allowance|job\s+opportunity|university\s+graduates|age\s+up\s+to|very\s+good\s+english|available\s+to\s+join|stable\s+and\s+reliable|comfortable\s+in\s+a\s+target|creative\s+thinking|opportunities\s+for\s+professional|performance-based\s+bonuses|stay\s+updated|plan\s+and\s+coordinate|track\s+growth|present\s+product|handle\s+inquiries|follow\s+up\s+on\s+leads|achieve\s+monthly|building\s+and\s+maintaining|mobile\s+shooting|reel\s+editing)\b|"
@@ -666,7 +667,7 @@ _EN_ROLE_NOUN = re.compile(
     r"lead|leader|head|director|supervisor|teacher|trainer|consultant|counselor|intern|educator|technician|nurse|"
     r"pediatrician|agronomist|medic|paramedic|midwife|enumerator|steward|"
     r"accountant|driver|translator|interpreter|representative|advisor|worker|chef|"
-    r"expert|therapist|pharmacist|chemist|doctor|surgeon|editor|writer|producer|marketer|"
+    r"expert|therapist|pharmacist|chemist|doctor|surgeon|editor|writer|producer|marketer|photographer|"
     r"recruiter|auditor|cashier|barista|cook|cleaner|guard|operator|mechanic|electrician|"
     r"carpenter|tailor)\b",
     re.I,

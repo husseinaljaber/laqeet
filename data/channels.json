@@ -454,5 +454,21 @@
     "official": false,
     "country": "sy",
     "sector": "private"
+  },
+  "recruitment_vacancies": {
+    "source": "hr_partner",
+    "label": "HR Partner — وظائف سوريا",
+    "kind": "formal",
+    "official": false,
+    "country": "sy",
+    "sector": "private"
+  },
+  "tawzif2": {
+    "source": "tawzif2",
+    "label": "طلبات التوظيف — مؤسسات ومشاريع",
+    "kind": "formal",
+    "official": false,
+    "country": "sy",
+    "sector": "private"
   }
 }

@@ -25,6 +25,7 @@ from .download import download_pdf, resolve_drive_id
 from .extract import extract
 from .models import Job
 from .sources import moad_announcement
+from .sources.ingo_ats import fetch_all_ingo_ats_jobs
 from .sources.moad_pdf import Card, fix_lost_tails, parse_pdf
 from .sources.reliefweb import fetch_reliefweb_jobs
 from .sources.turkey_portals import fetch_all_tr_portal_jobs
@@ -213,6 +214,7 @@ def collect(offline: bool = False, quick: bool = False) -> dict:
             today = date.today().isoformat()
             for key, fn in (
                 ("reliefweb", fetch_reliefweb_jobs),
+                ("ingo_ats", lambda c, cache=None: fetch_all_ingo_ats_jobs(c, cache=cache, quick=quick)),
                 ("web_portals", lambda c, cache=None: fetch_all_web_portal_jobs(c, cache=cache, quick=quick)),
                 ("turkey_portals", lambda c, cache=None: fetch_all_tr_portal_jobs(c, cache=cache, max_pages=2 if quick else 14, quick=quick)),
             ):

@@ -2098,6 +2098,327 @@ def scrape_syria_jobs_com(client: httpx.Client) -> list[Job]:
     return jobs
 
 
+def _parse_powerholding_date(raw: str) -> str | None:
+    s = re.sub(r"\s+", " ", (raw or "").strip())
+    if not s:
+        return None
+    for fmt in ("%d %b %Y", "%d %B %Y", "%b %d, %Y", "%Y-%m-%d"):
+        try:
+            return datetime.strptime(s, fmt).date().isoformat() + "T09:00:00+00:00"
+        except ValueError:
+            continue
+    return None
+
+
+def scrape_powerholding_sy(client: httpx.Client, max_pages: int = 10) -> list[Job]:
+    """Scrape active private-sector Syria jobs from Power International Holding SuccessFactors board."""
+    base = "https://careers.powerholding-intl.com"
+    formal_cutoff = (datetime.now(timezone.utc) - timedelta(days=config.FORMAL_DAYS)).date().isoformat()
+    jobs: list[Job] = []
+    seen: set[str] = set()
+
+    for page in range(max_pages):
+        url = f"{base}/search/?q=Syria&sortColumn=referencedate&sortDirection=desc&startrow={page * 25}"
+        try:
+            r = client.get(url, headers={"User-Agent": USER_AGENT}, timeout=20)
+            if r.status_code != 200:
+                break
+            soup = BeautifulSoup(r.text, "html.parser")
+            rows = soup.select("tr.data-row")
+            if not rows:
+                break
+            recent_on_page = 0
+            for row in rows:
+                a = row.select_one("a.jobTitle-link[href]")
+                if not a:
+                    continue
+                job_url = da.strip_tracking(urljoin(base, a["href"].strip()))
+                if not job_url or job_url in seen:
+                    continue
+                loc_el = row.select_one("span.jobLocation")
+                loc_txt = re.sub(r"\s+", " ", loc_el.get_text(" ", strip=True)) if loc_el else ""
+                if "syria" not in loc_txt.lower() and ", sy" not in loc_txt.lower():
+                    continue
+                dt_el = row.select_one("span.jobDate")
+                posted_at = _parse_powerholding_date(dt_el.get_text(" ", strip=True) if dt_el else "")
+                if posted_at and posted_at[:10] < formal_cutoff:
+                    continue
+                recent_on_page += 1
+                raw_t = html.unescape(a.get_text(" ", strip=True))
+                clean_t = ex.normalize_title_display(raw_t, keep_matlob=True).strip()
+                if not clean_t or len(clean_t) < 3 or _TENDER_NOTICE_RE.search(clean_t):
+                    continue
+                if re.search(r"\b(?:volunteer|intern(?:ship)?)\b", clean_t, re.I):
+                    continue
+                seen.add(job_url)
+
+                cities = tx.cities_from_text(f"{clean_t} {loc_txt}") or ["عدة محافظات"]
+                fld = tx.field_from_text(clean_t, loc_txt)
+                sub = computer_subfield(clean_t, loc_txt)
+                if sub or fld == "computer":
+                    fld, sub = "computer", sub or "DT"
+                edu = tx.education_from_title(clean_t) or "bachelor"
+
+                jobs.append(Job(
+                    title=clean_t[:120],
+                    source="powerholding",
+                    post_url=job_url,
+                    posted_at=posted_at or datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                    employer="Power International Holding",
+                    cities=cities,
+                    education=edu,
+                    education_from="title",
+                    field=fld,
+                    subfield=sub,
+                    kind="formal",
+                    official=False,
+                    country="sy",
+                    sector="private",
+                    apply_url=job_url,
+                    details_url=job_url,
+                    apply_types=["site", "form"],
+                    confidence=0.92,
+                    tags=["شركات كبرى", "قطاع خاص"],
+                    raw=f"{clean_t}\n{loc_txt}",
+                ))
+            if recent_on_page == 0:
+                break
+        except Exception as e:
+            log.warning("PowerHolding Syria page %s failed: %s", page, e)
+            break
+    return jobs
+
+
+_JOBSYRIA_NET_EN_AGE_RE = re.compile(
+    r"(\d+)\s+(seconds?|minutes?|hours?|days?|weeks?|months?|years?)\s+ago",
+    re.I,
+)
+_JOBSYRIA_NET_AR_AGE_RE = re.compile(
+    r"منذ\s+(?:(\d+)\s*)?(ثاني[ةه]|دقيق[ةه]|دقائق|ساع[ةه]|ساعات|يوم|يومين|أيام|ايام|أسبوع|اسبوع|أسبوعين|أسابيع|شهر|شهرين|أشهر|سنة)",
+)
+_JOBSYRIA_NET_SHARE_RE = re.compile(r"openShareModal\(\s*['\"]([^'\"]+)['\"]\s*\)")
+_JOBSYRIA_NET_GENERIC_EMP_RE = re.compile(r"^(?:شركة|صالة|مكتب|مركز|محل|معمل|مؤسسة|ورشة)$")
+_JOBSYRIA_NET_WEAK_TITLE_RE = re.compile(
+    r"^(?:لشرك[ةه]\s+|أشخاص\s+يصنعون|مركز\s+\S+\s+يفتح|كفاء[ةه]\s+(?:مميز|مبدع)|لدي[هة]\s+خبر[ةه]|معلم$)"
+)
+_JOBSYRIA_NET_META_H2_RE = re.compile(r"اكثر\s+من|أكثر\s+من|شواغر\s+متعددة|فرص\s+عمل")
+
+
+def _parse_jobsyria_net_posted_at(text: str, now_dt: datetime) -> str | None:
+    s = text or ""
+    m = _JOBSYRIA_NET_EN_AGE_RE.search(s)
+    if m:
+        n = int(m.group(1))
+        unit = m.group(2).lower()
+        if unit.startswith("sec"):
+            delta = timedelta(seconds=n)
+        elif unit.startswith("min"):
+            delta = timedelta(minutes=n)
+        elif unit.startswith("hour"):
+            delta = timedelta(hours=n)
+        elif unit.startswith("day"):
+            delta = timedelta(days=n)
+        elif unit.startswith("week"):
+            delta = timedelta(days=n * 7)
+        elif unit.startswith("month"):
+            delta = timedelta(days=n * 30)
+        else:
+            delta = timedelta(days=n * 365)
+        return (now_dt - delta).isoformat(timespec="seconds")
+
+    am = _JOBSYRIA_NET_AR_AGE_RE.search(s)
+    if am:
+        num = int(am.group(1)) if am.group(1) else 1
+        unit = am.group(2)
+        if unit in ("يومين", "أسبوعين", "شهرين") and not am.group(1):
+            num = 2
+        if "ثان" in unit:
+            delta = timedelta(seconds=num)
+        elif "دق" in unit:
+            delta = timedelta(minutes=num)
+        elif "ساع" in unit:
+            delta = timedelta(hours=num)
+        elif "يوم" in unit or "أيام" in unit or "ايام" in unit:
+            delta = timedelta(days=num)
+        elif "سب" in unit:
+            delta = timedelta(days=num * 7)
+        elif "شهر" in unit or "أشهر" in unit:
+            delta = timedelta(days=num * 30)
+        else:
+            delta = timedelta(days=num * 365)
+        return (now_dt - delta).isoformat(timespec="seconds")
+    return None
+
+
+def scrape_jobsyria_net(client: httpx.Client, max_pages: int = 20) -> list[Job]:
+    """Scrape active Syria private-sector jobs from jobsyria.net keeping only direct phone/email/form paths."""
+    base = "https://jobsyria.net"
+    now_dt = datetime.now(timezone.utc)
+    formal_cutoff = (now_dt - timedelta(days=config.FORMAL_DAYS)).date().isoformat()
+    jobs: list[Job] = []
+    seen_cards: set[str] = set()
+
+    for page in range(1, max_pages + 1):
+        url = f"{base}/?page={page}"
+        try:
+            r = client.get(url, headers={"User-Agent": USER_AGENT}, timeout=20)
+            if r.status_code != 200:
+                break
+            soup = BeautifulSoup(r.text, "html.parser")
+            cards = soup.select("article.work-card")
+            if not cards:
+                break
+
+            recent_on_page = 0
+            for idx, card in enumerate(cards):
+                share_url = ""
+                btn = card.select_one("button[onclick*='openShareModal']")
+                if btn:
+                    sm = _JOBSYRIA_NET_SHARE_RE.search(btn.get("onclick") or "")
+                    if sm:
+                        share_url = da.strip_tracking(urljoin(base, sm.group(1).strip()))
+                if not share_url:
+                    title_a = card.select_one("a[href*='/وظائف/'], a[href*='%D9%88%D8%B8%D8%A7%D8%A6%D9%81']")
+                    if title_a:
+                        share_url = da.strip_tracking(urljoin(base, title_a["href"].strip()))
+                if not share_url:
+                    share_url = f"{base}/?page={page}#card-{idx}"
+                if share_url in seen_cards:
+                    continue
+                seen_cards.add(share_url)
+
+                card_meta_txt = card.get_text("\n", strip=True)
+                posted_at = _parse_jobsyria_net_posted_at(card_meta_txt, now_dt) or now_dt.isoformat(timespec="seconds")
+                if posted_at[:10] < formal_cutoff:
+                    continue
+                recent_on_page += 1
+
+                full_el = card.select_one(".work-description-full") or card.select_one("p.work-description-text")
+                body_txt = (full_el.get_text("\n", strip=True) if full_el else (card.get("data-search") or "")).strip()
+                if not body_txt:
+                    continue
+
+                badge_city: list[str] = []
+                card_emp: str | None = None
+                for meta_p in card.select("p.new-style-data"):
+                    line_t = meta_p.get_text(" ", strip=True)
+                    if "المحافظة:" in line_t or "مكان العمل:" in line_t:
+                        for c_found in tx.cities_from_text(line_t):
+                            if c_found not in badge_city:
+                                badge_city.append(c_found)
+                    elif "الجهة المعنية:" in line_t:
+                        b_tag = meta_p.find("b")
+                        cand_e = (b_tag.get_text(" ", strip=True) if b_tag else line_t.split(":", 1)[-1]).strip()
+                        if 3 <= len(cand_e) <= 80 and not _JOBSYRIA_NET_GENERIC_EMP_RE.match(cand_e):
+                            card_emp = cand_e
+                if not badge_city:
+                    for sp in card.select("span"):
+                        sp_t = sp.get_text(" ", strip=True)
+                        if len(sp_t) <= 30:
+                            cs = tx.cities_from_text(sp_t)
+                            if cs:
+                                badge_city.extend(c for c in cs if c not in badge_city)
+
+                tel_phones: list[str] = []
+                emails: list[str] = []
+                ext_links: list[str] = []
+                for a in card.find_all("a", href=True):
+                    href = da.clean_url(a["href"])
+                    if not href:
+                        continue
+                    low = href.lower()
+                    if low.startswith("tel:"):
+                        for p in tx.phones(href[4:]):
+                            if p not in tel_phones:
+                                tel_phones.append(p)
+                    elif low.startswith("mailto:"):
+                        em = href[7:].split("?")[0].strip()
+                        if da._good_email(em) and em not in emails:
+                            emails.append(em)
+                    elif href.startswith(("http://", "https://")) and "jobsyria.net" not in da._host(href):
+                        for p in da.extract_phone_from_wa(href, country="sy"):
+                            if p not in tel_phones:
+                                tel_phones.append(p)
+                        if not da.is_disallowed_offline_url(href) and not da.is_strict_portal_wrapper(href):
+                            ext_links.append(href)
+
+                h2 = card.select_one("h2")
+                h2_t = ex.normalize_title_display(h2.get_text(" ", strip=True), keep_matlob=True).strip() if h2 else ""
+                extracted = ex.extract(
+                    body_txt,
+                    "jobsyria_net",
+                    share_url,
+                    posted_at,
+                    "quick",
+                    ext_links,
+                    country="sy",
+                    sector="private",
+                )
+                if not extracted:
+                    if h2_t and not _JOBSYRIA_NET_META_H2_RE.search(h2_t):
+                        extracted = ex.extract(
+                            f"{h2_t}\n{body_txt}",
+                            "jobsyria_net",
+                            share_url,
+                            posted_at,
+                            "quick",
+                            ext_links,
+                            country="sy",
+                            sector="private",
+                        )
+                elif (
+                    len(extracted) == 1
+                    and len(h2_t) >= 3
+                    and not _JOBSYRIA_NET_META_H2_RE.search(h2_t)
+                    and ex._good_title(h2_t)
+                    and _JOBSYRIA_NET_WEAK_TITLE_RE.search(extracted[0].title)
+                ):
+                    extracted[0].title = h2_t[:120]
+                    fld = tx.field_from_text(extracted[0].title, body_txt[:300])
+                    sub = computer_subfield(extracted[0].title, body_txt[:300])
+                    if sub or fld == "computer":
+                        extracted[0].field, extracted[0].subfield = "computer", sub or "DT"
+                    else:
+                        extracted[0].field = fld
+                    if extracted[0].education_from in ("title", "unknown"):
+                        new_edu = tx.education_from_text(body_txt) or tx.education_from_title(h2_t)
+                        if new_edu:
+                            extracted[0].education = new_edu
+
+                for j in extracted:
+                    if j.spam:
+                        continue
+                    if not j.cities and badge_city:
+                        j.cities = list(badge_city)
+                    if not j.employer and card_emp:
+                        j.employer = card_emp
+                    for p in tel_phones:
+                        if p not in j.phones:
+                            j.phones.append(p)
+                    for em in emails:
+                        if not j.email:
+                            j.email = em
+                    if j.apply_url and (
+                        "jobsyria.net" in da._host(j.apply_url)
+                        or da.is_strict_portal_wrapper(j.apply_url)
+                        or da.is_disallowed_offline_url(j.apply_url)
+                    ):
+                        j.apply_url = None
+                    if not j.apply_url and ext_links:
+                        j.apply_url = ext_links[0]
+                    if not (j.phones or j.email or j.apply_url):
+                        continue
+                    j.details_url = share_url
+                    j.apply_types = tx.infer_apply_types(j.apply_url, j.phones, j.whatsapp, j.email)
+                    jobs.append(j)
+            if recent_on_page == 0:
+                break
+        except Exception as e:
+            log.warning("JobSyria.net page %s failed: %s", page, e)
+            break
+    return jobs
+
+
 def _warm_resolve_cache(jobs: list[Job], cache: dict, max_workers: int = 8) -> None:
     """Resolve pending wrapper/shortener URLs concurrently into cache for large batches."""
     today_str = datetime.now(timezone.utc).date().isoformat()
@@ -2171,6 +2492,8 @@ def fetch_all_web_portal_jobs(client: httpx.Client | None = None, cache: dict | 
         scrape_wfp,
         scrape_impactpool_syria,
         scrape_syria_jobs_com,
+        (lambda c: scrape_powerholding_sy(c, max_pages=2 if quick else 10)),
+        (lambda c: scrape_jobsyria_net(c, max_pages=3 if quick else 20)),
     )
     try:
         for fn in scrapers:

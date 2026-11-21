@@ -65,6 +65,26 @@ SOURCE_LABEL = {v["source"]: v["label"] for v in CHANNELS.values()} | {
     "salamjobs": "منصة سلام جوبز",
     "wazifturk": "منصة وظيفتورك",
     "abilan_tr": "بوابة وظائف المنظمات في تركيا (AB-İlan)",
+    "powerholding": "مجموعة باور إنترناشيونال القابضة (Power Holding)",
+    "jobsyria_net": "شبكة وظائف سوريا (JobSyria.net)",
+    "ihsanrd": "منظمة إحسان للإغاثة والتنمية (IhsanRD)",
+    "medglobal": "منظمة ميدغلوبال (MedGlobal Syria)",
+    "ahf": "مؤسسة الأمين للمساندة الإنسانية (AHF)",
+    "hro": "منظمة إحياء الأمل (Hope Revival)",
+    "salam_sy": "منظمة سلام سوريا (Salam)",
+    "ghiras": "منظمة غراس الخير الإنسانية",
+    "un_careers": "الأمم المتحدة (UN Careers)",
+    "npa": "المساعدات الشعبية النرويجية (NPA)",
+    "wvi": "منظمة الرؤية العالمية (World Vision)",
+    "unhcr": "المفوضية السامية لشؤون اللاجئين (UNHCR)",
+    "nrc": "المجلس النرويجي للاجئين (NRC)",
+    "undp": "برنامج الأمم المتحدة الإنمائي (UNDP)",
+    "relief_intl": "منظمة الإغاثة الدولية (Relief International)",
+    "mag_intl": "المجموعة الاستشارية للألغام (MAG)",
+    "warchild": "منظمة وور تشايلد (War Child)",
+    "goal_syria": "منظمة غول الدولية (GOAL Syria)",
+    "dunya_doktorlari": "أطباء العالم (Dünya Doktorları / MDM-T)",
+    "hayata_destek": "جمعية دعم الحياة (Hayata Destek)",
     "httpOrganizationalExamTemplates": "بنك نماذج امتحانات المنظمات والوظائف",
 }
 
@@ -77,7 +97,10 @@ OFFICIAL_NGO_SOURCES = frozenset({
     "sarc", "syredcrescent", "sema", "ataa", "ida", "srd", "sened", "bahar",
     "shafak", "drc", "acted", "wfp", "violet", "org_vio", "takaful",
     "takafulalsham", "un_syria", "reliefweb", "unjobnet_sy", "unjobnet_tr",
-    "impactpool_sy", "impactpool_tr",
+    "impactpool_sy", "impactpool_tr", "ihsanrd", "medglobal", "ahf", "hro",
+    "salam_sy", "ghiras", "un_careers", "npa", "wvi", "unhcr", "nrc", "undp",
+    "relief_intl", "mag_intl", "warchild", "goal_syria", "dunya_doktorlari",
+    "hayata_destek",
 })
 
 HISTORY_DAYS = int(os.getenv("HISTORY_DAYS", 183))      # show the last ~6 months

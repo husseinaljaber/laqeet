@@ -45,11 +45,12 @@ _AGGREGATOR_HOSTS = {
 _SHORTENER_HOSTS = {
     "bit.ly", "shorturl.at", "tinyurl.com", "share.google", "cutt.ly",
     "is.gd", "rebrand.ly", "rb.gy", "t.co", "ow.ly", "lnkd.in", "tr.ee", "goo.gl", "q.me-qr.com", "unf.pa",
+    "syr.now", "acr.ps", "molh.am", "sl1nk.com",
 }
 
 _STRICT_PORTAL_HOSTS = {
     "worklink.sy", "jobinsyria.com", "reliefweb.int", "unjobs.org", "unjobnet.org", "ngosquare.com",
-    "jobsyria.org", "nsjobs.net", "ngossyria.com", "syria.un.org", "sqrjobs.net",
+    "jobsyria.org", "jobsyria.net", "nsjobs.net", "ngossyria.com", "syria.un.org", "sqrjobs.net",
     "syria-jobs.com", "jobsintr.net", "salamjobs.com", "adwhit.com", "ab-ilan.com",
     "sana.sy", "mohe.gov.sy", "spu.edu.sy", "au.edu.sy", "jude.edu.sy", "spc.sy",
     "mikrotiksyria.com", "lgsprefabsy.com", "almaqala.blog", "arabicline.com",
@@ -83,6 +84,10 @@ _DIRECT_FORM_OR_ATS_RE = re.compile(
     r"zohorecruit\.com|odoo\.com/jobs|webcruiter\.no|employ\.acf-e\.org|careers-page\.com|"
     r"sams-hr\.com|talkpu\.sh|erp\.bonyan-ngo\.org|sssd-ngo\.net|alignerr\.com|mercor\.com|creativetaskflow\.com|"
     r"sened\.org\.tr/job_ad/|ee\.moi-sy\.com|"
+    r"web\.inform\.unicef\.org/x/|cloud\.[a-z0-9-]+\.gov\.sy/(?:index\.php/)?apps/formvox/|"
+    r"erp\.nasaemkhair\.org/Apps/ApplyJob/|apps\.muzungo\.com/jobs/apply/|jobs\.personio\.(?:de|com)|"
+    r"sy\.medglobal\.org/(?:(?:en|ar)/)?jobs/apply/|rise\.yallago\.net/careers/|jobs\.hro\.ong/Jobs/Apply|"
+    r"jobs\.oxfam\.org\.uk|careers\.powerholding-intl\.com/job/|cv\.inoportal\.com/[^/]+/(?:Basvuru|IlanDetay)/|"
     r"inoportal\.com|careers\.ifrc\.org|lumesse|icims\.com|applytojob\.com|"
     r"breezy\.hr|ashbyhq\.com|career\d*\.successfactors\.eu|fa\.em\d+\.oraclecloud\.com)",
     re.I,
@@ -105,7 +110,7 @@ _IGNORE_EMAIL_SUBSTRS = (
     "info@sema-sy.org", "info@bahar.ngo", "info@sened.ngo",
     "info@jobsintr.net", "info@salamjobs.com", "info@mahereen.com", "info@wazifturk.com",
     "info@ab-ilan.com", "info@adwhit.com", "employee@gmail.com", "kvkk@", "global.inclusion@wfp.org",
-    "tenders@", "tender@",
+    "tenders@", "tender@", "procurement@",
     "noreply@", "no-reply@", "donotreply@", "webmaster@", "wordpress@", "wixpress",
     "sentry.io", "example.com", "domain.com", ".png", ".jpg", ".svg",
 )

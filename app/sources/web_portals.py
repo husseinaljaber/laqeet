@@ -2419,6 +2419,456 @@ def scrape_jobsyria_net(client: httpx.Client, max_pages: int = 20) -> list[Job]:
     return jobs
 
 
+# ---------------------------------------------------------------- Syrian Corporates & Private Universities
+def scrape_careers_page_hcd(client: httpx.Client, max_pages: int = 3) -> list[Job]:
+    """Scrape active corporate, pharma, engineering, and HR openings from HCD Syria on careers-page.com."""
+    base_url = "https://www.careers-page.com/platform-human-capital-development"
+    jobs: list[Job] = []
+    seen: set[str] = set()
+    entries: list[tuple[str, str, str]] = []
+    for page in range(1, max_pages + 1):
+        list_url = base_url if page == 1 else f"{base_url}?page={page}"
+        try:
+            r = client.get(list_url, timeout=18)
+            if r.status_code != 200:
+                break
+            unwrapped_html = re.sub(r"</?template[^>]*>", "", r.text, flags=re.I)
+            soup = BeautifulSoup(unwrapped_html, "html.parser")
+            found_on_page = 0
+            for li in soup.select("li.media"):
+                a = li.find("a", href=True)
+                if not a or "/platform-human-capital-development/job/" not in a["href"]:
+                    continue
+                job_u = da.strip_tracking(urljoin("https://www.careers-page.com", a["href"].strip()))
+                if not job_u or job_u in seen:
+                    continue
+                h5 = li.select_one("h5, h4")
+                title = html.unescape(h5.get_text(" ", strip=True) if h5 else a.get_text(" ", strip=True)).strip()
+                if not title or len(title) < 2:
+                    continue
+                seen.add(job_u)
+                found_on_page += 1
+                meta_txt = html.unescape(li.get_text(" | ", strip=True))
+                entries.append((title, job_u, meta_txt))
+            if found_on_page == 0:
+                break
+        except Exception as e:
+            log.warning("HCD careers-page %s failed: %s", page, e)
+            break
+
+    for title, job_u, meta_txt in entries:
+        body_txt = meta_txt
+        try:
+            dr = client.get(job_u, timeout=14)
+            if dr.status_code == 200 and not da._CLOSED_PAGE_RE.search(dr.text):
+                body_txt = _extract_clean_html_text(dr.text) or meta_txt
+        except Exception:
+            pass
+        clean_t = ex.normalize_title_display(title, keep_matlob=True)
+        if not clean_t or not ex._good_title(clean_t):
+            clean_t = title.strip()
+        cities = tx.cities_from_text(f"{clean_t} {body_txt[:1200]}") or ["دمشق"]
+        fld = tx.field_from_text(clean_t, body_txt[:500])
+        sub = computer_subfield(clean_t, body_txt[:400])
+        if sub or fld == "computer":
+            fld = "computer"
+            sub = sub or "DT"
+        elif fld == "other":
+            fld = "business"
+        edu = tx.education_from_text(body_txt[:1500]) or tx.education_from_title(clean_t) or "bachelor"
+        tasks, skills = ex._extract_tasks_and_skills(body_txt[:2000])
+        jobs.append(Job(
+            title=clean_t[:120],
+            source="hcd_syria",
+            post_url=job_u,
+            posted_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            employer="منصة تنمية رأس المال البشري (HCD Syria)",
+            cities=cities,
+            education=edu,
+            education_from="stated" if tx.education_from_text(body_txt[:1500]) else "title",
+            field=fld,
+            subfield=sub,
+            kind="formal",
+            official=False,
+            country="sy",
+            sector="private",
+            apply_url=job_u,
+            details_url=job_u,
+            apply_types=["site", "form"],
+            tasks=tasks,
+            skills=skills,
+            confidence=0.94,
+            tags=["شركات سورية", "توظيف مباشر"],
+            raw=f"{clean_t}\n{body_txt[:1500]}".strip(),
+        ))
+    return jobs
+
+
+def scrape_beeorder_sy(client: httpx.Client) -> list[Job]:
+    """Scrape active openings across Damascus, Aleppo, Lattakia & Tartous from BeeOrder Syria."""
+    url = "https://careers.beeorder.com/jobs"
+    jobs: list[Job] = []
+    seen: set[str] = set()
+    try:
+        r = client.get(url, headers={"User-Agent": USER_AGENT, "Accept": "application/json, text/html, */*"}, timeout=18)
+        if r.status_code != 200:
+            return []
+        html_text = (r.json().get("html") or "") if r.text.lstrip().startswith("{") else r.text
+        soup = BeautifulSoup(html_text, "html.parser")
+        for card in soup.select("article.job-card, .job-card"):
+            h2 = card.find(["h2", "h3"])
+            a = card.find("a", href=True)
+            if not h2 or not a:
+                continue
+            title = html.unescape(h2.get_text(" ", strip=True)).strip()
+            job_u = da.strip_tracking(urljoin(url, a["href"].strip()))
+            if not title or not job_u or job_u in seen:
+                continue
+            seen.add(job_u)
+            card_txt = html.unescape(card.get_text(" | ", strip=True))
+            cities = tx.cities_from_text(f"{title} {card_txt}") or ["دمشق"]
+            fld = tx.field_from_text(title, card_txt)
+            sub = computer_subfield(title, card_txt)
+            if sub or fld == "computer":
+                fld = "computer"
+                sub = sub or "DT"
+            elif fld == "other":
+                fld = "sales"
+            sh = "دوام جزئي" if "دوام جزئي" in card_txt else "دوام كامل"
+            jobs.append(Job(
+                title=title[:120],
+                source="beeorder",
+                post_url=job_u,
+                posted_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                employer="شركة بي أوردر (BeeOrder)",
+                cities=cities,
+                education=tx.education_from_title(title) or "bachelor",
+                education_from="title",
+                field=fld,
+                subfield=sub,
+                kind="formal",
+                official=False,
+                country="sy",
+                sector="private",
+                apply_url=job_u,
+                details_url=job_u,
+                shift=sh,
+                apply_types=["site", "form"],
+                confidence=0.95,
+                tags=["شركات تقنية", "BeeOrder"],
+                raw=f"{title}\nشركة بي أوردر (BeeOrder)\n{card_txt}",
+            ))
+    except Exception as e:
+        log.warning("BeeOrder scrape failed: %s", e)
+    return jobs
+
+
+def _parse_hkn_close_date(text: str) -> str | None:
+    m = re.search(r"Closes\s+(\d{1,2}\s+[A-Za-z]{3,9}\s+\d{4})", text or "", re.I)
+    if not m:
+        return None
+    val = m.group(1).strip()
+    for fmt in ("%d %b %Y", "%d %B %Y"):
+        try:
+            return datetime.strptime(val, fmt).date().isoformat()
+        except ValueError:
+            continue
+    return None
+
+
+def scrape_hknsyria(client: httpx.Client) -> list[Job]:
+    """Scrape active energy, engineering & logistics openings in Al-Hasakah from HKN Syria."""
+    url = "https://hknsyria.com/Careers/Index"
+    jobs: list[Job] = []
+    seen: set[str] = set()
+    today_str = datetime.now(timezone.utc).date().isoformat()
+    try:
+        r = client.get(url, timeout=18)
+        if r.status_code != 200:
+            return []
+        soup = BeautifulSoup(r.text, "html.parser")
+        for a in soup.find_all("a", href=True):
+            href = a["href"].strip()
+            if "/Careers/Details/" not in href:
+                continue
+            job_u = da.strip_tracking(urljoin("https://hknsyria.com", href))
+            if not job_u or job_u in seen:
+                continue
+            seen.add(job_u)
+            parts = [p.strip() for p in html.unescape(a.get_text(" | ", strip=True)).split("|") if p.strip()]
+            if not parts:
+                continue
+            title = parts[0]
+            if len(title) < 3:
+                continue
+            card_txt = " | ".join(parts)
+            deadline = _parse_hkn_close_date(card_txt)
+            if deadline and deadline < today_str:
+                continue
+            cities = tx.cities_from_text(card_txt) or ["الحسكة"]
+            fld = tx.field_from_text(title, card_txt)
+            if fld == "other":
+                fld = "engineering"
+            jobs.append(Job(
+                title=title[:120],
+                source="hknsyria",
+                post_url=job_u,
+                posted_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                employer="شركة HKN Syria للطاقة",
+                cities=cities,
+                education=tx.education_from_text(card_txt) or tx.education_from_title(title) or "bachelor",
+                education_from="title",
+                field=fld,
+                kind="formal",
+                official=False,
+                country="sy",
+                sector="private",
+                apply_url=job_u,
+                details_url=job_u,
+                deadline=deadline,
+                shift="دوام كامل",
+                apply_types=["site", "form"],
+                confidence=0.95,
+                tags=["قطاع الطاقة", "هندسة", "الحسكة"],
+                raw=f"{title}\nشركة HKN Syria\n{card_txt}",
+            ))
+    except Exception as e:
+        log.warning("HKN Syria scrape failed: %s", e)
+    return jobs
+
+
+def scrape_elffa_sy(client: httpx.Client) -> list[Job]:
+    """Scrape software & digital media openings from Elffa tech portal."""
+    url = "https://www.elffa.com/careers"
+    jobs: list[Job] = []
+    seen: set[str] = set()
+    try:
+        r = client.get(url, timeout=18)
+        if r.status_code != 200:
+            return []
+        soup = BeautifulSoup(r.text, "html.parser")
+        role_urls: list[str] = []
+        for a in soup.find_all("a", href=True):
+            href = a["href"].strip()
+            if "/careers/" in href and not href.rstrip("/").endswith("/careers"):
+                full_u = da.strip_tracking(urljoin("https://www.elffa.com", href))
+                if full_u and full_u not in seen:
+                    seen.add(full_u)
+                    role_urls.append(full_u)
+        for ru in role_urls:
+            try:
+                dr = client.get(ru, timeout=14)
+                if dr.status_code != 200 or da._CLOSED_PAGE_RE.search(dr.text):
+                    continue
+                ds = BeautifulSoup(dr.text, "html.parser")
+                h1 = ds.find("h1")
+                title = html.unescape(h1.get_text(" ", strip=True)) if h1 else ru.rstrip("/").split("/")[-1].replace("-", " ").title()
+                if not title or len(title) < 3:
+                    continue
+                body_txt = _extract_clean_html_text(dr.text)
+                cities = tx.cities_from_text(body_txt) or ["دمشق"]
+                fld = tx.field_from_text(title, body_txt[:400])
+                sub = computer_subfield(title, body_txt[:400])
+                if sub or fld == "computer":
+                    fld = "computer"
+                    sub = sub or "SE"
+                tasks, skills = ex._extract_tasks_and_skills(body_txt[:2000])
+                jobs.append(Job(
+                    title=title[:120],
+                    source="elffa",
+                    post_url=ru,
+                    posted_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                    employer="شركة Elffa التقنية",
+                    cities=cities,
+                    education="bachelor",
+                    education_from="title",
+                    field=fld,
+                    subfield=sub,
+                    kind="formal",
+                    official=False,
+                    country="sy",
+                    sector="private",
+                    apply_url=ru,
+                    details_url=ru,
+                    apply_types=["site", "form"],
+                    tasks=tasks,
+                    skills=skills,
+                    confidence=0.94,
+                    tags=["شركات برمجية", "Elffa"],
+                    raw=f"{title}\nشركة Elffa\n{body_txt[:1200]}",
+                ))
+            except Exception as de:
+                log.debug("Elffa detail %s failed: %s", ru, de)
+    except Exception as e:
+        log.warning("Elffa scrape failed: %s", e)
+    return jobs
+
+
+def scrape_onecash_sy(client: httpx.Client) -> list[Job]:
+    """Scrape active financial & accounting openings in Lattakia from OneCash Syria."""
+    url = "https://onecash-latakia-production-2bb5.up.railway.app/careers"
+    jobs: list[Job] = []
+    seen: set[str] = set()
+    today_str = datetime.now(timezone.utc).date().isoformat()
+    try:
+        r = client.get(url, timeout=15)
+        if r.status_code != 200:
+            return []
+        soup = BeautifulSoup(r.text, "html.parser")
+        for a in soup.find_all("a", href=True):
+            href = a["href"].strip()
+            if "/careers/apply/" not in href:
+                continue
+            apply_u = da.strip_tracking(urljoin(url, href))
+            if not apply_u or apply_u in seen:
+                continue
+            seen.add(apply_u)
+            card_txt = html.unescape(a.get_text(" | ", strip=True))
+            if "التقديم مغلق" in card_txt or "مغلقة حالياً" in card_txt:
+                continue
+            parts = [p.strip() for p in card_txt.split("|") if p.strip() and "قدّم الآن" not in p]
+            title = parts[0] if parts else "محاسب — شركة ون كاش"
+            m_dl = re.search(r"(\d{4}-\d{2}-\d{2})", card_txt)
+            deadline = m_dl.group(1) if m_dl else None
+            if deadline and deadline < today_str:
+                continue
+            cities = tx.cities_from_text(card_txt) or ["اللاذقية"]
+            fld = tx.field_from_text(title, card_txt)
+            if fld == "other":
+                fld = "business"
+            sh = "دوام جزئي" if "دوام جزئي" in card_txt else "دوام كامل"
+            jobs.append(Job(
+                title=title[:120],
+                source="onecash",
+                post_url=apply_u,
+                posted_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                employer="شركة ون كاش للصرافة والحوالات المالية (OneCash)",
+                cities=cities,
+                education="bachelor",
+                education_from="title",
+                field=fld,
+                kind="formal",
+                official=False,
+                country="sy",
+                sector="private",
+                apply_url=apply_u,
+                details_url=url,
+                deadline=deadline,
+                shift=sh,
+                apply_types=["site", "form"],
+                confidence=0.95,
+                tags=["مصارف وصرافة", "اللاذقية"],
+                raw=f"{title}\nشركة ون كاش — اللاذقية\n{card_txt}",
+            ))
+    except Exception as e:
+        log.warning("OneCash scrape failed: %s", e)
+    return jobs
+
+
+def scrape_syrian_private_universities(client: httpx.Client) -> list[Job]:
+    """Scrape active academic & administrative recruitment portals of Syrian private universities (HPU Homs & AU Tartous)."""
+    jobs: list[Job] = []
+    seen: set[str] = set()
+
+    # 1. Al-Hawash Private University (جامعة الحواش الخاصة — حمص)
+    hpu_hub = "https://hpu.edu.sy/ar/%d9%88%d8%b8%d8%a7%d8%a6%d9%81-%d8%a3%d8%b9%d8%b6%d8%a7%d8%a1-%d9%87%d9%8a%d8%a6%d8%a9-%d8%aa%d8%b9%d9%84%d9%8a%d9%85%d9%8a%d8%a9-2026-2027/"
+    try:
+        r = client.get(hpu_hub, timeout=18)
+        if r.status_code == 200:
+            soup = BeautifulSoup(r.text, "html.parser")
+            hpu_links: list[str] = []
+            for a in soup.find_all("a", href=True):
+                href = a["href"].strip()
+                txt = a.get_text(" ", strip=True)
+                if ("قدّم" in txt or "قدم" in txt or "توظيف" in href) and "hpu.edu.sy/ar/" in href:
+                    full_u = da.strip_tracking(href)
+                    if full_u and full_u not in seen and full_u != hpu_hub:
+                        seen.add(full_u)
+                        hpu_links.append(full_u)
+            for hu in hpu_links:
+                try:
+                    dr = client.get(hu, timeout=15)
+                    if dr.status_code != 200 or "wpcf7" not in dr.text:
+                        continue
+                    ds = BeautifulSoup(dr.text, "html.parser")
+                    h1 = ds.find("h1")
+                    raw_t = html.unescape(h1.get_text(" ", strip=True)) if h1 else "توظيف أعضاء هيئة تعليمية وخريجين — جامعة الحواش الخاصة"
+                    clean_t = re.sub(r"\s*2026(?:-2027)?\s*$", "", raw_t).strip()
+                    edu = "phd" if "دكتوراه" in clean_t else "master" if "ماجستير" in clean_t else "bachelor"
+                    jobs.append(Job(
+                        title=clean_t[:120],
+                        source="hpu_uni",
+                        post_url=hu,
+                        posted_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                        employer="جامعة الحواش الخاصة (HPU)",
+                        cities=["حمص"],
+                        education=edu,
+                        education_from="stated",
+                        field="education",
+                        kind="formal",
+                        official=False,
+                        country="sy",
+                        sector="private",
+                        apply_url=hu,
+                        details_url=hu,
+                        apply_types=["site", "form"],
+                        confidence=0.95,
+                        tags=["جامعات سورية", "تعليم عالي", "حمص"],
+                        raw=f"{raw_t}\nجامعة الحواش الخاصة — حمص (وادي النضارة)",
+                    ))
+                except Exception as he:
+                    log.debug("HPU detail %s failed: %s", hu, he)
+    except Exception as e:
+        log.warning("HPU university scrape failed: %s", e)
+
+    # 2. Al-Andalus University for Medical Sciences (جامعة الأندلس الخاصة للعلوم الطبية — طرطوس)
+    au_home = "https://au.edu.sy/home"
+    try:
+        r = client.get(au_home, timeout=18)
+        if r.status_code == 200:
+            soup = BeautifulSoup(r.text, "html.parser")
+            for a in soup.find_all("a", href=True):
+                href = a["href"].strip()
+                if "/job/" not in href or "/en/job/" in href:
+                    continue
+                full_u = da.strip_tracking(urljoin("https://au.edu.sy", href))
+                if not full_u or full_u in seen:
+                    continue
+                seen.add(full_u)
+                label = html.unescape(a.get_text(" ", strip=True)).strip()
+                if "الهيئة التعليمية" in label or "alhyy-altaalymy" in full_u:
+                    title = "عضو هيئة تعليمية وتدريسية — جامعة الأندلس الخاصة للعلوم الطبية"
+                    fld = "education"
+                else:
+                    title = "شواغر الكادر الإداري والفني — جامعة الأندلس الخاصة للعلوم الطبية"
+                    fld = "business"
+                jobs.append(Job(
+                    title=title,
+                    source="au_uni",
+                    post_url=full_u,
+                    posted_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                    employer="جامعة الأندلس الخاصة للعلوم الطبية",
+                    cities=["طرطوس"],
+                    education="bachelor",
+                    education_from="stated",
+                    field=fld,
+                    kind="formal",
+                    official=False,
+                    country="sy",
+                    sector="private",
+                    apply_url=full_u,
+                    details_url=full_u,
+                    apply_types=["site", "form"],
+                    confidence=0.94,
+                    tags=["جامعات سورية", "طرطوس"],
+                    raw=f"{title}\nجامعة الأندلس الخاصة للعلوم الطبية — طرطوس (القدموس)",
+                ))
+    except Exception as e:
+        log.warning("Al-Andalus University scrape failed: %s", e)
+
+    return jobs
+
+
 def _warm_resolve_cache(jobs: list[Job], cache: dict, max_workers: int = 8) -> None:
     """Resolve pending wrapper/shortener URLs concurrently into cache for large batches."""
     today_str = datetime.now(timezone.utc).date().isoformat()
@@ -2494,6 +2944,12 @@ def fetch_all_web_portal_jobs(client: httpx.Client | None = None, cache: dict | 
         scrape_syria_jobs_com,
         (lambda c: scrape_powerholding_sy(c, max_pages=2 if quick else 10)),
         (lambda c: scrape_jobsyria_net(c, max_pages=3 if quick else 20)),
+        (lambda c: scrape_careers_page_hcd(c, max_pages=2 if quick else 3)),
+        scrape_beeorder_sy,
+        scrape_hknsyria,
+        scrape_elffa_sy,
+        scrape_onecash_sy,
+        scrape_syrian_private_universities,
     )
     try:
         for fn in scrapers:

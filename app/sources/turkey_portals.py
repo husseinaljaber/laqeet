@@ -251,6 +251,20 @@ _JOBSINTR_EXTRA_PATHS = (
     "/job-cat/" + quote("الموارد-البشرية"),
     "/job-cat/" + quote("قانونية"),
     "/job-cat/" + quote("سياحة"),
+    "/jobs?keyword=" + quote("غازي عنتاب"),
+    "/jobs?keyword=" + quote("مرسين"),
+    "/jobs?keyword=" + quote("بورصة"),
+    "/jobs?keyword=" + quote("أنقرة"),
+    "/jobs?keyword=" + quote("أنطاليا"),
+    "/jobs?keyword=" + quote("إزمير"),
+    "/jobs?keyword=" + quote("قونيا"),
+    "/jobs?keyword=" + quote("هاتاي"),
+    "/jobs?keyword=" + quote("أورفا"),
+    "/jobs?keyword=" + quote("أضنة"),
+    "/jobs?keyword=" + quote("سكاريا"),
+    "/jobs?keyword=" + quote("كوجالي"),
+    "/jobs?keyword=" + quote("طرابزون"),
+    "/jobs?keyword=" + quote("قيصري"),
 )
 
 
@@ -396,6 +410,29 @@ _ADWHIT_EXTRA_CATS = (
     "وظائف-المحاسبة-والمالية",
     "وظائف-الترجمة",
     "وظائف-التدريس",
+    "وظائف-التخصصات-الهندسية",
+    "وظائف-التخصصات-الطبية",
+    "وظائف-قانونية-واستشارية",
+    "وظائف-الفنادق",
+    "وظائف-مشاريع-البناء",
+    "وظائف-الرعاية-الصحية",
+    "وظائف-خدمة-المنازل-والمكاتب",
+)
+_ADWHIT_CITIES = (
+    "gaziantep",
+    "bursa",
+    "antalya",
+    "mersin",
+    "trabzon",
+    "sakarya",
+    "kocaeli",
+    "ankara",
+    "izmir",
+    "hatay",
+    "konya",
+    "yalova",
+    "sanliurfa",
+    "adana",
 )
 _NEXT_DATA_RE = re.compile(r'<script[^>]+id=["\']__NEXT_DATA__["\'][^>]*>(.*?)</script>', re.S)
 
@@ -411,16 +448,24 @@ def _extract_next_data(html_text: str) -> dict:
 
 
 def scrape_adwhit_web(client: httpx.Client, max_pages: int = 8) -> list[Job]:
-    """Scrape structured active jobs from Adwhit main listings and categories via Next.js SSR JSON."""
+    """Scrape structured active jobs from Adwhit main listings, Turkish provinces, and categories via Next.js SSR JSON."""
     jobs: list[Job] = []
     seen_ids: set[str] = set()
     shift_map = {"fulltime": "دوام كامل", "parttime": "دوام جزئي", "freelance": "عمل حر"}
     today_str = datetime.now(timezone.utc).date().isoformat()
     main_pages = min(max_pages, 8)
-    feed_urls = [
-        f"https://www.adwhit.com/ar/jobs?page={page}" if page > 1 else "https://www.adwhit.com/ar/jobs"
-        for page in range(1, main_pages + 1)
-    ] + [f"https://www.adwhit.com/ar/{quote(slug)}" for slug in _ADWHIT_EXTRA_CATS]
+    feed_urls = (
+        [
+            f"https://www.adwhit.com/ar/jobs?page={page}" if page > 1 else "https://www.adwhit.com/ar/jobs"
+            for page in range(1, main_pages + 1)
+        ]
+        + [f"https://www.adwhit.com/ar/jobs?city={city}" for city in _ADWHIT_CITIES]
+        + [
+            "https://www.adwhit.com/ar/jobs?city=gaziantep&page=2",
+            "https://www.adwhit.com/ar/jobs?city=bursa&page=2",
+        ]
+        + [f"https://www.adwhit.com/ar/{quote(slug)}" for slug in _ADWHIT_EXTRA_CATS]
+    )
 
     pending_items: list[tuple[dict, str, str]] = []
     for list_url in feed_urls:
@@ -470,10 +515,24 @@ def scrape_adwhit_web(client: httpx.Client, max_pages: int = 8) -> list[Job]:
             wa_phones: list[str] = []
             if jdata.get("contactPhone"):
                 wa_phones.extend(tx.phones_tr(str(jdata["contactPhone"])))
-            for a in dsc_soup.select("a[href*='whatsapp'], a[href*='wa.me'], a[href^='tel:']"):
+            found_email = str(jdata.get("contactEmail") or "").strip() or None
+            for el in dsc_soup.select("[data-cfemail]"):
+                cand = da._decode_cf_email(el.get("data-cfemail") or "")
+                if not found_email and da._good_email(cand):
+                    found_email = cand
+            for a in dsc_soup.select("a[href*='whatsapp'], a[href*='wa.me'], a[href^='tel:'], a[href^='mailto:'], a[href*='email-protection']"):
                 href = a.get("href") or ""
-                if href.lower().startswith("tel:"):
+                low_h = href.lower()
+                if low_h.startswith("tel:"):
                     wa_phones.extend(tx.phones_tr(href[4:]))
+                elif "/cdn-cgi/l/email-protection#" in low_h:
+                    cand = da._decode_cf_email(href.split("#", 1)[1].split("?", 1)[0])
+                    if not found_email and da._good_email(cand):
+                        found_email = cand
+                elif low_h.startswith("mailto:"):
+                    cand = href[7:].split("?", 1)[0].strip()
+                    if not found_email and da._good_email(cand):
+                        found_email = cand
                 else:
                     wa_phones.extend(da.extract_phone_from_wa(href, country="tr"))
 
@@ -481,6 +540,10 @@ def scrape_adwhit_web(client: httpx.Client, max_pages: int = 8) -> list[Job]:
             a_name = (jdata.get("area") or it.get("area") or {}).get("name") or ""
             cat_name = (jdata.get("cat") or it.get("cat") or {}).get("name") or ""
             extra_tags = ["عن بعد"] if (jdata.get("jobLocation") == "remote" or it.get("jobLocation") == "remote") else []
+            ext_apply: str | None = None
+            raw_cu = da.strip_tracking(str(jdata.get("contactUrl") or "").strip())
+            if raw_cu and not da.is_disallowed_offline_url(raw_cu) and da.is_direct_form_or_ats(raw_cu):
+                ext_apply = raw_cu
 
             job = _build_tr_job(
                 title=jdata.get("title") or it.get("title") or "",
@@ -490,9 +553,10 @@ def scrape_adwhit_web(client: httpx.Client, max_pages: int = 8) -> list[Job]:
                 body_text=dsc_txt,
                 city_hint=f"{c_name} {a_name}",
                 shift_hint=shift_map.get(jdata.get("jobType") or it.get("jobType") or ""),
+                apply_url=ext_apply,
                 details_url=detail_url,
                 phones=wa_phones,
-                email=jdata.get("contactEmail"),
+                email=found_email,
                 tags=extra_tags + ([cat_name] if cat_name and cat_name != "متنوعة" else []),
             )
             if job and ex.expires_on(job) >= today_str:
@@ -555,6 +619,7 @@ def scrape_salamjobs_tr(client: httpx.Client, max_pages: int = 8) -> list[Job]:
         + [f"https://salamjobs.com/search?country_id=1&city_id=4&page={page}" for page in range(1, ist_pages + 1)]
         + [f"https://salamjobs.com/search?country_id=1&city_id=8&page={page}" for page in range(1, gaz_pages + 1)]
         + [f"https://salamjobs.com/search?country_id=1&city_id={cid}" for cid in (2, 10, 3, 11, 1, 6, 7, 9)]
+        + [f"https://salamjobs.com/search?category_id={cat_id}" for cat_id in (2, 7, 13, 12, 8, 18, 21, 3, 4, 11, 10, 14, 6, 9, 17)]
     )
 
     all_links: list[str] = []
@@ -604,6 +669,10 @@ def scrape_salamjobs_tr(client: httpx.Client, max_pages: int = 8) -> list[Job]:
             emails: list[str] = []
             out_url = None
             apply_url = None
+            for el in art.select("[data-cfemail]"):
+                em = da._decode_cf_email(el.get("data-cfemail") or "")
+                if da._good_email(em) and em not in emails:
+                    emails.append(em)
             for a in art.select("a[href]"):
                 href = (a.get("href") or "").strip()
                 low = href.lower()
@@ -611,6 +680,10 @@ def scrape_salamjobs_tr(client: httpx.Client, max_pages: int = 8) -> list[Job]:
                     phones.extend(tx.phones_tr(href[4:]))
                 elif "whatsapp" in low or "wa.me/" in low:
                     phones.extend(da.extract_phone_from_wa(href, country="tr"))
+                elif "/cdn-cgi/l/email-protection#" in low:
+                    em = da._decode_cf_email(href.split("#", 1)[1].split("?", 1)[0])
+                    if da._good_email(em) and em not in emails:
+                        emails.append(em)
                 elif low.startswith("mailto:"):
                     em = href[7:].split("?", 1)[0].strip()
                     if da._good_email(em):
@@ -729,11 +802,17 @@ _WAZIFTURK_PATHS = (
     "/jobs/mersin",
     "/jobs/bursa",
     "/jobs/antalya",
+    "/jobs/izmir",
+    "/jobs/konya",
+    "/jobs/kocaeli",
+    "/jobs/adana",
     "/jobs/category/sales-marketing",
     "/jobs/category/accounting-finance",
     "/jobs/category/technology",
     "/jobs/category/customer-service",
     "/jobs/category/restaurants-hotels",
+    "/jobs/category/transport-logistics",
+    "/jobs/category/education",
     "/jobs/category/translation-languages",
 )
 _WAZIF_TS_RE = re.compile(r'\\?"(postedAt|applicationDeadline|expiresAt)\\?"\s*:\s*\\?"(\d{10,13})\\?"')
@@ -796,6 +875,10 @@ def scrape_wazifturk_tr(client: httpx.Client) -> list[Job]:
                 if da._good_email(e) and "wazifturk" not in e.lower()
             ]
             ext_apply: str | None = None
+            for el in main.select("[data-cfemail]"):
+                em = da._decode_cf_email(el.get("data-cfemail") or "")
+                if da._good_email(em) and "wazifturk" not in em.lower():
+                    emails.append(em)
             for a in main.select("a[href]"):
                 href = (a.get("href") or "").strip()
                 low = href.lower()
@@ -803,6 +886,10 @@ def scrape_wazifturk_tr(client: httpx.Client) -> list[Job]:
                     phones.extend(tx.phones_tr(href[4:]))
                 elif "wa.me/" in low or "whatsapp" in low:
                     phones.extend(da.extract_phone_from_wa(href, country="tr"))
+                elif "/cdn-cgi/l/email-protection#" in low:
+                    em = da._decode_cf_email(href.split("#", 1)[1].split("?", 1)[0])
+                    if da._good_email(em) and "wazifturk" not in em.lower():
+                        emails.append(em)
                 elif low.startswith("mailto:"):
                     em = href[7:].split("?", 1)[0].strip()
                     if da._good_email(em) and "wazifturk" not in em.lower():
@@ -897,19 +984,31 @@ _ABILAN_HEADERS = {
 _ABILAN_TENDER_RE = re.compile(r"\b(?:ihale|teklif|rfq|rfp|itb|hizmet alımı|mal alımı|satın alma|tedarik)\b", re.I)
 
 
-def scrape_abilan_tr(client: httpx.Client, max_items: int = 80) -> list[Job]:
+def scrape_abilan_tr(client: httpx.Client, max_items: int = 140) -> list[Job]:
     """Scrape active humanitarian/NGO vacancies in Turkey from ab-ilan.com WP REST API + detail fields."""
     jobs: list[Job] = []
     today_str = datetime.now(timezone.utc).date().isoformat()
-    try:
-        r = client.get("https://ab-ilan.com/wp-json/wp/v2/job?per_page=100", headers=_ABILAN_HEADERS, timeout=20, follow_redirects=True)
-        if r.status_code != 200:
-            return []
-        items = r.json()
-        if not isinstance(items, list):
-            return []
-    except Exception as e:
-        log.warning("ab-ilan WP API fetch failed: %s", e)
+    items: list[dict] = []
+    pages = (1,) if max_items <= 40 else (1, 2)
+    for page in pages:
+        api_u = (
+            "https://ab-ilan.com/wp-json/wp/v2/job?per_page=100"
+            if page == 1
+            else f"https://ab-ilan.com/wp-json/wp/v2/job?per_page=100&page={page}"
+        )
+        try:
+            r = client.get(api_u, headers=_ABILAN_HEADERS, timeout=20, follow_redirects=True)
+            if r.status_code != 200:
+                break
+            batch = r.json()
+            if not isinstance(batch, list) or not batch:
+                break
+            items.extend(batch)
+        except Exception as e:
+            if page == 1:
+                log.warning("ab-ilan WP API fetch failed: %s", e)
+            break
+    if not items:
         return []
 
     candidates: list[tuple[dict, str, str, str, str]] = []
@@ -1091,7 +1190,7 @@ def fetch_all_tr_portal_jobs(
             ("salamjobs", lambda c: scrape_salamjobs_tr(c, max_pages=max_pages)),
             ("wazifturk", scrape_wazifturk_tr),
             ("sened_tr", scrape_sened_tr),
-            ("abilan_tr", lambda c: scrape_abilan_tr(c, max_items=25 if quick else 80)),
+            ("abilan_tr", lambda c: scrape_abilan_tr(c, max_items=35 if quick else 140)),
             ("unjobnet_tr", scrape_unjobnet_turkey),
             ("impactpool_tr", scrape_impactpool_turkey),
             ("drc_tr", lambda c: scrape_drc(c, country="tr")),

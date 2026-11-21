@@ -52,7 +52,7 @@ _STRICT_PORTAL_HOSTS = {
     "worklink.sy", "jobinsyria.com", "reliefweb.int", "unjobs.org", "unjobnet.org", "ngosquare.com",
     "jobsyria.org", "jobsyria.net", "nsjobs.net", "ngossyria.com", "syria.un.org", "sqrjobs.net",
     "syria-jobs.com", "jobsintr.net", "salamjobs.com", "adwhit.com", "ab-ilan.com",
-    "sana.sy", "mohe.gov.sy", "spu.edu.sy", "au.edu.sy", "jude.edu.sy", "spc.sy",
+    "sana.sy", "mohe.gov.sy", "spu.edu.sy", "jude.edu.sy", "spc.sy",
     "mikrotiksyria.com", "lgsprefabsy.com", "almaqala.blog", "arabicline.com",
 }
 
@@ -87,6 +87,10 @@ _DIRECT_FORM_OR_ATS_RE = re.compile(
     r"web\.inform\.unicef\.org/x/|cloud\.[a-z0-9-]+\.gov\.sy/(?:index\.php/)?apps/formvox/|"
     r"erp\.nasaemkhair\.org/Apps/ApplyJob/|apps\.muzungo\.com/jobs/apply/|jobs\.personio\.(?:de|com)|"
     r"sy\.medglobal\.org/(?:(?:en|ar)/)?jobs/apply/|rise\.yallago\.net/careers/|jobs\.hro\.ong/Jobs/Apply|"
+    r"careers\.beeorder\.com/jobs/\d+|hknsyria\.com/Careers/Details/\d+|elffa\.com/careers/[^/?#]+|"
+    r"ipv-sy\.org/job-archive/[^/?#]+|au\.edu\.sy/(?:en/)?job/[^/?#]+|"
+    r"hpu\.edu\.sy/ar/(?:%d8%aa%d9%88%d8%b8%d9%8a%d9%81|%d8%a7%d8%b9%d9%84%d8%a7%d9%86-%d8%aa%d9%88%d8%b8%d9%8a%d9%81|توظيف|اعلان-توظيف)[^/?#]*|"
+    r"onecash-latakia-production-2bb5\.up\.railway\.app/careers/apply/|"
     r"jobs\.oxfam\.org\.uk|careers\.powerholding-intl\.com/job/|cv\.inoportal\.com/[^/]+/(?:Basvuru|IlanDetay)/|"
     r"inoportal\.com|careers\.ifrc\.org|lumesse|icims\.com|applytojob\.com|"
     r"breezy\.hr|ashbyhq\.com|career\d*\.successfactors\.eu|fa\.em\d+\.oraclecloud\.com)",

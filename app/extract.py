@@ -663,7 +663,7 @@ _EN_IMPERATIVE_START = re.compile(
     re.I,
 )
 _EN_ROLE_NOUN = re.compile(
-    r"\b(?:manager|officer|coordinator|assistant|specialist|engineer|developer|analyst|designer|"
+    r"\b(?:manager|officer|coordinator|assistant|specialist|engineer|developer|analyst|designer|secretary|"
     r"lead|leader|head|director|supervisor|teacher|trainer|consultant|counselor|intern|educator|technician|nurse|"
     r"pediatrician|agronomist|medic|paramedic|midwife|enumerator|steward|"
     r"accountant|driver|translator|interpreter|representative|advisor|worker|chef|"

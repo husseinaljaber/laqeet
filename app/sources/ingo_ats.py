@@ -263,6 +263,13 @@ _WORKDAY_BOARDS: tuple[dict[str, str], ...] = (
         "tenant": "unhcr",
         "site": "External",
     },
+    {
+        "source": "irc",
+        "employer": "لجنة الإنقاذ الدولية (IRC)",
+        "host": "theirc.wd1.myworkdayjobs.com",
+        "tenant": "theirc",
+        "site": "External_Careers",
+    },
 )
 
 
@@ -537,6 +544,48 @@ def scrape_relief_international(client: httpx.Client) -> list[Job]:
                 jobs.append(job)
     except Exception as e:
         log.warning("Relief International scrape failed: %s", e)
+    return jobs
+
+
+def scrape_neareast_foundation(client: httpx.Client) -> list[Job]:
+    """Scrape Near East Foundation (NEF) BambooHR JSON board for Syria and Turkey."""
+    url = "https://neareast.bamboohr.com/careers/list"
+    jobs: list[Job] = []
+    try:
+        r = client.get(url, headers={"User-Agent": USER_AGENT, "Accept": "application/json"}, timeout=18)
+        if r.status_code != 200:
+            return []
+        for it in (r.json().get("result") or []):
+            jid = str(it.get("id") or "").strip()
+            title = html.unescape(str(it.get("jobOpeningName") or "")).strip()
+            dept = html.unescape(str(it.get("departmentLabel") or "")).strip()
+            loc = it.get("location") or {}
+            loc_str = " ".join(str(loc.get(k) or "") for k in ("city", "state", "country")).strip()
+            if not jid or not title:
+                continue
+            loc_dept = f"{dept} {loc_str}".strip()
+            if re.search(r"\b(?:iraq|baghdad|anbar|morocco|marrakesh|merrakech|jordan|amman|lebanon|sudan|mali|armenia)\b", loc_dept, re.I):
+                continue
+            detected = _detect_sy_or_tr(f"{loc_dept} {title}")
+            if not detected:
+                continue
+            country, cities = detected
+            apply_u = f"https://neareast.bamboohr.com/careers/{jid}"
+            job = _make_ats_job(
+                title=title,
+                source="nef",
+                employer="مؤسسة الشرق الأدنى (Near East Foundation)",
+                country=country,
+                cities=cities,
+                apply_url=apply_u,
+                details_url=apply_u,
+                body_text=f"{title}\n{dept}\n{loc_str}",
+                tags=["منظمات دولية", "NEF"],
+            )
+            if job:
+                jobs.append(job)
+    except Exception as e:
+        log.warning("Near East Foundation scrape failed: %s", e)
     return jobs
 
 
@@ -989,6 +1038,226 @@ def scrape_wp_ngo_vacancies(
     return jobs
 
 
+# ---------------------------------------------------------------- Solidarités / SARD / IPV Syria / IHH
+def scrape_solidarites(client: httpx.Client) -> list[Job]:
+    """Scrape Solidarités International Syria & Turkey openings and extract direct TalentSoft application forms."""
+    list_url = "https://www.solidarites.org/en/since-1980/join-us/jobs/"
+    jobs: list[Job] = []
+    candidates: list[tuple[str, str]] = []
+    seen: set[str] = set()
+    try:
+        r = client.get(list_url, headers={"User-Agent": USER_AGENT}, timeout=18)
+        if r.status_code != 200:
+            return []
+        soup = BeautifulSoup(r.text, "html.parser")
+        for a in soup.find_all("a", href=True):
+            href = a["href"].strip()
+            if "/jobs/job-detail/" not in href:
+                continue
+            txt = html.unescape(a.get_text(" ", strip=True))
+            if not txt or not (_SY_EXPLICIT_RE.search(txt) or _TR_EXPLICIT_RE.search(txt) or tx.cities_from_text(txt)):
+                continue
+            full_u = urljoin(list_url, href)
+            if full_u not in seen:
+                seen.add(full_u)
+                candidates.append((txt, full_u))
+    except Exception as e:
+        log.warning("Solidarites list failed: %s", e)
+        return []
+
+    for card_title, detail_url in candidates:
+        try:
+            dr = client.get(detail_url, headers={"User-Agent": USER_AGENT}, timeout=18)
+            if dr.status_code != 200 or da._CLOSED_PAGE_RE.search(dr.text):
+                continue
+            ds = BeautifulSoup(dr.text, "html.parser")
+            apply_a = next(
+                (a for a in ds.find_all("a", href=True) if "submit-your-application" in a["href"].lower()),
+                None,
+            )
+            apply_u = urljoin(detail_url, apply_a["href"].strip()) if apply_a else detail_url
+            h1 = ds.select_one("h1")
+            raw_title = html.unescape(h1.get_text(" ", strip=True)) if h1 else card_title
+            clean_t = re.sub(r"^(?:SYRIA|Syria|TURKEY|Turkiye)\s*[-–:]\s*", "", raw_title).strip()
+            detected = _detect_sy_or_tr(f"{raw_title} {card_title}")
+            if not detected:
+                continue
+            country, cities = detected
+            body_txt = _clean_html_text(dr.text)
+            deadline = ex.parse_deadline(body_txt)
+            job = _make_ats_job(
+                title=clean_t or raw_title,
+                source="solidarites",
+                employer="منظمة Solidarités International",
+                country=country,
+                cities=cities,
+                apply_url=apply_u,
+                details_url=detail_url,
+                deadline=deadline,
+                body_text=body_txt[:1500],
+                tags=["منظمات دولية", "Solidarités"],
+            )
+            if job:
+                jobs.append(job)
+        except Exception as e:
+            log.debug("Solidarites detail %s failed: %s", detail_url, e)
+    return jobs
+
+
+def scrape_sard(client: httpx.Client) -> list[Job]:
+    """Scrape active Syria & Turkey vacancies from SARD Careers portal (sarderp.baseilowcloud.com)."""
+    list_url = "https://sarderp.baseilowcloud.com/careers/"
+    jobs: list[Job] = []
+    today_str = _today_str()
+    try:
+        r = client.get(list_url, headers={"User-Agent": USER_AGENT}, timeout=18)
+        if r.status_code != 200:
+            return []
+        soup = BeautifulSoup(r.text, "html.parser")
+        for card in soup.select("article.card"):
+            h2 = card.select_one("h2, h3")
+            title = html.unescape(h2.get_text(" ", strip=True)) if h2 else ""
+            if not title or _skip_non_job_title(title):
+                continue
+            summary_el = card.select_one("p.summary")
+            summary = html.unescape(summary_el.get_text(" ", strip=True)) if summary_el else ""
+            meta_txt = " | ".join(sp.get_text(" ", strip=True) for sp in card.select(".meta span"))
+            deadline: str | None = None
+            m_close = _IHSAN_CLOSE_RE.search(meta_txt.replace(".", ""))
+            if m_close:
+                dl_iso = _parse_ihsan_date(m_close.group(2))
+                if dl_iso:
+                    if dl_iso < today_str:
+                        continue
+                    deadline = dl_iso
+            apply_a = next((a for a in card.find_all("a", href=True) if a["href"].rstrip("/").endswith("/apply")), None)
+            detail_a = next((a for a in card.find_all("a", href=True) if "/careers/" in a["href"] and not a["href"].rstrip("/").endswith("/apply")), None)
+            if not (apply_a or detail_a):
+                continue
+            apply_u = urljoin(list_url, (apply_a or detail_a)["href"].strip())
+            detail_u = urljoin(list_url, (detail_a or apply_a)["href"].strip())
+            detected = _detect_sy_or_tr(f"{title} {summary}")
+            if not detected:
+                detected = ("sy", tx.cities_from_text(f"{title} {summary}") or ["حلب", "إدلب"])
+            country, cities = detected
+            job = _make_ats_job(
+                title=title,
+                source="sard",
+                employer="منظمة سارد للإغاثة والتنمية (SARD)",
+                country=country,
+                cities=cities,
+                apply_url=apply_u,
+                details_url=detail_u,
+                deadline=deadline,
+                body_text=f"{meta_txt}\n{summary}",
+                tags=["منظمات إنسانية", "SARD"],
+            )
+            if job:
+                jobs.append(job)
+    except Exception as e:
+        log.warning("SARD scrape failed: %s", e)
+    return jobs
+
+
+def scrape_ipv_sy(client: httpx.Client) -> list[Job]:
+    """Scrape active North-East Syria (Deir ez-Zor & Raqqa) openings from ipv-sy.org WP Simple Job Board API."""
+    api_url = "https://ipv-sy.org/wp-json/wp/v2/jobpost?per_page=30"
+    jobs: list[Job] = []
+    seen: set[str] = set()
+    try:
+        r = client.get(api_url, headers={"User-Agent": USER_AGENT, "Accept": "application/json"}, timeout=18)
+        if r.status_code != 200 or not r.text.lstrip().startswith("["):
+            return []
+        for it in r.json():
+            posted = (it.get("date_gmt") or it.get("date") or "")[:19]
+            posted_iso = (posted + "+00:00") if posted else None
+            if not _is_recent_iso(posted_iso):
+                continue
+            link = (it.get("link") or "").strip()
+            if not link or link in seen:
+                continue
+            seen.add(link)
+            raw_t = html.unescape(re.sub(r"<[^>]+>", " ", (it.get("title") or {}).get("rendered") or "")).strip()
+            if not raw_t or _skip_non_job_title(raw_t):
+                continue
+            content_html = (it.get("content") or {}).get("rendered") or ""
+            plain = _clean_html_text(content_html)
+            deadline = ex.parse_deadline(plain, posted_iso)
+            if deadline and deadline < _today_str():
+                continue
+            cities = tx.cities_from_text(f"{raw_t} {plain[:900]}") or ["الرقة", "دير الزور"]
+            job = _make_ats_job(
+                title=raw_t,
+                source="ipv_sy",
+                employer="منظمة IPV Syria",
+                country="sy",
+                cities=cities,
+                apply_url=link,
+                details_url=link,
+                posted_at=posted_iso,
+                deadline=deadline,
+                body_text=plain[:1500],
+                tags=["منظمات إنسانية", "شمال شرق سوريا"],
+            )
+            if job:
+                jobs.append(job)
+    except Exception as e:
+        log.warning("IPV Syria scrape failed: %s", e)
+    return jobs
+
+
+def scrape_ihh_hrpeak(client: httpx.Client) -> list[Job]:
+    """Scrape active Syria & Turkey openings from IHH Humanitarian Relief Foundation (ihh.hrpeak.com)."""
+    list_url = "https://ihh.hrpeak.com/jobs"
+    jobs: list[Job] = []
+    seen: set[str] = set()
+    try:
+        r = client.get(list_url, headers={"User-Agent": USER_AGENT}, timeout=18)
+        if r.status_code != 200:
+            return []
+        soup = BeautifulSoup(r.text, "html.parser")
+        for a in soup.find_all("a", href=True):
+            href = a["href"].strip()
+            if not href.endswith(".job"):
+                continue
+            title = html.unescape(a.get_text(" ", strip=True))
+            if not title or len(title) < 3 or _skip_non_job_title(title):
+                continue
+            full_u = urljoin(list_url, href)
+            if full_u in seen:
+                continue
+            seen.add(full_u)
+            row = a.find_parent(["tr", "li", "div"])
+            row_txt = html.unescape(row.get_text(" | ", strip=True)) if row else title
+            posted_iso: str | None = None
+            m_dt = re.search(r"(\d{2})\.(\d{2})\.(\d{4})", row_txt)
+            if m_dt:
+                posted_iso = f"{m_dt.group(3)}-{m_dt.group(2)}-{m_dt.group(1)}T09:00:00+00:00"
+                if not _is_recent_iso(posted_iso):
+                    continue
+            detected = _detect_sy_or_tr(f"{title} {row_txt}")
+            if not detected:
+                detected = ("tr", tx.tr_cities_from_text(row_txt) or ["إسطنبول"])
+            country, cities = detected
+            job = _make_ats_job(
+                title=title,
+                source="ihh",
+                employer="هيئة الإغاثة الإنسانية (IHH)",
+                country=country,
+                cities=cities,
+                apply_url=full_u,
+                details_url=full_u,
+                posted_at=posted_iso,
+                body_text=row_txt,
+                tags=["منظمات إنسانية", "IHH"],
+            )
+            if job:
+                jobs.append(job)
+    except Exception as e:
+        log.warning("IHH HRPeak scrape failed: %s", e)
+    return jobs
+
+
 # ---------------------------------------------------------------- Entrypoint
 def _warm_resolve_cache(jobs: list[Job], cache: dict, max_workers: int = 6) -> None:
     pending: list[tuple[str, str]] = []
@@ -1060,11 +1329,16 @@ def fetch_all_ingo_ats_jobs(
         tasks.extend([
             ("un_careers", scrape_un_careers),
             ("relief_intl", scrape_relief_international),
+            ("nef", scrape_neareast_foundation),
             ("mag_intl", scrape_mag_international),
             ("warchild", scrape_warchild),
             ("goal_syria", scrape_goal_syria),
             ("ihsanrd", scrape_ihsanrd),
             ("medglobal", scrape_medglobal_sy),
+            ("solidarites", scrape_solidarites),
+            ("sard", scrape_sard),
+            ("ipv_sy", scrape_ipv_sy),
+            ("ihh", scrape_ihh_hrpeak),
             *[
                 (src, lambda c, sl=sl, src=src, emp=emp: scrape_inoportal_ngo(c, sl, src, emp))
                 for sl, src, emp in _INOPORTAL_BOARDS

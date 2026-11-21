@@ -481,3 +481,144 @@ def test_phase3_cleanup_extract_sy_routing_and_h2_fallback():
     assert "job_in_syria" not in channels
     assert "recruitment_vacancies" in channels
     assert "tawzif2" in channels
+
+
+def test_expansion_pack_ingo_and_syria_corporates_universities():
+    def handler(req: httpx.Request) -> httpx.Response:
+        u = str(req.url)
+        if "neareast.bamboohr.com" in u:
+            return httpx.Response(200, json={
+                "result": [
+                    {"id": "565", "jobOpeningName": "Loan Officer", "departmentLabel": "Syria سوريا", "location": {"city": "Hawi Al Hawa حاوي الهوى", "state": "Al-Raqqa الرقة"}},
+                    {"id": "563", "jobOpeningName": "Senior MEL Manager", "departmentLabel": "Iraq", "location": {"city": "Baghdad", "state": "Iraq"}},
+                ]
+            })
+        if "solidarites.org" in u and "job-detail" not in u:
+            return httpx.Response(200, text="""
+              <a href="/en/since-1980/join-us/jobs/job-detail/?id=117988">SYRIA - Field Coordinator - (M/F) - Aleppo</a>
+              <a href="/en/since-1980/join-us/jobs/job-detail/?id=117000">MALI - Field Coordinator</a>
+            """)
+        if "solidarites.org" in u and "job-detail" in u:
+            return httpx.Response(200, text="""
+              <h1>SYRIA - Field Coordinator - (M/F) - Aleppo</h1>
+              <a href="https://www.solidarites.org/en/since-1980/join-us/jobs/submit-your-application/?jobId=PA3-117988">Apply</a>
+            """)
+        if "sarderp.baseilowcloud.com" in u:
+            return httpx.Response(200, text="""
+              <article class="card">
+                <h2>Child Friendly Space Team Leader</h2>
+                <div class="meta"><span>Protection</span><span>Closes Nov. 29, 2026</span></div>
+                <p class="summary">SARD is looking for an IACC Team Leader in Azaz, Aleppo.</p>
+                <div class="actions">
+                  <a href="/careers/child-friendly-space-team-leader/Hb5l/">View details</a>
+                  <a href="/careers/child-friendly-space-team-leader/Hb5l/apply/">Apply now</a>
+                </div>
+              </article>
+            """)
+        if "ipv-sy.org/wp-json" in u:
+            return httpx.Response(200, json=[
+                {
+                    "date_gmt": "2026-11-19T10:00:00",
+                    "link": "https://ipv-sy.org/job-archive/guard-1/",
+                    "title": {"rendered": "Guard-حارس"},
+                    "content": {"rendered": "<p>مكان العمل: دير الزور - أبو حمام</p>"},
+                }
+            ])
+        if "ihh.hrpeak.com" in u:
+            return httpx.Response(200, text="""
+              <table>
+                <tr><td><a href="/y7dyb.job">National Fsal Sector Co-Coordinator</a></td><td>Damascus / Syria</td><td>17.11.2026</td></tr>
+              </table>
+            """)
+        if "careers-page.com/platform-human-capital-development" in u:
+            if "/job/" in u:
+                return httpx.Response(200, text="<h1>مندوب علمي</h1><p>العمل في حلب ودمشق</p>")
+            if "page=2" in u:
+                return httpx.Response(200, text="<html></html>")
+            return httpx.Response(200, text="""
+              <template v-else-if="jobs && jobs.length == 0">
+                <li class="media">
+                  <div class="media-body">
+                    <a href="/platform-human-capital-development/job/4R74Y64V">
+                      <h5>مندوب علمي/ Scientific Representative</h5>
+                    </a>
+                  </div>
+                </li>
+              </template>
+            """)
+        if "careers.beeorder.com" in u:
+            return httpx.Response(200, json={
+                "html": """
+                  <article class="job-card">
+                    <p class="job-card__dept">امتياز المطاعم</p>
+                    <h2>Regional Sales Officer - Latakia & Tartous</h2>
+                    <span>اللاذقية</span><span>دوام كامل</span>
+                    <a href="https://careers.beeorder.com/jobs/92">Apply</a>
+                  </article>
+                """
+            })
+        if "hknsyria.com" in u:
+            return httpx.Response(200, text="""
+              <a href="/Careers/Details/126">Field Services Team Lead | HKN Syria | Al-Hasakah, Syrian Arab Republic | Full-time | Closes 29 Nov 2026</a>
+            """)
+        if "elffa.com/careers" in u:
+            if u.endswith("/careers"):
+                return httpx.Response(200, text='<a href="/careers/flutter-developer">View Role</a>')
+            return httpx.Response(200, text="<h1>Flutter Developer</h1><p>Build mobile apps in Damascus.</p>")
+        if "onecash-latakia" in u:
+            return httpx.Response(200, text="""
+              <a href="/careers/apply/acc-1/">محاسب متابعة وتدقيق | فرع الزراعة | دوام جزئي | آخر موعد 2026-11-28 | قدّم الآن</a>
+            """)
+        if "hpu.edu.sy" in u:
+            if "2026-2027" in u and "دكتوراه" not in u and "d8%af%d9%83" not in u.lower():
+                return httpx.Response(200, text='<a href="https://hpu.edu.sy/ar/اعلان-توظيف-دكتوراه-طبي-2026-2027/">قدّم الآن</a>')
+            return httpx.Response(200, text='<h1>إعلان توظيف لحملة شهادة الدكتوراه اختصاصات طبية 2026-2027</h1><form class="wpcf7-form"><input name="n"/></form>')
+        if "au.edu.sy" in u:
+            return httpx.Response(200, text="""
+              <a href="https://au.edu.sy/job/1-tlb-tkdm-llaaml-dmn-alhyy-altaalymy">الهيئة التعليمية</a>
+              <a href="https://au.edu.sy/job/2-tlb-tkdm-llaaml-dmn-alkadr-aladary">الكادر الإداري</a>
+            """)
+        return httpx.Response(404)
+
+    with _mock_client(handler) as cli:
+        nef = ingo_ats.scrape_neareast_foundation(cli)
+        assert len(nef) == 1 and nef[0].cities == ["الرقة"]
+
+        sol = ingo_ats.scrape_solidarites(cli)
+        assert len(sol) == 1 and sol[0].cities == ["حلب"]
+        assert "submit-your-application" in sol[0].apply_url
+
+        sard = ingo_ats.scrape_sard(cli)
+        assert len(sard) == 1 and sard[0].cities == ["حلب"]
+        assert sard[0].deadline == "2026-11-29"
+        assert sard[0].apply_url.endswith("/apply/")
+
+        ipv = ingo_ats.scrape_ipv_sy(cli)
+        assert len(ipv) == 1 and ipv[0].cities == ["دير الزور"]
+
+        ihh = ingo_ats.scrape_ihh_hrpeak(cli)
+        assert len(ihh) == 1 and ihh[0].country == "sy" and ihh[0].cities == ["دمشق"]
+
+        hcd = web_portals.scrape_careers_page_hcd(cli, max_pages=2)
+        assert len(hcd) == 1 and "حلب" in hcd[0].cities
+
+        bee = web_portals.scrape_beeorder_sy(cli)
+        assert len(bee) == 1 and "اللاذقية" in bee[0].cities and "طرطوس" in bee[0].cities
+
+        hkn = web_portals.scrape_hknsyria(cli)
+        assert len(hkn) == 1 and hkn[0].cities == ["الحسكة"] and hkn[0].deadline == "2026-11-29"
+
+        elffa = web_portals.scrape_elffa_sy(cli)
+        assert len(elffa) == 1 and elffa[0].field == "computer"
+
+        oc = web_portals.scrape_onecash_sy(cli)
+        assert len(oc) == 1 and oc[0].cities == ["اللاذقية"]
+
+        unis = web_portals.scrape_syrian_private_universities(cli)
+        assert len(unis) == 3
+        uni_cities = {c for j in unis for c in j.cities}
+        assert "حمص" in uni_cities and "طرطوس" in uni_cities
+        for src in ("beeorder", "hknsyria", "elffa", "onecash", "hcd_syria", "hpu_uni", "au_uni"):
+            assert src not in config.OFFICIAL_GOV_SOURCES
+            assert src not in config.OFFICIAL_NGO_SOURCES
+

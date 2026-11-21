@@ -85,6 +85,19 @@ SOURCE_LABEL = {v["source"]: v["label"] for v in CHANNELS.values()} | {
     "goal_syria": "منظمة غول الدولية (GOAL Syria)",
     "dunya_doktorlari": "أطباء العالم (Dünya Doktorları / MDM-T)",
     "hayata_destek": "جمعية دعم الحياة (Hayata Destek)",
+    "irc": "لجنة الإنقاذ الدولية (IRC)",
+    "nef": "مؤسسة الشرق الأدنى (NEF)",
+    "solidarites": "منظمة Solidarités International",
+    "sard": "منظمة سارد للإغاثة والتنمية (SARD)",
+    "ipv_sy": "منظمة IPV Syria",
+    "ihh": "هيئة الإغاثة الإنسانية (IHH)",
+    "beeorder": "شركة بي أوردر (BeeOrder)",
+    "hknsyria": "شركة HKN Syria للطاقة",
+    "elffa": "شركة Elffa التقنية",
+    "onecash": "شركة ون كاش المالية (OneCash)",
+    "hcd_syria": "منصة تنمية رأس المال البشري (HCD)",
+    "hpu_uni": "جامعة الحواش الخاصة (HPU)",
+    "au_uni": "جامعة الأندلس الخاصة للعلوم الطبية",
     "httpOrganizationalExamTemplates": "بنك نماذج امتحانات المنظمات والوظائف",
 }
 
@@ -100,7 +113,7 @@ OFFICIAL_NGO_SOURCES = frozenset({
     "impactpool_sy", "impactpool_tr", "ihsanrd", "medglobal", "ahf", "hro",
     "salam_sy", "ghiras", "un_careers", "npa", "wvi", "unhcr", "nrc", "undp",
     "relief_intl", "mag_intl", "warchild", "goal_syria", "dunya_doktorlari",
-    "hayata_destek",
+    "hayata_destek", "irc", "nef", "solidarites", "sard", "ipv_sy", "ihh",
 })
 
 HISTORY_DAYS = int(os.getenv("HISTORY_DAYS", 183))      # show the last ~6 months

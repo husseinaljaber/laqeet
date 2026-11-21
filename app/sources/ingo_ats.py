@@ -1064,24 +1064,21 @@ def fetch_all_ingo_ats_jobs(
             ("warchild", scrape_warchild),
             ("goal_syria", scrape_goal_syria),
             ("ihsanrd", scrape_ihsanrd),
+            ("medglobal", scrape_medglobal_sy),
+            *[
+                (src, lambda c, sl=sl, src=src, emp=emp: scrape_inoportal_ngo(c, sl, src, emp))
+                for sl, src, emp in _INOPORTAL_BOARDS
+            ],
+            *[
+                (
+                    src,
+                    lambda c, bu=bu, src=src, emp=emp, dc=dc: scrape_wp_ngo_vacancies(
+                        c, base_url=bu, source=src, employer=emp, default_cities=dc
+                    ),
+                )
+                for bu, src, emp, dc in _WP_NGO_SITES
+            ],
         ])
-        if not quick:
-            tasks.extend([
-                ("medglobal", scrape_medglobal_sy),
-                *[
-                    (src, lambda c, sl=sl, src=src, emp=emp: scrape_inoportal_ngo(c, sl, src, emp))
-                    for sl, src, emp in _INOPORTAL_BOARDS
-                ],
-                *[
-                    (
-                        src,
-                        lambda c, bu=bu, src=src, emp=emp, dc=dc: scrape_wp_ngo_vacancies(
-                            c, base_url=bu, source=src, employer=emp, default_cities=dc
-                        ),
-                    )
-                    for bu, src, emp, dc in _WP_NGO_SITES
-                ],
-            ])
 
         for name, fn in tasks:
             try:

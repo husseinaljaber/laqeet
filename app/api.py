@@ -717,7 +717,25 @@ def job_page(job_id: int, request: Request):
     wa_share = "https://wa.me/?text=" + quote(share_text)
     tg_share = f"https://t.me/share/url?url={quote(primary_link)}&text={quote(share_text)}"
 
-    wa_text = quote(f"مرحباً، أستفسر عن شاغر «{j.get('title', '')}» المنشور عبر منصة {config.SITE_NAME}. هل الشاغر متاح حالياً؟")
+    org_ar = f"لدى {emp}" if emp else "لديكم"
+    wa_pitch_raw = (
+        f"السلام عليكم ورحمة الله وبركاته،\n"
+        f"أتواصل معكم للتقديم على شاغر «{j.get('title', '')}» {org_ar} ({cities}) المنشور عبر منصة {config.SITE_NAME}.\n"
+        f"أرفق لكم السيرة الذاتية للتفضل بالاطلاع، ويسعدني تواصلكم لتحديد موعد مقابلة. شكراً لكم."
+    )
+    wa_text = quote(wa_pitch_raw)
+    email_subj_ar = f"التقدم لشاغر: {j.get('title', '')} — {cities}"
+    email_body_ar = (
+        f"السادة في قسم الموارد البشرية {org_ar} المحترمين،\n"
+        f"تحية طيبة وبعد،\n\n"
+        f"أود التقدم بطلبي لشغل شاغر «{j.get('title', '')}» في {cities}.\n"
+        f"أرفق لكم سيرتي الذاتية المحدثة للاطلاع على مؤهلاتي وخبراتي العملية، وأتطلع لفرصة إجراء مقابلة عمل.\n\n"
+        f"مع خالص التقدير والاحترام،"
+    )
+    mailto_prefilled = (
+        f"mailto:{quote(j['email'])}?subject={quote(email_subj_ar)}&body={quote(email_body_ar)}"
+        if j.get("email") else ""
+    )
     btns = []
     for p in (j.get("phones") or [])[:1]:
         if p.startswith("09"):
@@ -726,7 +744,7 @@ def job_page(job_id: int, request: Request):
             btns.append(f'<a class="wa" target="_blank" rel="noopener" href="https://wa.me/90{p[1:]}?text={wa_text}">راسل واتساب ({e(p)})</a>')
         btns.append(f'<a class="call" href="tel:{e(p)}">اتصل {e(p)}</a>')
     if j.get("email"):
-        btns.append(f'<a class="btn primary" href="mailto:{e(j["email"])}">إرسال CV بالإيميل ({e(j["email"])})</a>')
+        btns.append(f'<a class="btn primary" href="{e(mailto_prefilled)}">إرسال CV بالإيميل ({e(j["email"])})</a>')
     if has_direct_link:
         btns.append(f'<a class="btn primary" target="_blank" rel="noopener" href="{e(j["apply_url"])}">قدّم عالوظيفة</a>')
     btns.append(f'<a class="btn ghost" href="/cv.html?job={job_id}"><i data-ico="file-text" data-ico-cls="ico-sm"></i><span>جهّز سيرة ذاتية إلها</span></a>')
@@ -742,6 +760,7 @@ def job_page(job_id: int, request: Request):
         "verified_employer": '<span class="trust-pill verified"><i data-ico="badge-check" data-ico-cls="ico-sm"></i><span>صاحب عمل موثّق على لقيت</span></span>',
     }
     trust_badge_html = trust_map.get(j.get("trust_tier") or "", "")
+    pitch_default = email_body_ar if j.get("email") else wa_pitch_raw
     return HTMLResponse(f"""<!doctype html>
 <html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>{e(j['title'])} · {e(config.SITE_NAME)}</title>
@@ -756,8 +775,8 @@ def job_page(job_id: int, request: Request):
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Alexandria:wght@500;600;700;800&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="/app.css?v=32"><link rel="stylesheet" href="/page.css?v=32">
-<script src="/ui.js?v=32"></script>
+<link rel="stylesheet" href="/app.css?v=34"><link rel="stylesheet" href="/page.css?v=34">
+<script src="/ui.js?v=34"></script>
 </head><body>
 <nav class="site-nav" aria-label="التنقل الرئيسي">
   <div class="inner site-nav-inner">
@@ -802,6 +821,20 @@ def job_page(job_id: int, request: Request):
     </div>
     {summary_html}{tasks_html}{skills_html}
     <div class="row" style="margin-top:8px">{''.join(btns)}</div>
+    <div class="tpl-box" style="margin-top:16px">
+      <div class="tpl-head">
+        <span class="tpl-title"><i data-ico="message-square" data-ico-cls="ico-sm"></i><span>مُولّد رسالة التقديم الجاهزة لهذا الشاغر:</span></span>
+      </div>
+      <div class="tpl-subject-row">
+        <span class="tpl-subject-lbl">عنوان الإيميل (Subject):</span>
+        <input id="pitchSubjectText" type="text" class="tpl-subject-input" dir="rtl" value="{e(email_subj_ar)}">
+        <button type="button" class="btn ghost tpl-copy-subj-btn" onclick="navigator.clipboard.writeText(document.getElementById('pitchSubjectText').value).then(()=>this.textContent='تم نسخ العنوان')">نسخ العنوان</button>
+      </div>
+      <textarea id="pitchBodyText" class="tpl-textarea" dir="rtl">{e(pitch_default)}</textarea>
+      <div class="tpl-actions">
+        <button type="button" class="btn primary" onclick="navigator.clipboard.writeText(document.getElementById('pitchBodyText').value).then(()=>this.textContent='تم نسخ نص الرسالة')"><i data-ico="copy" data-ico-cls="ico-sm"></i><span>نسخ نص رسالة التقديم</span></button>
+      </div>
+    </div>
     <div class="share-box" style="margin-top:16px">
       <div class="share-box-title"><i data-ico="share" data-ico-cls="ico-sm"></i><span>مشاركة ونسخ الإعلان مع الوصف وطريقة التقديم:</span></div>
       <textarea id="shareAdText" class="share-preview" dir="rtl">{e(share_text)}</textarea>

@@ -111,6 +111,19 @@
     try { localStorage.setItem(TRACKER_KEY, JSON.stringify(trackerMap)); } catch (e) {}
   }
 
+  function formatShortDay(iso) {
+    const s = String(iso || '').slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return '';
+    const [, m, d] = s.split('-');
+    return `${parseInt(d, 10)}/${parseInt(m, 10)}`;
+  }
+
+  function isExpiringWithin48h(j) {
+    if (!j || !j.deadline) return false;
+    const d = daysLeft(j.deadline);
+    return d >= 0 && d <= 2;
+  }
+
   function getTrack(id) {
     return trackerMap[String(id)] || null;
   }
@@ -120,7 +133,9 @@
     const prev = trackerMap[k] || {};
     const nextStage = STAGE_MAP[stage] ? stage : (prev.stage || 'saved');
     const nextNote = note !== undefined ? String(note).slice(0, 240) : (prev.note || '');
-    trackerMap[k] = { job: j, stage: nextStage, note: nextNote, updatedAt: new Date().toISOString() };
+    const nowIso = new Date().toISOString();
+    const appliedAt = nextStage === 'saved' ? null : (prev.appliedAt || nowIso);
+    trackerMap[k] = { job: j, stage: nextStage, note: nextNote, appliedAt, updatedAt: nowIso };
     savedMap[k] = j;
     saveSaved();
     updateSavedCount();
@@ -132,6 +147,15 @@
     delete savedMap[k];
     saveSaved();
     updateSavedCount();
+  }
+
+  function isEnglishJob(j) {
+    const t = String((j && j.title) || '');
+    const arChars = (t.match(/[\u0621-\u064A]/g) || []).length;
+    const enChars = (t.match(/[A-Za-z]/g) || []).length;
+    if (enChars >= 5 && arChars <= 2) return true;
+    const sec = (j && (j.sector || (j.official ? 'gov' : 'private'))) || 'private';
+    return sec === 'ngo' && /[A-Za-z]{4,}/.test(t);
   }
 
   function trustPill(j) {
@@ -151,54 +175,65 @@
   function buildApplyTemplates(j) {
     let cv = {};
     try { cv = JSON.parse(localStorage.getItem('laqeet.cv') || '{}') || {}; } catch (_) {}
-    const myName = (cv.name || '').trim() || '[اسمك الكامل]';
+    const rawName = (cv.name || '').trim();
+    const hasName = Boolean(rawName);
+    const myName = rawName || '[اسمك الكامل]';
     const myPhone = (cv.phone || '').trim();
     const myExp = profile.exp != null ? `${profile.exp} سنوات خبرة` : '';
     const myEdu = profile.edu && EDU_LABEL[profile.edu] ? EDU_LABEL[profile.edu] : '';
     const ent = entityMeta(j);
-    const orgAr = ent.name && !/^جهة|^شركة\s*\/\s*صاحب/.test(ent.name) ? `في ${ent.name}` : 'لديكم';
+    const hasNamedOrg = Boolean(ent.name && !/^جهة|^شركة\s*\/\s*صاحب|^منظمة\s+دولية/.test(ent.name));
+    const orgAr = hasNamedOrg ? `لدى ${ent.name}` : 'لديكم';
     const cityTxt = (j.cities || [])[0] || (j.country === 'tr' ? 'تركيا' : 'سوريا');
     const quals = [myEdu, myExp].filter(Boolean).join(' و');
-    const qualLineAr = quals ? `، وأمتلك ${quals} مناسبة لمتطلبات الدور` : '';
+    const qualLineAr = quals ? ` أمتلك ${quals} ذات صلة بمتطلبات الدور.` : '';
+    const introNameAr = hasName ? `اسمي ${rawName}، و` : '';
 
     const waAr = [
       `السلام عليكم ورحمة الله وبركاته،`,
-      `أرغب بالتقديم على شاغر «${j.title}» ${orgAr} (${cityTxt}) المنشور عبر منصة لقيت.`,
-      `اسمي ${myName}${qualLineAr}.`,
-      `مرفق لكم السيرة الذاتية، ويسعدني تواصلكم في أي وقت لتحديد موعد مقابلة.`,
+      `${introNameAr}أتواصل معكم للتقديم على شاغر «${j.title}» ${orgAr} (${cityTxt}) المنشور عبر منصة لقيت.${qualLineAr}`,
+      `أرفق لكم السيرة الذاتية للتفضل بالاطلاع، ويسعدني تواصلكم لتحديد موعد مقابلة. شكراً لكم.`,
       myPhone ? `رقم التواصل: ${myPhone}` : null
     ].filter(Boolean).join('\n');
 
-    const emailSubjectAr = `التقديم على شاغر: ${j.title}${myName !== '[اسمك الكامل]' ? ' - ' + myName : ''}`;
+    const emailSubjectAr = `التقدم لشاغر: ${j.title} — ${cityTxt}${hasName ? ' (' + rawName + ')' : ''}`;
     const emailBodyAr = [
+      `السادة في قسم الموارد البشرية ${orgAr} المحترمين،`,
       `تحية طيبة وبعد،`,
       ``,
-      `أكتب إليكم للتقدم بطلب التوظيف لشاغر «${j.title}» ${orgAr} في ${cityTxt}.`,
-      `اسمي ${myName}${qualLineAr}، ولدي جاهزية كاملة للالتزام بمهام الوظيفة والانضمام إلى فريقكم.`,
+      `أود التقدم بطلبي لشغل شاغر «${j.title}» في ${cityTxt}.${qualLineAr}`,
+      `أرفق لكم سيرتي الذاتية المحدثة للاطلاع على مؤهلاتي وخبراتي العملية، ولدي جاهزية كاملة للالتزام بمهام الوظيفة والانضمام إلى فريقكم، وأتطلع لفرصة إجراء مقابلة عمل.`,
       ``,
-      `تجدون في المرفقات سيرتي الذاتية المحدثة، وأتطلع لفرصة مناقشة مساهمتي المحتملة خلال مقابلة عمل.`,
-      ``,
-      `مع خالص الشكر والتقدير،`,
-      myName,
+      `مع خالص التقدير والاحترام،`,
+      hasName ? rawName : myName,
       myPhone || null
     ].filter((x) => x !== null).join('\n');
 
     const orgEn = ent.name && /[A-Za-z]/.test(ent.name) ? ent.name : 'your organization';
-    const emailSubjectEn = `Application for ${j.title}${myName !== '[اسمك الكامل]' ? ' - ' + myName : ''}`;
+    const emailSubjectEn = `Application for ${j.title} Position — ${cityTxt}${hasName ? ' (' + rawName + ')' : ''}`;
     const emailBodyEn = [
       `Dear Hiring Team at ${orgEn},`,
       ``,
       `I am writing to express my strong interest in the "${j.title}" position (${cityTxt}).`,
-      `Please find my updated CV attached for your review. I am confident that my background and commitment align well with the role requirements, and I would welcome the opportunity to discuss how I can contribute to your team.`,
+      `Please find my updated CV attached for your review. I am confident that my qualifications and practical experience align well with the role requirements, and I would welcome the opportunity to discuss how I can contribute to your team in an interview.`,
       ``,
       `Thank you for your time and consideration.`,
       ``,
       `Best regards,`,
-      myName !== '[اسمك الكامل]' ? myName : '[Your Full Name]',
+      hasName ? rawName : '[Your Full Name]',
       myPhone || null
     ].filter((x) => x !== null).join('\n');
 
     return { waAr, emailSubjectAr, emailBodyAr, emailSubjectEn, emailBodyEn };
+  }
+
+  function mailtoHref(j, forceLang) {
+    if (!j || !j.email) return '';
+    const tpls = buildApplyTemplates(j);
+    const useEn = forceLang ? forceLang === 'en' : isEnglishJob(j);
+    const subj = useEn ? tpls.emailSubjectEn : tpls.emailSubjectAr;
+    const body = useEn ? tpls.emailBodyEn : tpls.emailBodyAr;
+    return `mailto:${encodeURIComponent(j.email)}?subject=${encodeURIComponent(subj)}&body=${encodeURIComponent(body)}`;
   }
 
   async function get(path) {
@@ -306,7 +341,7 @@
 
   // ---------------------------------------------------------------- cards & links
   function waLink(j) {
-    const msg = `مرحباً، أستفسر عن شاغر «${j.title}» المنشور عبر منصة لقيت. هل الشاغر متاح حالياً؟`;
+    const msg = buildApplyTemplates(j).waAr;
     const p = (j.phones || []).find(isMobile);
     if (p) {
       return `https://wa.me/${intlPhone(p)}?text=${encodeURIComponent(msg)}`;
@@ -484,19 +519,80 @@
   }
 
   function toggleSave(j) {
-    if (getTrack(j.id)) {
+    const trk = getTrack(j.id);
+    if (trk && trk.stage === 'saved') {
       removeTrack(j.id);
-      toast('تمت إزالة الشاغر من متتبع تقديماتي');
+      toast('تمت إزالة الشاغر من المحفوظات');
+    } else if (trk && trk.stage !== 'saved') {
+      setTrack(j, 'saved');
+      toast('تم نقل الشاغر إلى «المحفوظة للتقديم»');
     } else {
       setTrack(j, 'saved');
-      toast('تم حفظ الشاغر في متتبع تقديماتي');
+      toast('تم حفظ الشاغر في «المحفوظة للتقديم» ⭐');
     }
     if (state.saved) refresh();
   }
 
+  function toggleApplied(j) {
+    const trk = getTrack(j.id);
+    if (trk && trk.stage !== 'saved') {
+      setTrack(j, 'saved');
+      toast('تمت إعادة الحالة إلى «محفوظة للتقديم»');
+    } else {
+      setTrack(j, 'applied');
+      const dayLbl = formatShortDay(new Date().toISOString());
+      toast(`تم تعليم الشاغر كـ «قدّمت عليها ✅» (${dayLbl})`);
+    }
+    if (state.saved) refresh();
+  }
+
+  function getExpiringSavedEntries() {
+    return Object.values(trackerMap).filter(
+      (e) => e && e.job && e.stage === 'saved' && isExpiringWithin48h(e.job)
+    );
+  }
+
+  function renderExpiringSavedBanner() {
+    const banner = $('expiringSavedBanner');
+    if (!banner) return;
+    const expiring = getExpiringSavedEntries();
+    if (!expiring.length) {
+      banner.hidden = true;
+      banner.replaceChildren();
+      return;
+    }
+    const n = expiring.length;
+    const countTxt = n === 1
+      ? 'لديك وظيفة محفوظة واحدة ينتهي التقديم عليها خلال 48 ساعة ولم تقدّم عليها بعد!'
+      : n === 2
+        ? 'لديك وظيفتان محفوظتان ينتهي التقديم عليهما خلال 48 ساعة ولم تقدّم عليهما بعد!'
+        : `لديك ${n} وظائف محفوظة ينتهي التقديم عليها خلال 48 ساعة ولم تقدّم عليها بعد!`;
+    banner.hidden = false;
+    banner.replaceChildren(
+      el('div', { class: 'expiring-saved-msg' },
+        ico('alert', 'ico-sm'),
+        el('span', null, countTxt)
+      ),
+      el('button', {
+        type: 'button',
+        class: 'expiring-saved-btn',
+        onclick: () => {
+          state.saved = true;
+          state.trackerFilter = 'expiring';
+          syncFilterUI();
+          refresh();
+        }
+      }, ico('hourglass', 'ico-sm'), el('span', null, 'عرضها للتقديم الآن'))
+    );
+  }
+
   function updateSavedCount() {
-    const n = Object.keys(trackerMap).length;
-    if ($('savedCount')) $('savedCount').textContent = n;
+    const entries = Object.values(trackerMap).filter((e) => e && e.job);
+    const savedCnt = entries.filter((e) => e.stage === 'saved').length;
+    const appliedCnt = entries.filter((e) => e.stage !== 'saved').length;
+    if ($('savedCount')) $('savedCount').textContent = savedCnt;
+    if ($('appliedCount')) $('appliedCount').textContent = appliedCnt;
+    renderExpiringSavedBanner();
   }
 
   function copyText(text, msg = 'تم النسخ إلى الحافظة ✅') {
@@ -746,30 +842,66 @@
       out.append(el('a', { href: j.details_url, target: '_blank', rel: 'noopener' }, ico('external-link', 'ico-sm'), 'تفاصيل الإعلان'));
     }
     if (j.email) {
-      out.append(el('a', { href: 'mailto:' + j.email }, ico('mail', 'ico-sm'), 'إرسال CV بالإيميل'));
+      out.append(el('a', { href: mailtoHref(j) }, ico('mail', 'ico-sm'), 'إرسال CV بالإيميل (مع رسالة جاهزة)'));
     }
     visibleSources(j).slice(0, big ? 6 : 1).forEach((s) => {
       out.append(el('a', { href: s.post_url, target: '_blank', rel: 'noopener' }, 'المصدر: ' + s.label));
     });
 
-    const isSav = Boolean(savedMap[j.id]);
+    const curTrk = getTrack(j.id);
+    const isSav = Boolean(curTrk && curTrk.stage === 'saved');
+    const isApp = Boolean(curTrk && curTrk.stage !== 'saved');
+    const appDay = isApp ? formatShortDay(curTrk.appliedAt || curTrk.updatedAt) : '';
+
     const saveBtn = el('button', {
-      class: 'report',
+      type: 'button',
+      class: 'report save-toggle' + (isSav ? ' is-saved' : ''),
       onclick: (e) => {
         toggleSave(j);
-        const nowSav = Boolean(savedMap[j.id]);
+        const nowTrk = getTrack(j.id);
+        const nowSav = Boolean(nowTrk && nowTrk.stage === 'saved');
+        const nowApp = Boolean(nowTrk && nowTrk.stage !== 'saved');
+        e.currentTarget.classList.toggle('is-saved', nowSav);
         e.currentTarget.replaceChildren(ico(nowSav ? 'bookmark-filled' : 'bookmark', 'ico-sm'), nowSav ? 'محفوظة' : 'احفظ');
+        appliedBtn.classList.toggle('is-applied', nowApp);
+        appliedBtn.replaceChildren(ico('check-circle', 'ico-sm'), nowApp ? `قدّمت (${formatShortDay(nowTrk.appliedAt || nowTrk.updatedAt)})` : 'قدّمت عليها');
+        const cardEl = e.currentTarget.closest('.card');
+        if (cardEl && !state.saved) {
+          const pillSlot = cardEl.querySelector('.card-track-slot');
+          if (pillSlot) pillSlot.replaceChildren(...buildCardTrackBadges(j));
+        }
       }
     }, ico(isSav ? 'bookmark-filled' : 'bookmark', 'ico-sm'), isSav ? 'محفوظة' : 'احفظ');
 
+    const appliedBtn = el('button', {
+      type: 'button',
+      class: 'report applied-toggle' + (isApp ? ' is-applied' : ''),
+      onclick: (e) => {
+        toggleApplied(j);
+        const nowTrk = getTrack(j.id);
+        const nowSav = Boolean(nowTrk && nowTrk.stage === 'saved');
+        const nowApp = Boolean(nowTrk && nowTrk.stage !== 'saved');
+        e.currentTarget.classList.toggle('is-applied', nowApp);
+        e.currentTarget.replaceChildren(ico('check-circle', 'ico-sm'), nowApp ? `قدّمت (${formatShortDay(nowTrk.appliedAt || nowTrk.updatedAt)})` : 'قدّمت عليها');
+        saveBtn.classList.toggle('is-saved', nowSav);
+        saveBtn.replaceChildren(ico(nowSav ? 'bookmark-filled' : 'bookmark', 'ico-sm'), nowSav ? 'محفوظة' : 'احفظ');
+        const cardEl = e.currentTarget.closest('.card');
+        if (cardEl && !state.saved) {
+          const pillSlot = cardEl.querySelector('.card-track-slot');
+          if (pillSlot) pillSlot.replaceChildren(...buildCardTrackBadges(j));
+        }
+      }
+    }, ico('check-circle', 'ico-sm'), isApp ? `قدّمت (${appDay})` : 'قدّمت عليها');
+
     const hasDirectLink = Boolean(j.apply_url && !/^https?:\/\/(?:wa\.me\/|api\.whatsapp\.com\/)/i.test(j.apply_url));
     out.append(
-      el('button', { class: 'report share-btn', onclick: () => shareJob(j) }, ico('share', 'ico-sm'), 'مشاركة ونسخ'),
-      j.email && !hasDirectLink
-        ? el('button', { class: 'report', onclick: () => copyText(j.email, 'تم نسخ إيميل التقديم') }, ico('mail', 'ico-sm'), 'نسخ الإيميل')
-        : el('button', { class: 'report', onclick: () => copyText(primaryJobLink(j), 'تم نسخ الرابط') }, ico('link', 'ico-sm'), 'نسخ الرابط'),
       saveBtn,
-      el('button', { class: 'report', onclick: () => report(j) }, ico('flag', 'ico-sm'), 'بلّغ')
+      appliedBtn,
+      el('button', { type: 'button', class: 'report share-btn', onclick: () => shareJob(j) }, ico('share', 'ico-sm'), 'مشاركة ونسخ'),
+      j.email && !hasDirectLink
+        ? el('button', { type: 'button', class: 'report', onclick: () => copyText(j.email, 'تم نسخ إيميل التقديم') }, ico('mail', 'ico-sm'), 'نسخ الإيميل')
+        : el('button', { type: 'button', class: 'report', onclick: () => copyText(primaryJobLink(j), 'تم نسخ الرابط') }, ico('link', 'ico-sm'), 'نسخ الرابط'),
+      el('button', { type: 'button', class: 'report', onclick: () => report(j) }, ico('flag', 'ico-sm'), 'بلّغ')
     );
     return out;
   }
@@ -791,6 +923,45 @@
       );
     }
     $('grid').replaceChildren(...frag);
+  }
+
+  function buildCardTrackBadges(j) {
+    const out = [];
+    if (j.verified_employer) {
+      out.push(el('span', { class: 'card-verified-chip' }, ico('badge-check', 'ico-sm'), 'صاحب عمل موثّق على لقيت'));
+    }
+    const trk = getTrack(j.id);
+    if (!trk) return out;
+    const stageInfo = STAGE_MAP[trk.stage] || STAGE_MAP.saved;
+    if (!state.saved) {
+      if (trk.stage !== 'saved') {
+        const dayLbl = formatShortDay(trk.appliedAt || trk.updatedAt);
+        out.push(
+          el('span', { class: 'tracker-stage-pill ' + stageInfo.cls },
+            ico(stageInfo.ico, 'ico-sm'),
+            dayLbl ? `${stageInfo.label} (${dayLbl})` : stageInfo.label
+          )
+        );
+      } else {
+        out.push(
+          el('span', { class: 'tracker-stage-pill st-saved' },
+            ico('bookmark-filled', 'ico-sm'),
+            'محفوظة للتقديم'
+          )
+        );
+      }
+    }
+    if (trk.stage === 'saved' && isExpiringWithin48h(j)) {
+      const d = daysLeft(j.deadline);
+      const leftTxt = d === 0 ? 'اليوم' : d === 1 ? 'خلال 24 ساعة' : 'خلال 48 ساعة';
+      out.push(
+        el('span', { class: 'tracker-expiring-pill' },
+          ico('alert', 'ico-sm'),
+          `ينتهي التقديم ${leftTxt} ولم تقدّم بعد!`
+        )
+      );
+    }
+    return out;
   }
 
   function card(j, i) {
@@ -821,12 +992,7 @@
 
     const trk = getTrack(j.id);
     const stageInfo = trk ? STAGE_MAP[trk.stage] : null;
-    const verifiedChip = j.verified_employer
-      ? el('span', { class: 'card-verified-chip' }, ico('badge-check', 'ico-sm'), 'صاحب عمل موثّق على لقيت')
-      : null;
-    const trackBadge = (!state.saved && stageInfo && trk.stage !== 'saved')
-      ? el('span', { class: 'tracker-stage-pill ' + stageInfo.cls }, ico(stageInfo.ico, 'ico-sm'), stageInfo.label)
-      : null;
+    const trackSlot = el('div', { class: 'card-track-slot' }, ...buildCardTrackBadges(j));
 
     let trackerRow = null;
     if (state.saved && trk) {
@@ -838,10 +1004,11 @@
           refresh();
         }
       }, ...TRACKER_STAGES.map((st) => el('option', { value: st.code, selected: trk.stage === st.code }, st.label)));
+      const dayLbl = trk.stage !== 'saved' ? formatShortDay(trk.appliedAt || trk.updatedAt) : '';
       trackerRow = el('div', { class: 'tracker-card-bar' },
         el('span', { class: 'tracker-stage-pill ' + (stageInfo ? stageInfo.cls : 'st-saved') },
           ico(stageInfo ? stageInfo.ico : 'bookmark-filled', 'ico-sm'),
-          stageInfo ? stageInfo.label : 'محفوظة'
+          (stageInfo ? stageInfo.label : 'محفوظة') + (dayLbl ? ` (${dayLbl})` : '')
         ),
         sel,
         trk.note ? el('p', { class: 'tracker-card-note' }, `ملاحظتي: ${trk.note}`) : null
@@ -853,7 +1020,7 @@
         el('span', { class: 'sec-tag sec-' + sec }, ico(secMeta.ico, 'ico-sm'), secMeta.label),
         statusOf(j)
       ),
-      (verifiedChip || trackBadge) ? el('div', { style: 'display:flex;flex-wrap:wrap;gap:6px;align-items:center' }, verifiedChip, trackBadge) : null,
+      trackSlot,
       datesRow,
       el('h3', null, el('button', { onclick: () => openDetail(j) }, ...highlightNodes(j.title, state.terms))),
       orgLoc,
@@ -937,62 +1104,73 @@
 
     // Phase 2: Quick Apply Message Templates (WhatsApp AR, Email AR, Email EN for NGOs)
     const tpls = buildApplyTemplates(j);
-    const defaultTab = (sec === 'ngo' && /[A-Za-z]{4,}/.test(j.title || '')) ? 'en' : (j.email && !(j.phones && j.phones.length) ? 'email' : 'wa');
+    const defaultTab = isEnglishJob(j) ? 'en' : (j.email && !(j.phones && j.phones.length) ? 'email' : 'wa');
     let activeTplTab = defaultTab;
-    const tplTextarea = el('textarea', { class: 'tpl-textarea', 'aria-label': 'قالب رسالة التقديم' });
+    const tplSubjectInput = el('input', {
+      type: 'text',
+      class: 'tpl-subject-input',
+      'aria-label': 'عنوان الإيميل (Subject)'
+    });
+    const tplSubjectRow = el('div', { class: 'tpl-subject-row', hidden: true },
+      el('span', { class: 'tpl-subject-lbl' }, 'عنوان الإيميل (Subject):'),
+      tplSubjectInput,
+      el('button', {
+        type: 'button',
+        class: 'btn ghost tpl-copy-subj-btn',
+        onclick: () => copyText(tplSubjectInput.value, 'تم نسخ عنوان الإيميل (Subject) ✅')
+      }, ico('copy', 'ico-sm'), 'نسخ العنوان')
+    );
+    const tplTextarea = el('textarea', { class: 'tpl-textarea', 'aria-label': 'نص رسالة التقديم' });
     const tplDirectBtn = el('a', { class: 'btn ghost', target: '_blank', rel: 'noopener', hidden: true });
     const tplTabs = [
       { id: 'wa', label: 'واتساب (عربي)' },
       { id: 'email', label: 'إيميل (عربي)' },
-      { id: 'en', label: 'Email (EN · NGOs)' }
+      { id: 'en', label: 'Email (English)' }
     ];
     const tplTabBtns = [];
+    const updateDirectTplHref = () => {
+      if (activeTplTab === 'wa') {
+        const p = (j.phones || []).find((x) => x.startsWith('09') || (j.country === 'tr' && x.startsWith('05')));
+        if (p) {
+          const intl = (j.country === 'tr' && p.startsWith('05')) ? '90' + p.slice(1) : '963' + p.slice(1);
+          tplDirectBtn.hidden = false;
+          tplDirectBtn.href = `https://wa.me/${intl}?text=${encodeURIComponent(tplTextarea.value)}`;
+          tplDirectBtn.replaceChildren(ico('whatsapp', 'ico-sm'), 'إرسال الرسالة عبر واتساب');
+        } else {
+          tplDirectBtn.hidden = true;
+        }
+      } else if (j.email) {
+        tplDirectBtn.hidden = false;
+        tplDirectBtn.href = `mailto:${encodeURIComponent(j.email)}?subject=${encodeURIComponent(tplSubjectInput.value)}&body=${encodeURIComponent(tplTextarea.value)}`;
+        tplDirectBtn.replaceChildren(ico('mail', 'ico-sm'), activeTplTab === 'en' ? 'Open Email with Pitch' : 'فتح الإيميل مع الرسالة جاهزة');
+      } else {
+        tplDirectBtn.hidden = true;
+      }
+    };
     const syncTplView = (tabId) => {
       activeTplTab = tabId;
       tplTabBtns.forEach((b, i) => b.setAttribute('aria-selected', String(tplTabs[i].id === tabId)));
       if (tabId === 'wa') {
+        tplSubjectRow.hidden = true;
         tplTextarea.dir = 'rtl';
         tplTextarea.value = tpls.waAr;
-        const p = (j.phones || []).find((x) => x.startsWith('09') || (j.country === 'tr' && x.startsWith('05')));
-        if (p) {
-          const intl = (j.country === 'tr' && p.startsWith('05')) ? '90' + p.slice(1) : '963' + p.slice(1);
-          tplDirectBtn.hidden = false;
-          tplDirectBtn.href = `https://wa.me/${intl}?text=${encodeURIComponent(tplTextarea.value)}`;
-          tplDirectBtn.replaceChildren(ico('whatsapp', 'ico-sm'), 'إرسال الرسالة بواتساب');
-        } else {
-          tplDirectBtn.hidden = true;
-        }
       } else if (tabId === 'email') {
+        tplSubjectRow.hidden = false;
+        tplSubjectInput.dir = 'rtl';
+        tplSubjectInput.value = tpls.emailSubjectAr;
         tplTextarea.dir = 'rtl';
-        tplTextarea.value = `العنوان (Subject): ${tpls.emailSubjectAr}\n\n${tpls.emailBodyAr}`;
-        if (j.email) {
-          tplDirectBtn.hidden = false;
-          tplDirectBtn.href = `mailto:${encodeURIComponent(j.email)}?subject=${encodeURIComponent(tpls.emailSubjectAr)}&body=${encodeURIComponent(tpls.emailBodyAr)}`;
-          tplDirectBtn.replaceChildren(ico('mail', 'ico-sm'), 'فتح في تطبيق الإيميل');
-        } else {
-          tplDirectBtn.hidden = true;
-        }
+        tplTextarea.value = tpls.emailBodyAr;
       } else {
+        tplSubjectRow.hidden = false;
+        tplSubjectInput.dir = 'ltr';
+        tplSubjectInput.value = tpls.emailSubjectEn;
         tplTextarea.dir = 'ltr';
-        tplTextarea.value = `Subject: ${tpls.emailSubjectEn}\n\n${tpls.emailBodyEn}`;
-        if (j.email) {
-          tplDirectBtn.hidden = false;
-          tplDirectBtn.href = `mailto:${encodeURIComponent(j.email)}?subject=${encodeURIComponent(tpls.emailSubjectEn)}&body=${encodeURIComponent(tpls.emailBodyEn)}`;
-          tplDirectBtn.replaceChildren(ico('mail', 'ico-sm'), 'Open in Email App');
-        } else {
-          tplDirectBtn.hidden = true;
-        }
+        tplTextarea.value = tpls.emailBodyEn;
       }
+      updateDirectTplHref();
     };
-    tplTextarea.addEventListener('input', () => {
-      if (activeTplTab === 'wa' && !tplDirectBtn.hidden) {
-        const p = (j.phones || []).find((x) => x.startsWith('09') || (j.country === 'tr' && x.startsWith('05')));
-        if (p) {
-          const intl = (j.country === 'tr' && p.startsWith('05')) ? '90' + p.slice(1) : '963' + p.slice(1);
-          tplDirectBtn.href = `https://wa.me/${intl}?text=${encodeURIComponent(tplTextarea.value)}`;
-        }
-      }
-    });
+    tplSubjectInput.addEventListener('input', updateDirectTplHref);
+    tplTextarea.addEventListener('input', updateDirectTplHref);
     tplTabs.forEach((t) => {
       tplTabBtns.push(el('button', {
         type: 'button',
@@ -1006,17 +1184,18 @@
 
     const templatesSection = el('div', { class: 'tpl-box' },
       el('div', { class: 'tpl-head' },
-        el('span', { class: 'tpl-title' }, ico('message-square', 'ico-sm'), 'رسالة تقديم جاهزة ومخصصة لهذا الشاغر'),
+        el('span', { class: 'tpl-title' }, ico('message-square', 'ico-sm'), 'مُولّد رسالة التقديم الجاهزة (Email & WhatsApp)'),
         el('div', { class: 'tpl-tabs', role: 'tablist' }, ...tplTabBtns)
       ),
+      tplSubjectRow,
       tplTextarea,
       el('div', { class: 'tpl-actions' },
         el('button', {
           type: 'button',
           class: 'btn primary',
           style: 'padding:8px 15px;font-size:.83rem',
-          onclick: () => copyText(tplTextarea.value, 'تم نسخ رسالة التقديم الجاهزة')
-        }, ico('copy', 'ico-sm'), 'نسخ الرسالة'),
+          onclick: () => copyText(tplTextarea.value, 'تم نسخ نص رسالة التقديم ✅')
+        }, ico('copy', 'ico-sm'), 'نسخ نص الرسالة'),
         tplDirectBtn
       )
     );
@@ -1343,7 +1522,8 @@
       c.setAttribute('aria-pressed', String(pressed));
     });
     if ($('newToday')) $('newToday').setAttribute('aria-pressed', String(state.fresh));
-    if ($('savedOnly')) $('savedOnly').setAttribute('aria-pressed', String(state.saved));
+    if ($('savedOnly')) $('savedOnly').setAttribute('aria-pressed', String(state.saved && state.trackerFilter !== 'applied'));
+    if ($('appliedOnly')) $('appliedOnly').setAttribute('aria-pressed', String(state.saved && state.trackerFilter === 'applied'));
   }
 
   function renderActivePills() {
@@ -1394,15 +1574,22 @@
       bar.replaceChildren();
       return;
     }
-    const counts = { '': entries.length, saved: 0, applied: 0, interview: 0, offered: 0 };
+    const expiringCnt = entries.filter((e) => e.stage === 'saved' && isExpiringWithin48h(e.job)).length;
+    const counts = { '': entries.length, saved: 0, applied: 0, interview: 0, offered: 0, expiring: expiringCnt };
     entries.forEach((e) => { if (counts[e.stage] != null) counts[e.stage] += 1; });
-    const tabs = [{ code: '', label: 'الكل', ico: 'layers' }, ...TRACKER_STAGES].map((st) =>
+    const stageList = [
+      { code: '', label: 'الكل', ico: 'layers' },
+      ...TRACKER_STAGES,
+      ...(expiringCnt > 0 ? [{ code: 'expiring', label: 'تنتهي خلال 48 ساعة', ico: 'alert', cls: 'st-expiring' }] : [])
+    ];
+    const tabs = stageList.map((st) =>
       el('button', {
         type: 'button',
-        class: 'tracker-tab',
+        class: 'tracker-tab' + (st.code === 'expiring' ? ' is-expiring' : ''),
         'aria-pressed': String(state.trackerFilter === st.code),
         onclick: () => {
           state.trackerFilter = st.code;
+          syncFilterUI();
           refresh();
         }
       }, ico(st.ico, 'ico-sm'), el('span', null, st.label), el('small', null, `(${counts[st.code] || 0})`))
@@ -1418,6 +1605,7 @@
   const renderedIds = new Set();
   let requestSeq = 0;
   async function refresh(append) {
+    renderExpiringSavedBanner();
     if (state.saved) {
       state.terms = [];
       renderActivePills();
@@ -1426,20 +1614,25 @@
         .filter((e) => e && e.job)
         .sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')));
       renderTrackerBar(entries);
-      const filtered = state.trackerFilter
-        ? entries.filter((e) => e.stage === state.trackerFilter)
-        : entries;
+      const filtered = state.trackerFilter === 'expiring'
+        ? entries.filter((e) => e.stage === 'saved' && isExpiringWithin48h(e.job))
+        : state.trackerFilter
+          ? entries.filter((e) => e.stage === state.trackerFilter)
+          : entries;
       $('grid').replaceChildren(
         ...(filtered.length ? filtered.map((e, i) => card(e.job, i)) : [
           el('div', { class: 'empty' },
             el('b', null, entries.length ? 'لا توجد شواغر ضمن هذه المرحلة حالياً' : 'متتبع تقديماتك فارغ حالياً'),
             el('span', null, entries.length
-              ? 'يمكنك تغيير حالة أي شاغر إلى «قدّمت عليها» أو «مقابلة» من قائمة الحالة على البطاقة أو من تفاصيل الوظيفة.'
-              : 'اضغط على «احفظ» على أي بطاقة، أو افتح تفاصيل الشاغر وسجّل حالتك (محفوظة / قدّمت / مقابلة / عرض عمل) لتتابع كل تقديماتك هنا مجاناً بدون حساب.')
+              ? 'يمكنك الضغط على «قدّمت عليها» أو «احفظ» على أي بطاقة لتحديث حالتك فوراً.'
+              : 'اضغط على «احفظ» أو «قدّمت عليها» على أي بطاقة لتتابع كل تقديماتك هنا مجاناً وبدون حساب.')
           )
         ])
       );
-      $('count').textContent = `${filtered.length} شاغر في متتبع تقديماتي` + (state.trackerFilter && STAGE_MAP[state.trackerFilter] ? ` · ${STAGE_MAP[state.trackerFilter].label}` : '');
+      const filterTitle = state.trackerFilter === 'expiring'
+        ? ' · تنتهي خلال 48 ساعة'
+        : (state.trackerFilter && STAGE_MAP[state.trackerFilter] ? ` · ${STAGE_MAP[state.trackerFilter].label}` : '');
+      $('count').textContent = `${filtered.length} شاغر في متتبع تقديماتي${filterTitle}`;
       $('more').hidden = true;
       return;
     }
@@ -1824,11 +2017,30 @@
       e.currentTarget.setAttribute('aria-pressed', String(state.fresh));
       refresh();
     });
-    $('savedOnly').addEventListener('click', (e) => {
-      state.saved = !state.saved;
-      e.currentTarget.setAttribute('aria-pressed', String(state.saved));
+    $('savedOnly').addEventListener('click', () => {
+      if (state.saved && state.trackerFilter === 'saved') {
+        state.saved = false;
+        state.trackerFilter = '';
+      } else {
+        state.saved = true;
+        state.trackerFilter = 'saved';
+      }
+      syncFilterUI();
       refresh();
     });
+    if ($('appliedOnly')) {
+      $('appliedOnly').addEventListener('click', () => {
+        if (state.saved && state.trackerFilter === 'applied') {
+          state.saved = false;
+          state.trackerFilter = '';
+        } else {
+          state.saved = true;
+          state.trackerFilter = 'applied';
+        }
+        syncFilterUI();
+        refresh();
+      });
+    }
     $('resetFiltersBtn').addEventListener('click', resetFilters);
     $('more').addEventListener('click', () => {
       state.offset += PAGE;

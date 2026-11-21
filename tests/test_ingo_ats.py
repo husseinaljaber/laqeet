@@ -622,3 +622,36 @@ def test_expansion_pack_ingo_and_syria_corporates_universities():
             assert src not in config.OFFICIAL_GOV_SOURCES
             assert src not in config.OFFICIAL_NGO_SOURCES
 
+
+def test_pitch_generator_and_tracker_ui():
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parent.parent
+    index_html = (root / "frontend" / "index.html").read_text(encoding="utf-8")
+    app_js = (root / "frontend" / "app.js").read_text(encoding="utf-8")
+    app_css = (root / "frontend" / "app.css").read_text(encoding="utf-8")
+    api_py = (root / "app" / "api.py").read_text(encoding="utf-8")
+
+    assert 'id="savedOnly"' in index_html
+    assert 'id="appliedOnly"' in index_html
+    assert 'id="expiringSavedBanner"' in index_html
+    assert "?v=34" in index_html
+
+    for fn in (
+        "function toggleApplied(",
+        "function mailtoHref(",
+        "function isExpiringWithin48h(",
+        "function renderExpiringSavedBanner(",
+        "function buildCardTrackBadges(",
+        "tpl-subject-input",
+    ):
+        assert fn in app_js
+
+    for cls in (".expiring-saved-banner", ".tracker-expiring-pill", ".tpl-subject-row", ".applied-toggle.is-applied"):
+        assert cls in app_css
+
+    assert 'id="pitchSubjectText"' in api_py
+    assert 'id="pitchBodyText"' in api_py
+    assert "?subject=" in api_py
+
+

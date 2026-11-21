@@ -12,8 +12,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Alexandria:wght@500;600;700;800&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="app.css?v=33">
-<script src="ui.js?v=32"></script>
+<link rel="stylesheet" href="app.css?v=34">
+<script src="ui.js?v=34"></script>
 </head>
 <body>
 <a class="skip" href="#board">انتقل للوظائف</a>
@@ -577,7 +577,8 @@
       <!-- Action Toggles -->
       <div class="row options-row">
         <button class="chip" id="newToday" aria-pressed="false"><i data-ico="sparkles" data-ico-cls="ico-sm"></i><span>جديد اليوم</span></button>
-        <button class="chip" id="savedOnly" aria-pressed="false"><i data-ico="clipboard-check" data-ico-cls="ico-sm"></i><span>تقديماتي ومحفوظاتي (<span id="savedCount">0</span>)</span></button>
+        <button class="chip" id="savedOnly" aria-pressed="false"><i data-ico="bookmark-filled" data-ico-cls="ico-sm"></i><span>المحفوظة للتقديم (<span id="savedCount">0</span>)</span></button>
+        <button class="chip" id="appliedOnly" aria-pressed="false"><i data-ico="check-circle" data-ico-cls="ico-sm"></i><span>قدّمت عليها (<span id="appliedCount">0</span>)</span></button>
         <label class="toggle">
           <input id="lower" type="checkbox" checked> ورجيني أيضاً شواغر تطلب مؤهل أقل أو بدون تحديد شهادة
         </label>
@@ -611,6 +612,7 @@
       <div id="activeFilterPills" class="active-pills"></div>
     </div>
     <div id="typoBanner" class="typo-banner" hidden></div>
+    <div id="expiringSavedBanner" class="expiring-saved-banner" hidden></div>
     <div id="trackerBar" class="tracker-bar" hidden></div>
 
     <!-- Job Cards Grid -->
@@ -692,6 +694,6 @@
 
 <div class="toast" id="toast" role="status" hidden></div>
 
-<script src="app.js?v=32" defer></script>
+<script src="app.js?v=34" defer></script>
 </body>
 </html>

@@ -1,0 +1,124 @@
+name: Collect jobs
+
+# Runs the collector 24/7 on GitHub Actions (hourly incremental + daily full deep pass),
+# then commits the refreshed seed snapshot whenever jobs change so Render redeploys automatically.
+on:
+  schedule:
+    - cron: "17 * * * *"      # every hour (quick, incremental across all channels, INGO ATS & portals)
+    - cron: "40 2 * * *"      # once a day: full deep pass
+  workflow_dispatch:
+    inputs:
+      full:
+        description: "Run a full deep collect"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: collect
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Snapshot state before collection
+        run: |
+          python - <<'PY'
+          import hashlib, json
+          from app import db
+          con = db.connect()
+          db.expire_past(con)
+          con.commit()
+          rows = con.execute(
+              "SELECT id, status, title, cities, apply_types, expires_on FROM jobs ORDER BY id"
+          ).fetchall()
+          h = hashlib.sha256(
+              "\n".join(f"{r[0]}|{r[1]}|{r[2]}|{r[3]}|{r[4]}|{r[5]}" for r in rows).encode("utf-8")
+          ).hexdigest()
+          live = sum(1 for r in rows if r[1] == "live")
+          with open("data/before_state.json", "w", encoding="utf-8") as f:
+              json.dump({"digest": h, "live": live, "total": len(rows)}, f)
+          print(f"Before collect: live={live}, total={len(rows)}, digest={h[:12]}")
+          con.close()
+          PY
+
+      - name: Collect (restores DB from seed, then scrapes Telegram channels, INGO ATS, and web portals)
+        env:
+          FULL: ${{ github.event.schedule == '40 2 * * *' || inputs.full == true }}
+        run: |
+          if [ "$FULL" = "true" ]; then
+            python -m app.collect
+          else
+            python -m app.collect --quick
+          fi
+
+      - name: Check changes and export refreshed seed
+        id: check_seed
+        env:
+          FORCE_COMMIT: ${{ github.event_name == 'workflow_dispatch' || github.event.schedule == '40 2 * * *' }}
+        run: |
+          python - <<'PY'
+          import hashlib, json, os
+          from app import db
+          con = db.connect()
+          db.expire_past(con)
+          con.commit()
+          rows = con.execute(
+              "SELECT id, status, title, cities, apply_types, expires_on FROM jobs ORDER BY id"
+          ).fetchall()
+          h = hashlib.sha256(
+              "\n".join(f"{r[0]}|{r[1]}|{r[2]}|{r[3]}|{r[4]}|{r[5]}" for r in rows).encode("utf-8")
+          ).hexdigest()
+          live = sum(1 for r in rows if r[1] == "live")
+          before = json.loads(open("data/before_state.json", encoding="utf-8").read())
+          changed = (h != before["digest"]) or (os.getenv("FORCE_COMMIT") == "true")
+          diff_live = live - before["live"]
+          print(f"After collect: live={live} (delta={diff_live:+d}), total={len(rows)}, digest={h[:12]}, changed={changed}")
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as out:
+              out.write(f"changed={'true' if changed else 'false'}\n")
+              out.write(f"live={live}\n")
+              out.write(f"delta={diff_live:+d}\n")
+          con.close()
+          PY
+
+      - name: Rebase onto latest main, export seed, and push
+        if: steps.check_seed.outputs.changed == 'true'
+        run: |
+          git config user.name "laqeet-bot"
+          git config user.email "laqeet-bot@users.noreply.github.com"
+          rm -f data/before_state.json
+          for attempt in 1 2 3; do
+            git checkout -- data/seed_jobs.jsonl.gz 2>/dev/null || true
+            git pull --rebase origin main
+            python -m app.seed
+            git add data/seed_jobs.jsonl.gz
+            if git diff --cached --quiet; then
+              echo "Seed file unchanged; skipping commit."
+              exit 0
+            fi
+            git commit -m "data: refresh jobs (${{ steps.check_seed.outputs.live }} live, ${{ steps.check_seed.outputs.delta }}) $(date -u +%Y-%m-%dT%H:%MZ)"
+            if git push origin HEAD:main; then
+              echo "Pushed refreshed seed on attempt $attempt."
+              exit 0
+            fi
+            echo "Push race detected on attempt $attempt; resetting commit and retrying..."
+            git reset --soft HEAD~1
+            sleep 3
+          done
+          exit 1

@@ -42,6 +42,12 @@ def test_education_filter_and_lower_toggle():
     assert titles(edu="none", kind="quick", lower=True) == ["كاشير"]
     assert titles(edu="bachelor", city="حلب") == []
     assert titles(edu="bachelor", field="computer", sub="NET") == ["مهندس شبكات"]
+    # Explicit edu + search query must NOT dump unrelated 'none'/'institute' roles unless lower=True
+    assert "فني تمريض" not in titles(edu="bachelor", q="فني")
+    # Experience bucket filter
+    assert "محاسب" in titles(exp="low")
+    assert "فني تمريض" in titles(exp="unk")
+    assert "فني تمريض" not in titles(exp="low")
 
 
 def test_report_hides_after_three():

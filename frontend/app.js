@@ -69,9 +69,10 @@
     sector: '',
     edu_group: '',
     edu: '',
-    lower: true,
+    lower: false,
     source: '',
     apply: '',
+    exp: '',
     field: '',
     sub: '',
     city: '',
@@ -84,6 +85,9 @@
     offset: 0,
     total: 0
   };
+  let manualFieldsOpen = null;
+  let pendingFitSort = false;
+  let fitCache = null;
 
   // ---------------------------------------------------------------- helpers
   function $(id) { return document.getElementById(id); }
@@ -293,6 +297,12 @@
   }
 
   const expBand = (e) => e == null ? 'unk' : e <= 2 ? 'low' : e < 5 ? 'mid' : 'high';
+  const EXP_UI = {
+    unk: { label: 'خبرة غير مشروطة' },
+    low: { label: 'خبرة حتى سنتين' },
+    mid: { label: 'خبرة 3–4 سنين' },
+    high: { label: 'خبرة 5+ سنين' }
+  };
   const expText = (e) => e == null ? 'الخبرة غير مشروطة' : e === 0 ? 'بدون خبرة' : e === 1 ? 'سنة خبرة واحدة' : e === 2 ? 'سنتان خبرة' : e <= 10 ? e + ' سنوات خبرة' : e + ' سنة خبرة';
   const fieldLabel = (f) => (META && (META.fields.find((x) => x.code === f) || {}).label) || f;
   const subLabel = (f) => (META && (META.subfields.find((x) => x.code === f) || {}).label) || f;
@@ -337,6 +347,28 @@
 
     const text = level === 'ok' ? 'مؤهلاتك تنطبق تماماً ✓' : level === 'maybe' ? 'تنطبق جزئياً: ' + why.join('، ') : 'لا تنطبق: ' + why.join('، ');
     return { level, text };
+  }
+
+  function hasProfile() {
+    return Boolean(profile && (profile.edu || profile.exp != null || profile.age || profile.gender));
+  }
+
+  function fitScore(j) {
+    const m = fit(j);
+    if (!m) return 0;
+    let score = m.level === 'ok' ? 1000 : m.level === 'maybe' ? 500 : 0;
+    if (profile.edu && j.education) {
+      if (j.education === profile.edu) score += 80;
+      else if (EDU_RANK[j.education] <= EDU_RANK[profile.edu]) score += 35;
+    } else if (profile.edu && !j.education) {
+      score += 10;
+    }
+    if (profile.exp != null && profile.exp !== '') {
+      if (j.experience != null && j.experience <= profile.exp) score += 25;
+      else if (j.experience == null) score += 10;
+    }
+    if (j.posted_at) score += (Date.parse(j.posted_at) || 0) / 1e13;
+    return score;
   }
 
   // ---------------------------------------------------------------- cards & links
@@ -1592,7 +1624,7 @@
   }
 
   // ---------------------------------------------------------------- query params
-  function buildParams() {
+  function buildParams(limitOverride, offsetOverride) {
     const p = new URLSearchParams();
     p.set('country', state.country || 'sy');
     if (state.sector) p.set('sector', state.sector);
@@ -1601,15 +1633,41 @@
     if (state.lower) p.set('lower', 'true');
     if (state.source) p.set('source', state.source);
     if (state.apply) p.set('apply', state.apply);
+    if (state.exp) p.set('exp', state.exp);
     if (state.city) p.set('city', state.city);
     if (state.field) p.set('field', state.field);
     if (state.sub) p.set('sub', state.sub);
     if (state.q) p.set('q', state.q);
-    if (state.sort && state.sort !== 'relevance') p.set('sort', state.sort);
+    if (state.sort && state.sort !== 'relevance' && state.sort !== 'fit') p.set('sort', state.sort);
     if (state.fresh) p.set('new', 'true');
-    p.set('limit', PAGE);
-    p.set('offset', state.offset);
+    p.set('limit', limitOverride != null ? limitOverride : PAGE);
+    p.set('offset', offsetOverride != null ? offsetOverride : state.offset);
     return p;
+  }
+
+  function buildFilterKey() {
+    return JSON.stringify([
+      state.country, state.sector, state.edu_group, state.edu, state.lower,
+      state.source, state.apply, state.exp, state.field, state.sub,
+      state.city, state.q, state.fresh, profile.edu, profile.exp, profile.age, profile.gender
+    ]);
+  }
+
+  function updateMarketFieldsCollapse() {
+    const sec = $('marketFieldsSection');
+    const btn = $('toggleMarketFields');
+    if (!sec || !btn) return;
+    const isFiltered = Boolean(
+      state.q || state.city || state.sector || state.edu || state.edu_group ||
+      state.field || state.sub || state.apply || state.exp || state.fresh || state.saved
+    );
+    const open = manualFieldsOpen != null ? manualFieldsOpen : !isFiltered;
+    sec.classList.toggle('is-collapsed', !open);
+    btn.setAttribute('aria-expanded', String(open));
+    btn.replaceChildren(
+      ico(open ? 'chevron-up' : 'chevron-down', 'ico-sm'),
+      el('span', null, open ? 'إخفاء' : 'عرض المجالات')
+    );
   }
 
   const SYRIAN_GOVERNORATES = [
@@ -1809,9 +1867,16 @@
       const pressed = code ? selApplies.includes(code) : selApplies.length === 0;
       c.setAttribute('aria-pressed', String(pressed));
     });
+    const selExps = splitCsv(state.exp);
+    document.querySelectorAll('#expRow .chip').forEach((c) => {
+      const code = c.dataset.exp;
+      const pressed = code ? selExps.includes(code) : selExps.length === 0;
+      c.setAttribute('aria-pressed', String(pressed));
+    });
     if ($('newToday')) $('newToday').setAttribute('aria-pressed', String(state.fresh));
     if ($('savedOnly')) $('savedOnly').setAttribute('aria-pressed', String(state.saved && state.trackerFilter !== 'applied'));
     if ($('appliedOnly')) $('appliedOnly').setAttribute('aria-pressed', String(state.saved && state.trackerFilter === 'applied'));
+    updateMarketFieldsCollapse();
   }
 
   function renderActivePills() {
@@ -1848,6 +1913,10 @@
     for (const a of splitCsv(state.apply)) {
       const aInfo = APPLY_UI[a];
       addPill(aInfo ? aInfo.ico : 'send', aInfo ? aInfo.label : a, () => { state.apply = removeCsvItem(state.apply, a); syncFilterUI(); refresh(); });
+    }
+    for (const exCode of splitCsv(state.exp)) {
+      const exInfo = EXP_UI[exCode];
+      addPill('clock', exInfo ? exInfo.label : exCode, () => { state.exp = removeCsvItem(state.exp, exCode); syncFilterUI(); refresh(); });
     }
     if (state.fresh) addPill('sparkles', 'جديد اليوم', () => { state.fresh = false; syncFilterUI(); refresh(); });
     if (state.saved) addPill('clipboard-check', 'متتبع تقديماتي', () => { state.saved = false; state.trackerFilter = ''; syncFilterUI(); refresh(); });
@@ -1894,6 +1963,7 @@
   let requestSeq = 0;
   async function refresh(append) {
     renderExpiringSavedBanner();
+    updateMarketFieldsCollapse();
     if (state.saved) {
       state.terms = [];
       renderActivePills();
@@ -1928,25 +1998,44 @@
 
     if (!append) state.offset = 0;
     const currentSeq = ++requestSeq;
-    if (!append) renderSkeletons(6);
+    const useFitSort = state.sort === 'fit' && hasProfile();
+    const curFitKey = useFitSort ? buildFilterKey() : '';
+    if (!useFitSort) fitCache = null;
 
     let data;
-    try {
-      data = await getWithRetry('/jobs?' + buildParams(), 3, 1800);
-    } catch (e) {
-      $('grid').replaceChildren(
-        el('div', { class: 'empty' },
-          el('b', null, 'تعذر تحميل الشواغر حالياً'),
-          el('span', null, 'قد يكون الخادم في مرحلة الإقلاع المؤقت. اضغط إعادة المحاولة بعد ثوانٍ.'),
-          el('button', {
-            type: 'button',
-            class: 'btn primary',
-            style: 'margin-top:12px',
-            onclick: () => refresh(append)
-          }, 'إعادة تحميل الشواغر')
-        )
-      );
-      return;
+    if (useFitSort && append && fitCache && fitCache.key === curFitKey) {
+      data = fitCache.data;
+    } else {
+      if (!append) renderSkeletons(6);
+      try {
+        const rawData = await getWithRetry(
+          '/jobs?' + (useFitSort ? buildParams(200, 0) : buildParams()),
+          3,
+          1800
+        );
+        if (currentSeq !== requestSeq) return;
+        if (useFitSort) {
+          const sortedJobs = [...(rawData.jobs || [])].sort((a, b) => fitScore(b) - fitScore(a));
+          data = { ...rawData, jobs: sortedJobs };
+          fitCache = { key: curFitKey, data };
+        } else {
+          data = rawData;
+        }
+      } catch (e) {
+        $('grid').replaceChildren(
+          el('div', { class: 'empty' },
+            el('b', null, 'تعذر تحميل الشواغر حالياً'),
+            el('span', null, 'قد يكون الخادم في مرحلة الإقلاع المؤقت. اضغط إعادة المحاولة بعد ثوانٍ.'),
+            el('button', {
+              type: 'button',
+              class: 'btn primary',
+              style: 'margin-top:12px',
+              onclick: () => refresh(append)
+            }, 'إعادة تحميل الشواغر')
+          )
+        );
+        return;
+      }
     }
 
     if (currentSeq !== requestSeq) return;
@@ -1978,7 +2067,8 @@
     }
 
     if (!append) renderedIds.clear();
-    const freshJobs = (data.jobs || []).filter((j) => {
+    const batch = useFitSort ? (data.jobs || []).slice(state.offset, state.offset + PAGE) : (data.jobs || []);
+    const freshJobs = batch.filter((j) => {
       if (!j || renderedIds.has(j.id)) return false;
       renderedIds.add(j.id);
       return true;
@@ -2003,17 +2093,18 @@
 
     const shown = Math.min(renderedIds.size, data.total);
     const selCities = splitCsv(state.city);
-    const countryDefaultLabel = state.country === 'tr' ? 'في كل تركيا 🇹🇷' : 'في كل سوريا 🇸🇾';
+    const countryDefaultLabel = state.country === 'tr' ? 'في كل تركيا' : 'في كل سوريا';
     const whereLabel = selCities.length ? `في ${selCities.join(' و ')}` : countryDefaultLabel;
     $('count').textContent = `${data.total} فرصة عمل مفتوحة ${whereLabel}` + (data.total > shown ? ` · معروض ${shown}` : '');
     if ($('boardOpenLabel')) {
-      $('boardOpenLabel').textContent = state.country === 'tr' ? 'فرصة مفتوحة في تركيا 🇹🇷' : 'إعلان مفتوح في سوريا 🇸🇾';
+      $('boardOpenLabel').textContent = state.country === 'tr' ? 'فرصة مفتوحة في تركيا' : 'إعلان مفتوح في سوريا';
     }
     const boardOpenNode = document.querySelector('[data-count="board_open"]');
-    if (boardOpenNode && !state.city && !state.field && !state.edu && !state.edu_group && !state.q && !state.sector && !state.apply) {
+    if (boardOpenNode && !state.city && !state.field && !state.edu && !state.edu_group && !state.q && !state.sector && !state.apply && !state.exp) {
       boardOpenNode.textContent = data.total;
     }
-    $('more').hidden = data.total <= shown || (state.offset + PAGE >= data.total) || !(data.jobs && data.jobs.length);
+    const maxReachable = useFitSort ? (data.jobs || []).length : data.total;
+    $('more').hidden = shown >= maxReachable || (state.offset + PAGE >= maxReachable) || !batch.length;
 
     if (!append) {
       renderBars(data.facets.field);
@@ -2110,6 +2201,7 @@
     state.edu_group = '';
     state.edu = '';
     state.apply = '';
+    state.exp = '';
     state.field = '';
     state.sub = '';
     state.city = '';
@@ -2120,7 +2212,10 @@
     state.fresh = false;
     state.saved = false;
     state.trackerFilter = '';
-    state.lower = true;
+    state.lower = false;
+    manualFieldsOpen = null;
+    pendingFitSort = false;
+    fitCache = null;
     if (location.search) {
       try { history.replaceState(null, '', location.pathname + location.hash); } catch (e) {}
     }
@@ -2166,6 +2261,25 @@
         refresh();
       });
     });
+
+    // Experience level chips (multi-select supported)
+    document.querySelectorAll('#expRow .chip').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const code = btn.dataset.exp;
+        state.exp = code ? toggleCsvItem(state.exp, code) : '';
+        syncFilterUI();
+        refresh();
+      });
+    });
+
+    if ($('toggleMarketFields')) {
+      $('toggleMarketFields').addEventListener('click', () => {
+        const sec = $('marketFieldsSection');
+        if (!sec) return;
+        manualFieldsOpen = sec.classList.contains('is-collapsed');
+        updateMarketFieldsCollapse();
+      });
+    }
 
     // Search input + live autocomplete
     let typingTimer, suggestTimer, activeIdx = -1;
@@ -2253,7 +2367,20 @@
 
     if ($('sortOrder')) {
       $('sortOrder').addEventListener('change', (e) => {
-        state.sort = e.target.value;
+        const nextSort = e.target.value;
+        if (nextSort === 'fit' && !hasProfile()) {
+          pendingFitSort = true;
+          e.target.value = state.sort;
+          toast('حدّد مؤهلاتك أولاً لترتيب الشواغر حسب المطابقة');
+          $('userEdu').value = profile.edu || '';
+          $('userExp').value = profile.exp ?? '';
+          $('userAge').value = profile.age || '';
+          $('userGender').value = profile.gender || '';
+          $('profileDrawer').showModal();
+          return;
+        }
+        pendingFitSort = false;
+        state.sort = nextSort;
         refresh();
       });
     }
@@ -2368,12 +2495,22 @@
       };
       saveProfile();
       $('profileDrawer').close();
+      if (pendingFitSort && hasProfile()) {
+        pendingFitSort = false;
+        state.sort = 'fit';
+        syncFilterUI();
+      }
       toast('تم حفظ ملفك الشخصي بنجاح وتفعيل المطابقة');
       refresh();
     });
     $('clearProfileBtn').addEventListener('click', () => {
       profile = {};
       saveProfile();
+      pendingFitSort = false;
+      if (state.sort === 'fit') {
+        state.sort = 'relevance';
+        syncFilterUI();
+      }
       $('userEdu').value = '';
       $('userExp').value = '';
       $('userAge').value = '';
@@ -2403,7 +2540,7 @@
       });
     }
 
-    // Board Country Switcher Tabs (🇸🇾 وظائف سوريا | 🇹🇷 وظائف تركيا)
+    // Board Country Switcher Tabs (وظائف سوريا | وظائف تركيا)
     document.querySelectorAll('[data-board-country]').forEach((btn) => {
       btn.addEventListener('click', () => {
         const c = btn.dataset.boardCountry || 'sy';
@@ -2463,7 +2600,7 @@
 
       const bar = $('lpWizSectorsBar');
       if (bar) {
-        const countryTag = isTr ? 'تركيا 🇹🇷' : 'سوريا 🇸🇾';
+        const countryTag = isTr ? 'تركيا' : 'سوريا';
         const items = [
           { ico: 'building', lbl: 'قطاع خاص', cnt: cs.private_count || 0, sector: 'private' },
           { ico: 'handshake', lbl: 'منظمات دولية', cnt: cs.ngo_count || 0, sector: 'ngo' },
@@ -2492,15 +2629,15 @@
         const b = $('lpCounterNgo').querySelector('[data-lp-country-stat="ngo_count"]');
         if (b) b.textContent = String(cs.ngo_count || 0);
       }
-      if ($('lpNgoLabel')) $('lpNgoLabel').textContent = isTr ? 'شواغر منظمات في تركيا 🇹🇷' : 'شواغر منظمات في سوريا 🇸🇾';
+      if ($('lpNgoLabel')) $('lpNgoLabel').textContent = isTr ? 'شواغر منظمات في تركيا' : 'شواغر منظمات في سوريا';
       if ($('lpCounterPrivate')) {
         $('lpCounterPrivate').setAttribute('data-enter-country', c);
         const b = $('lpCounterPrivate').querySelector('[data-lp-country-stat="private_count"]');
         if (b) b.textContent = String(cs.private_count || 0);
       }
-      if ($('lpPrivateLabel')) $('lpPrivateLabel').textContent = isTr ? 'شركات وقطاع خاص في تركيا 🇹🇷' : 'شركات وقطاع خاص في سوريا 🇸🇾';
+      if ($('lpPrivateLabel')) $('lpPrivateLabel').textContent = isTr ? 'شركات وقطاع خاص في تركيا' : 'شركات وقطاع خاص في سوريا';
 
-      const gwCountrySuffix = isTr ? 'في تركيا 🇹🇷' : 'في سوريا 🇸🇾';
+      const gwCountrySuffix = isTr ? 'في تركيا' : 'في سوريا';
       const gwLinkText = {
         ngo_count: `تصفح شواغر المنظمات ${gwCountrySuffix}`,
         gov_count: `تصفح الوظائف الحكومية ${gwCountrySuffix}`,
@@ -2674,7 +2811,7 @@
       b.setAttribute('aria-selected', String(active));
     });
     if ($('boardCountryTitle')) {
-      $('boardCountryTitle').textContent = isTr ? 'في تركيا 🇹🇷' : 'في سوريا 🇸🇾';
+      $('boardCountryTitle').textContent = isTr ? 'في تركيا' : 'في سوريا';
     }
     if ($('boardHeroSub')) {
       $('boardHeroSub').textContent = isTr
@@ -2683,8 +2820,8 @@
     }
     if ($('marketDemandTitle')) {
       $('marketDemandTitle').textContent = isTr
-        ? 'أكثر المجالات طلباً حالياً في تركيا 🇹🇷 (اضغط للفلترة السريعة):'
-        : 'أكثر المجالات طلباً حالياً في سوريا 🇸🇾 (اضغط للفلترة السريعة):';
+        ? 'أكثر المجالات طلباً حالياً في تركيا (اضغط للفلترة السريعة):'
+        : 'أكثر المجالات طلباً حالياً في سوريا (اضغط للفلترة السريعة):';
     }
   }
 
@@ -2717,7 +2854,7 @@
       });
     }
     if ($('boardOpenLabel')) {
-      $('boardOpenLabel').textContent = c === 'tr' ? 'فرصة مفتوحة في تركيا 🇹🇷' : 'إعلان مفتوح في سوريا 🇸🇾';
+      $('boardOpenLabel').textContent = c === 'tr' ? 'فرصة مفتوحة في تركيا' : 'إعلان مفتوح في سوريا';
     }
   }
 
@@ -2820,6 +2957,8 @@
       if (state.edu) sp.set('edu', state.edu);
       if (state.edu_group) sp.set('edu_group', state.edu_group);
       if (state.field) sp.set('field', state.field);
+      if (state.exp) sp.set('exp', state.exp);
+      if (state.sort && state.sort !== 'relevance') sp.set('sort', state.sort);
       if (state.q) sp.set('q', state.q);
       try { history.pushState({ view: 'jobs', country: state.country }, '', `${location.pathname}?${sp.toString()}`); } catch (e) {}
     }
@@ -2973,7 +3112,7 @@
     // Determine initial view: Standalone Landing Page by default, or Jobs Board if deep-linked
     const sp = new URLSearchParams(location.search);
     const hashMatch = location.hash.match(/^#job-(\d+)$/);
-    if (sp.get('view') === 'jobs' || sp.get('country') || sp.get('city') || sp.get('sector') || sp.get('edu_group') || sp.get('q') || hashMatch) {
+    if (sp.get('view') === 'jobs' || sp.get('country') || sp.get('city') || sp.get('sector') || sp.get('edu_group') || sp.get('exp') || sp.get('q') || hashMatch) {
       enterBoard({
         country: sp.get('country') || 'sy',
         city: sp.get('city') || '',
@@ -2981,6 +3120,8 @@
         edu: sp.get('edu') || '',
         edu_group: sp.get('edu_group') || '',
         field: sp.get('field') || '',
+        exp: sp.get('exp') || '',
+        sort: sp.get('sort') || 'relevance',
         q: sp.get('q') || ''
       }, false);
       if (hashMatch) {

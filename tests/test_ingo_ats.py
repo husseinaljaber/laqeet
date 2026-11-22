@@ -636,7 +636,13 @@ def test_pitch_generator_and_tracker_ui():
     assert 'id="appliedOnly"' in index_html
     assert 'id="expiringSavedBanner"' in index_html
     assert 'id="lower"' not in index_html
-    assert "?v=39" in index_html
+    assert 'id="expRow"' in index_html
+    assert 'id="toggleMarketFields"' in index_html
+    assert 'value="fit"' in index_html
+    assert "🇸🇾" not in index_html and "🇹🇷" not in index_html
+    assert "🇸🇾" not in app_js and "🇹🇷" not in app_js
+    assert "lower: false" in app_js
+    assert "?v=40" in index_html
 
     for fn in (
         "function toggleApplied(",

@@ -105,8 +105,8 @@
     <form class="box" id="f">
       <h2>1. الدولة والقطاع وتفاصيل الشاغر</h2>
       <div class="emp-country-row" role="group" aria-label="الدولة">
-        <button type="button" class="emp-cbtn" data-emp-country="sy" aria-pressed="true">🇸🇾 شاغر في سوريا</button>
-        <button type="button" class="emp-cbtn" data-emp-country="tr" aria-pressed="false">🇹🇷 شاغر في تركيا</button>
+        <button type="button" class="emp-cbtn" data-emp-country="sy" aria-pressed="true">شاغر في سوريا</button>
+        <button type="button" class="emp-cbtn" data-emp-country="tr" aria-pressed="false">شاغر في تركيا</button>
       </div>
       <input type="hidden" name="country" id="countryInput" value="sy">
 
@@ -363,7 +363,7 @@
         </div>
         <div style="font-size:.86rem;color:var(--muted);display:flex;flex-wrap:wrap;gap:8px 16px">
           <span>الجهة: <b>${esc(d.employer)}</b></span>
-          <span>الدولة: <b>${d.country === 'tr' ? 'تركيا 🇹🇷' : 'سوريا 🇸🇾'}</b></span>
+          <span>الدولة: <b>${d.country === 'tr' ? 'تركيا' : 'سوريا'}</b></span>
           ${d.cities && d.cities.length ? `<span>المدينة: <b>${esc(d.cities.join('، '))}</b></span>` : ''}
           ${d.verified ? `<span style="color:var(--accent);font-weight:700">✓ موثّق بشارة لقيت</span>` : ''}
         </div>

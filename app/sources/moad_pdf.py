@@ -80,6 +80,11 @@ def _rehome_orphans(lines) -> None:
 
 # Words whose last letter the PDF font drops (a two-letter glyph reported as one letter).
 _LOST_TAIL = [(re.compile(r"\bالفن(?=\s|$)"), "الفني"), (re.compile(r"\bالعاملي(?=\s|$)"), "العاملين"),
+              (re.compile(r"\bلوجست(?=\s|$|\))"), "لوجستي"),
+              (re.compile(r"\bالتقان(?=\s|$)"), "التقاني"),
+              (re.compile(r"\bإحصائ(?=\s|$)"), "إحصائي"),
+              (re.compile(r"\bتطبيق(?=\s|$)"), "تطبيقي"),
+              (re.compile(r"\b(?:إداري|مساعد|باحث|فني)\s+ثان(?=\s|\(|$)"), lambda m: m.group(0) + "ي"),
               # glyphs the font maps to the wrong letters (يي→بر، ين→ير، بي→نر)
               (re.compile(r"\bطنر\b"), "طبي"), (re.compile(r"المعايبر"), "المعايير"), (re.compile(r"\bتحسير\b"), "تحسين"),
               (re.compile(r"\bالمخبر ية\b"), "المخبرية"), (re.compile(r"أخصائ (.*?) ي\b"), r"أخصائي \1"),

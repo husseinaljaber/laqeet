@@ -1078,7 +1078,19 @@
     const dlDay = formatDate(j.deadline);
     const cityTxt = formatCardCities(j);
     const summaryText = cleanCardSummary(j, ent, cityTxt);
-    const desc = el('p', { class: 'card-desc' }, ...highlightNodes(summaryText, state.terms));
+    const desc = el('p', {
+      class: 'card-desc',
+      role: 'button',
+      tabindex: '0',
+      title: 'اضغط لعرض مواصفات الشغل والشروط كاملة',
+      onclick: () => openDetail(j),
+      onkeydown: (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          openDetail(j);
+        }
+      }
+    }, ...highlightNodes(summaryText, state.terms));
 
     const trk = getTrack(j.id);
     const isSav = Boolean(trk && trk.stage === 'saved');
@@ -1230,7 +1242,7 @@
           ...(primary.external ? { target: '_blank', rel: 'noopener' } : {})
         }, ico(primary.icon, 'ico-sm'), el('span', null, primary.label))
       );
-      applyActions.slice(1, 3).forEach((secAct) => {
+      applyActions.slice(1, 2).forEach((secAct) => {
         footerEl.append(
           el('a', {
             class: 'card-cta-icon ' + secAct.cls,
@@ -1241,6 +1253,14 @@
           }, ico(secAct.icon, 'ico-sm'))
         );
       });
+      footerEl.append(
+        el('button', {
+          type: 'button',
+          class: 'card-det-btn',
+          title: 'عرض شرح العمل والمواصفات والشروط',
+          onclick: () => openDetail(j)
+        }, ico('file-text', 'ico-sm'), el('span', null, 'المواصفات'))
+      );
     } else {
       footerEl.append(
         el('button', {
@@ -1299,6 +1319,20 @@
     const detSummary = cleanSummary(j.summary);
     const summaryBlock = detSummary ? [el('h4', null, ico('file-text', 'ico-sm'), 'نبذة ووصف الشاغر'), el('p', { style: 'margin:0;line-height:1.72' }, detSummary)] : [];
     const hasDirectLink = Boolean(j.apply_url && !/^https?:\/\/(?:wa\.me\/|api\.whatsapp\.com\/)/i.test(j.apply_url));
+    const hasStructuredSpecs = Boolean((j.tasks && j.tasks.length) || (j.skills && j.skills.length));
+    const detSpecUrl = j.details_url || (hasDirectLink ? j.apply_url : '');
+    const externalSpecsBox = (!hasStructuredSpecs && detSpecUrl) ? el('div', { class: 'sheet-external-specs' },
+      el('div', { class: 'sheet-external-specs-copy' },
+        el('strong', null, ico('info', 'ico-sm'), 'بطاقة الوصف الوظيفي الكاملة على المصدر الرسمي'),
+        el('p', null, 'المهام والشروط التفصيلية لهذا الشاغر منشورة ضمن صفحة الإعلان أو استمارة التقديم الرسمية.')
+      ),
+      el('a', {
+        class: 'btn primary',
+        href: detSpecUrl,
+        target: '_blank',
+        rel: 'noopener'
+      }, ico('external-link', 'ico-sm'), 'عرض مواصفات العمل على الموقع الرسمي')
+    ) : null;
 
     // Phase 2: Personal Application Tracker Control Box inside Drawer
     const curTrk = getTrack(j.id);
@@ -1509,6 +1543,7 @@
       ...summaryBlock,
       ...listBlock('المهام والمسؤوليات الرئيسية', j.tasks),
       ...listBlock('الشروط والمهارات المطلوبة', j.skills),
+      externalSpecsBox,
       templatesSection,
       shareSection,
       ...sourcesSection,

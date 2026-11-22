@@ -635,7 +635,7 @@ def test_pitch_generator_and_tracker_ui():
     assert 'id="savedOnly"' in index_html
     assert 'id="appliedOnly"' in index_html
     assert 'id="expiringSavedBanner"' in index_html
-    assert "?v=36" in index_html
+    assert "?v=37" in index_html
 
     for fn in (
         "function toggleApplied(",
@@ -649,6 +649,8 @@ def test_pitch_generator_and_tracker_ui():
         "CARD_EDU_LABEL",
         "CARD_FIELD_LABEL",
         "tpl-subject-input",
+        "card-det-btn",
+        "sheet-external-specs",
     ):
         assert fn in app_js
 
@@ -661,6 +663,8 @@ def test_pitch_generator_and_tracker_ui():
         ".card-cta-main",
         ".card-applied-btn",
         ".trunc-txt",
+        ".card-det-btn",
+        ".sheet-external-specs",
     ):
         assert cls in app_css
 
@@ -705,6 +709,77 @@ def test_clean_titles_summaries_and_no_unicode_surrogate_leaks():
     assert d["employer"] == "شركة الترك للصناعات (ALTURK)"
     assert "معلومات التواصل" not in (d["summary"] or "")
     assert "\u200b" not in (d["summary"] or "") and "\ufffd" not in (d["summary"] or "")
+
+
+def test_bugfixes_city_hours_title_moad_and_specs_drawer():
+    from app import db, extract as ex, taxonomy as tx
+    from app.sources import moad_pdf
+
+    assert tx.cities_from_text("محاسبة لدى مركز جملة بقدسيا") == ["دمشق"]
+    assert tx.shift("أوقات الدوام:\nمن الساعة 9 صباحاً حتى الساعة 6 مساءً.") == "من 9 لـ 6"
+
+    hs = ex.extract(
+        (
+            "💼 فرصة عمل في المجال الإداري | 📍 اللاذقية – شركة M.ONE Fashion Wear\n"
+            "🎙️ تعلن شركة M.ONE Fashion Wear في اللاذقية عن حاجتها إلى صبية للعمل في المعمل الرئيسي للشركة.\n"
+            "👩🏻‍💼 المسمى الوظيفي: موظفة إدارية (متابعة الورشات).\n"
+            "⏰ أوقات الدوام:\nمن الساعة 9 صباحاً حتى الساعة 6 مساءً.\n"
+            "📲 0930707221"
+        ),
+        "higher_steps",
+        "https://t.me/higher_steps/15152",
+        "2026-11-22T06:48:18+00:00",
+    )
+    assert len(hs) == 1
+    assert hs[0].title == "موظفة إدارية (متابعة الورشات)"
+    assert db._clean_employer_val(hs[0].employer) == "شركة M.ONE Fashion Wear"
+    assert hs[0].shift == "من 9 لـ 6"
+    assert hs[0].cities == ["اللاذقية"]
+
+    sj = ex.extract(
+        "شاغر معلم نجار المينو للعمل في ورشة ب المزينة المنامة مؤمنة للأستفسار اكثر الاتصال على في حمص – للتقديم والتواصل المباشر عبر الرقم 0957700555",
+        "syrianjobs2",
+        "https://t.me/syrianjobs2/9457",
+        "2026-11-22T06:00:00+00:00",
+    )
+    assert len(sj) == 1
+    assert "المنامة" not in sj[0].title and "استفسار" not in sj[0].title and "أستفسار" not in sj[0].title
+    assert sj[0].cities == ["حمص"]
+
+    assert moad_pdf.fix_lost_tails("مساعد دعم لوجست (أرشيف إعلامي)") == "مساعد دعم لوجستي (أرشيف إعلامي)"
+
+    moad_row = {
+        "title": "مساعد دعم لوجست (أرشيف إعلامي)",
+        "employer": "وزارة الإعلام",
+        "cities": ["دمشق"],
+        "country": "sy",
+        "official": True,
+        "education": "secondary",
+        "summary": "مساعد دعم لوجستي ( أرشيف إعلامي ) · الجهة: وزارة الإعلام",
+        "apply_url": "https://apply.hiring.moad.gov.sy/single/test123",
+    }
+    db._enrich_from_raw(moad_row)
+    assert moad_row["title"] == "مساعد دعم لوجستي (أرشيف إعلامي)"
+    assert "الجهة:" not in (moad_row["summary"] or "")
+
+    orphan_shift_row = {
+        "title": "صبية للعمل في المعمل الرئيسي للشركة",
+        "employer": None,
+        "cities": [],
+        "country": "sy",
+        "summary": "المسمى الوظيفي: موظفة إدارية (متابعة الورشات). · أوقات الدوام",
+        "raw": (
+            "🎙️ تعلن شركة M.ONE Fashion Wear في اللاذقية عن حاجتها إلى صبية للعمل في المعمل الرئيسي للشركة.\n"
+            "👩🏻‍💼 المسمى الوظيفي: موظفة إدارية (متابعة الورشات).\n"
+            "⏰ أوقات الدوام:\nمن الساعة 9 صباحاً حتى الساعة 6 مساءً."
+        ),
+    }
+    db._enrich_from_raw(orphan_shift_row)
+    assert orphan_shift_row["title"] == "موظفة إدارية (متابعة الورشات)"
+    assert orphan_shift_row["employer"] == "شركة M.ONE Fashion Wear"
+    assert orphan_shift_row["shift"] == "من 9 لـ 6"
+    assert orphan_shift_row["cities"] == ["اللاذقية"]
+
 
 
 

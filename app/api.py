@@ -775,8 +775,8 @@ def job_page(job_id: int, request: Request):
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Alexandria:wght@500;600;700;800&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="/app.css?v=36"><link rel="stylesheet" href="/page.css?v=36">
-<script src="/ui.js?v=36"></script>
+<link rel="stylesheet" href="/app.css?v=37"><link rel="stylesheet" href="/page.css?v=37">
+<script src="/ui.js?v=37"></script>
 </head><body>
 <nav class="site-nav" aria-label="التنقل الرئيسي">
   <div class="inner site-nav-inner">

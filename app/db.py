@@ -791,6 +791,17 @@ def _strip_ui_junk(text: str | None) -> str:
 def _clean_employer_val(emp: str | None, official: bool = False) -> str:
     raw = _strip_ui_junk(emp)
     raw = re.sub(r"\s+(?:عبر|عن)$", "", raw).strip(" -–:،,")
+    raw_stripped = re.sub(
+        r"\s+(?:في|ضمن)\s+(?:محافظة\s+)?(?:دمشق|ريف\s+دمشق|حلب|حمص|حماة|اللاذقية|طرطوس|إدلب|درعا|السويداء|القنيطرة|دير\s*الزور|الحسكة|الرقة)\s*$",
+        "",
+        raw,
+    ).strip(" -–:،,")
+    if (
+        raw_stripped != raw
+        and len(raw_stripped) >= 8
+        and not re.match(r"^(?:شركة|مؤسسة|مكتب|مركز|معمل|مطعم|مصنع|صاحب عمل|جهة|فرع)$", raw_stripped)
+    ):
+        raw = raw_stripped
     if not raw or raw.lower() in _PLACEHOLDER_EMP or _PORTAL_EMP_RE.search(raw) or _LOCATION_AS_EMP_RE.search(raw):
         return "جهة حكومية رسمية" if official else ""
     return raw
@@ -1080,6 +1091,7 @@ _SKIP_SUMMARY_LINE = re.compile(
     r"وظيفة جديدة|الوصف المستخرج|🔗|🏢\s*الجهة|📍\s*الموقع|📅\s*آخر موعد|الفئة الوظيفية|محافظة العمل|"
     r"(?:المسم[ىي]\s*الوظيف[يى]|المسميات\s*الوظيفية|الشواغر\s*(?:الوظيفية|المطلوبة(?:\s*والشروط)?)|"
     r"الشروط\s*(?:المطلوبة|والمؤهلات|اللازمة)?|المتطلبات(?:\s*والشروط)?|المهام(?:\s*والمسؤوليات(?:\s*الرئيسية)?)?|"
+    r"أوقات\s*(?:العمل|الدوام)|ساعات\s*(?:العمل|الدوام)|مواعيد\s*(?:العمل|الدوام)|"
     r"المزايا|المميزات|طبيعة\s+العمل|طبيعة\s+الدوام|شروط\s+ومعلومات\s+العمل|معلومات\s+التواصل(?:\s+والموقع)?|لاعطاء\s+المواد(?:\s+التالية)?)\s*:?\s*$|"
     r"(?:محافظة|مدينة)\s+(?:دمشق|ريف\s+دمشق|حلب|حمص|حماة|طرطوس|اللاذقية|إدلب|درعا|السويداء|القنيطرة|دير\s*الزور|الحسكة|الرقة)\s*$|"
     r"نصيحة\s+\S+|تم\s+نشر\s+الإعلان|لا\s+تتحمل\s+(?:منصة|قناة)|إذا\s+كنت\s+تبحث\s+عن\s+فرصة|^عند التواصل(?:،|\s+للتقدم)|"
@@ -1129,26 +1141,60 @@ def _clean_bullets(block: str, limit: int = 5) -> list[str]:
     return out
 
 
+_EDU_AR = {
+    "none": "بدون شهادة",
+    "basic": "تعليم أساسي",
+    "secondary": "ثانوية عامة",
+    "institute": "معهد تقاني / متوسط",
+    "bachelor": "إجازة جامعية",
+    "master": "ماجستير",
+    "phd": "دكتوراه",
+}
+
+
 def _fallback_summary(d: dict) -> str:
-    title = (d.get("title") or "شاغر وظيفي").strip()
     emp = _clean_employer_val(d.get("employer"), bool(d.get("official")))
     default_country = "تركيا" if d.get("country") == "tr" else "سوريا"
     cs = "، ".join((d.get("cities") or [])[:3]) or default_country
-    dl = f" · آخر موعد للتقديم: {d['deadline']}" if d.get("deadline") else ""
-    head = f"شاغر {title} لدى {emp} في {cs}{dl}" if emp else f"شاغر {title} في {cs}{dl}"
+
+    facts: list[str] = []
+    if d.get("specialty"):
+        spec = _strip_ui_junk(d["specialty"])
+        spec = re.sub(r"\bالتقان(?=\s|$)", "التقاني", spec)
+        facts.append(f"التخصص: {spec[:70]}")
+    if d.get("education") and d["education"] in _EDU_AR:
+        edu_s = _EDU_AR[d["education"]]
+        if d.get("grade"):
+            edu_s += f" (الفئة {d['grade']})"
+        facts.append(f"المؤهل: {edu_s}")
+    if d.get("experience") is not None:
+        exp_n = d["experience"]
+        facts.append("الخبرة: غير مطلوبة" if exp_n == 0 else f"الخبرة: {exp_n} سنوات")
+    if d.get("shift"):
+        facts.append(f"الدوام: {d['shift']}")
+    if d.get("salary"):
+        facts.append(f"الراتب: {d['salary']}")
+    if d.get("deadline"):
+        facts.append(f"آخر موعد: {d['deadline']}")
 
     has_link = bool(d.get("apply_url") and not str(d["apply_url"]).lower().startswith("https://wa.me/"))
     has_email = bool(d.get("email"))
     phones = d.get("phones") or []
 
+    if facts:
+        prefix = f"فرصة عمل لدى {emp} ({cs})" if emp else f"فرصة عمل في {cs}"
+        if has_link and not d.get("tasks") and not d.get("skills") and len(facts) < 2:
+            facts.append("المهام والشروط ضمن الرابط")
+        return _clip_clause(f"{prefix} · " + " · ".join(facts), 185)
+
+    title = (d.get("title") or "شاغر وظيفي").strip()
+    head = f"شاغر {title} لدى {emp} في {cs}" if emp else f"شاغر {title} في {cs}"
     if has_email and not has_link:
-        how = f"للتقديم: إرسال السيرة الذاتية (CV) إلى البريد الإلكتروني {d['email']}"
+        how = f"للتقديم: إرسال السيرة الذاتية إلى {d['email']}"
     elif phones and not has_link and not has_email:
-        how = f"للتقديم والتواصل المباشر عبر الرقم {phones[0]}"
-    elif has_link and has_email:
-        how = f"التقديم عبر رابط التقديم المرفق أو إرسال السيرة الذاتية إلى {d['email']}"
+        how = f"للتواصل المباشر والتقديم: {phones[0]}"
     elif has_link:
-        how = "التقديم عبر استمارة / رابط التقديم المباشر المرفق."
+        how = "بطاقة الوصف والمهام الكاملة متوفرة في رابط التقديم الرسمي."
     else:
         how = ""
     return f"{head} — {how}" if how else head
@@ -1225,7 +1271,13 @@ def _repair_title_and_emp(d: dict) -> tuple[str, str]:
     title = _strip_ui_junk(d.get("title") or "")
     title = re.sub(r"(?:\s+|^)(?:09|٠٩|\+963|00963|\+90|0090)[0-9٠-٩\s\-]{7,}", "", title)
     title = re.sub(r"\s*#\S+", "", title).strip(" -–:،,.|/")
+    # Fix dropped PDF glyph final ي and cut titles containing housing/inquiry suffixes
+    title = re.sub(r"\bلوجست(?=\s|$|\))", "لوجستي", title)
+    title = re.sub(r"\b(?:إداري|مساعد|باحث|فني)\s+ثان(?=\s|\(|$)", lambda m: m.group(0) + "ي", title)
+    title = re.sub(r"\s+\b(?:المنام[ةه]\s+مؤمن[ةه]|السكن\s+مؤم[ن]?|ل[إأا]?ستفسار|الاتصال\s+على)\b.*$", "", title).strip(" -–:،,.|/")
     emp = _clean_employer_val(d.get("employer"), bool(d.get("official")))
+    if not emp and raw:
+        emp = _clean_employer_val(ex._employer(raw), bool(d.get("official")))
 
     if m_dom := re.search(r"\s+مجال\s+العمل\s+(.+)$", title):
         base_t = title[:m_dom.start()].strip(" -–:،,.")
@@ -1238,6 +1290,13 @@ def _repair_title_and_emp(d: dict) -> tuple[str, str]:
                 d["_extra_scope"] = f"مجال العمل: {dom}"
 
     title = ex.rewrite_freelance_title(title, raw)
+
+    # Upgrade vague generic person titles («صبية للعمل في المعمل الرئيسي...») when raw gives explicit «المسمى الوظيفي: ...»
+    if raw and re.match(r"^(?:صبي[ةه]|شاب|شباب|آنس[ةه]|بنت|مطلوب)\s+للعمل\b", title):
+        if m_explicit := re.search(r"(?:المسم[ىي]|المنصب|الشاغر)\s*الوظيف[يى]\s*[:：]\s*([^\n]+)", raw):
+            explicit_t = ex.normalize_title_display(m_explicit.group(1))
+            if explicit_t and len(explicit_t) >= 4:
+                title = explicit_t
 
     bad_title_re = re.compile(
         r"الشواغر\s+المطلوبة|التفاصيل\s+حول\s+الشواغر|تقديم\s+طلب\s+التوظيف|ضمن\s+الرابط\s+الآتي|"
@@ -1331,6 +1390,17 @@ def _enrich_from_raw(d: dict) -> None:
     if d.get("raw"):
         d["raw"] = raw
     title, emp = _repair_title_and_emp(d)
+    if d.get("specialty"):
+        d["specialty"] = re.sub(r"\bالتقان(?=\s|$)", "التقاني", _strip_ui_junk(d["specialty"]))
+    from . import taxonomy as tx
+    if not d.get("cities") and d.get("country", "sy") == "sy":
+        inferred_cs = tx.cities_from_text("\n".join(filter(None, (title, emp, raw))))
+        if inferred_cs:
+            d["cities"] = inferred_cs
+    if d.get("shift") is None and raw:
+        sh = tx.shift(raw)
+        if sh:
+            d["shift"] = sh
     if d.get("tags"):
         d["tags"] = [t for t in d["tags"] if t not in _PORTAL_TAGS]
     if d.get("apply_url"):
@@ -1366,11 +1436,15 @@ def _enrich_from_raw(d: dict) -> None:
     )
 
     cur_raw_sum = d.get("summary") or ""
+    title_core = re.split(r"[—–\-|(]", title)[0].strip()
     has_bad_cur = bool(
         "\ufffd" in cur_raw_sum
         or _UI_JUNK_RE.search(cur_raw_sum)
         or _BOILERPLATE_SUM_RE.search(cur_raw_sum)
         or _DANGLING_TAIL_RE.search(cur_raw_sum)
+        or "الجهة:" in cur_raw_sum
+        or "أوقات الدوام" in cur_raw_sum and "من " not in cur_raw_sum
+        or (title_core and cur_raw_sum.startswith(title_core) and len(cur_raw_sum) < len(title) + 38)
     )
     cur_sum = _clean_summary_text(cur_raw_sum)
     if cur_sum and (
@@ -1405,16 +1479,35 @@ def _enrich_from_raw(d: dict) -> None:
                 idx_hit = raw.find(t_kw)
                 if idx_hit > 60:
                     raw_scan = raw[max(0, raw.rfind("\n", 0, idx_hit)):]
+            raw_lines = [ln.strip() for ln in raw_scan.splitlines()]
             lines: list[str] = []
             title_head = title.split("—")[0].strip()
-            for ln in raw_scan.splitlines():
-                if _NUMBERED_LIST_ITEM_RE.match(ln.strip()):
+            li = 0
+            while li < len(raw_lines):
+                ln = raw_lines[li]
+                li += 1
+                if not ln or _NUMBERED_LIST_ITEM_RE.match(ln):
                     continue
+                # Merge standalone colon labels like «أوقات الدوام:\nمن الساعة 9 صباحاً حتى الساعة 6 مساءً»
+                if ln.endswith((":", "：")) and len(ln) <= 32 and li < len(raw_lines):
+                    nxt_v = raw_lines[li].strip(" •-*–\t\r")
+                    hdr_plain = ln.rstrip(":： ").strip()
+                    if (
+                        re.match(r"^(?:أوقات\s*(?:العمل|الدوام)|ساعات\s*(?:العمل|الدوام)|مكان\s*العمل|الراتب(?:\s*والمزايا)?|المؤهل(?:\s*المطلوب)?)$", hdr_plain)
+                        and nxt_v and len(nxt_v) >= 4 and not _SKIP_SUMMARY_LINE.search(nxt_v)
+                    ):
+                        lines.append(_clean_summary_text(f"{hdr_plain}: {nxt_v}"))
+                        li += 1
+                        if sum(len(x) for x in lines) >= 160 or len(lines) >= 2:
+                            break
+                        continue
                 core = _strip_intro_fluff(ln, emp)
                 if not core:
                     continue
                 s = _clean_summary_text(core)
                 if not s or len(s) < 12 or _NUMBERED_LIST_ITEM_RE.match(s):
+                    continue
+                if re.match(r"^(?:المسم[ىي]\s*الوظيف[يى]|Job\s*Title)\s*[:：]", s, re.I) and title_head and title_head in s:
                     continue
                 if s == title or (title_head and s == title_head) or s == emp or s in city_set:
                     continue
@@ -1426,7 +1519,10 @@ def _enrich_from_raw(d: dict) -> None:
                 if sum(len(x) for x in lines) >= 160 or len(lines) >= 2:
                     break
             if lines:
-                d["summary"] = _clip_clause(_clean_summary_text(" · ".join(lines)))
+                joined = _clean_summary_text(" · ".join(lines))
+                # Don't let summary merely duplicate title + location/phone when skills or structured specs exist
+                if not (title_head and joined.startswith("شاغر " + title_head) and not d.get("skills")):
+                    d["summary"] = _clip_clause(joined)
         d.pop("_extra_scope", None)
         d.pop("_colon_roles", None)
         if not d.get("summary") and d.get("skills"):

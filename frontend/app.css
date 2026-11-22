@@ -501,6 +501,8 @@ mark.hl{background:rgba(45,184,138,.26);color:inherit;padding:0 3px;border-radiu
   display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;
   min-height:calc(1.62em * 3);
 }
+.card-desc[role="button"]{cursor:pointer;transition:color .16s var(--ease),opacity .16s var(--ease)}
+.card-desc[role="button"]:hover,.card-desc[role="button"]:focus-visible{opacity:1;color:var(--accent);outline:none}
 
 /* Match Badge («بتنطبق عليك») */
 .fit{display:flex;align-items:center;gap:6px;font-size:.8rem;font-weight:600;padding:4px 9px;border-radius:8px;background:var(--surface-subtle)}
@@ -552,6 +554,21 @@ mark.hl{background:rgba(45,184,138,.26);color:inherit;padding:0 3px;border-radiu
   text-decoration:none!important;transition:all .18s var(--ease);
 }
 .card-cta-icon:hover{border-color:var(--accent);color:var(--accent);background:var(--accent-soft);transform:translateY(-1px)}
+.card-det-btn{
+  height:36px;padding:0 9px;border-radius:10px;flex-shrink:0;
+  display:inline-flex;align-items:center;gap:4px;white-space:nowrap;
+  font-size:.76rem;font-weight:700;font-family:inherit;cursor:pointer;
+  background:var(--surface-subtle);border:1px solid var(--line-strong);color:var(--ink);
+  transition:all .18s var(--ease);
+}
+.card-det-btn:hover{border-color:var(--accent);color:var(--accent);background:var(--accent-soft);transform:translateY(-1px)}
+.sheet-external-specs{
+  margin:12px 0;padding:14px 16px;border-radius:var(--r-sm);
+  background:var(--surface-subtle);border:1px dashed var(--line-strong);
+  display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;
+}
+.sheet-external-specs-copy strong{display:inline-flex;align-items:center;gap:6px;font-size:.86rem;color:var(--ink);margin-bottom:4px}
+.sheet-external-specs-copy p{margin:0;font-size:.82rem;color:var(--muted);line-height:1.6}
 .card-applied-btn{
   all:unset;cursor:pointer;height:34px;padding:0 10px;border-radius:10px;flex-shrink:0;
   display:inline-flex;align-items:center;justify-content:center;gap:5px;

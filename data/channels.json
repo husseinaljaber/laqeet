@@ -175,6 +175,14 @@
     "country": "sy",
     "sector": "private"
   },
+  "syria10102": {
+    "source": "syria10102",
+    "label": "وظائف عامة — سوريا",
+    "kind": "formal",
+    "official": false,
+    "country": "sy",
+    "sector": "private"
+  },
   "wazayf_Syria": {
     "source": "wazayf_sy",
     "label": "شواغر وظائف سوريا",

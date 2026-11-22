@@ -30,7 +30,7 @@ from .sources.moad_pdf import Card, fix_lost_tails, parse_pdf
 from .sources.reliefweb import fetch_reliefweb_jobs
 from .sources.turkey_portals import fetch_all_tr_portal_jobs
 from .sources.web_portals import fetch_all_web_portal_jobs
-from .sources.telegram import USER_AGENT, Post, parse_page
+from .sources.telegram import USER_AGENT, MTProtoReader, Post, parse_page
 
 log = logging.getLogger("collect")
 
@@ -160,13 +160,24 @@ def store_post(
     return new
 
 
-def read_channel(channel: str, client: httpx.Client, stop_id: int, since: str, max_pages: int = 20):
-    """Posts newer than stop_id (or posted after `since`), newest first."""
+def read_channel(channel: str, client: httpx.Client, stop_id: int, since: str, max_pages: int = 20,
+                 mtproto_reader: MTProtoReader | None = None):
+    """Posts newer than stop_id (or posted after `since`), newest first.
+
+    Falls back to MTProto (Telethon) on page 0 when Telegram web preview `t.me/s/` is disabled.
+    """
     before = None
-    for _ in range(max_pages):
+    for page_idx in range(max_pages):
         url = f"https://t.me/s/{channel}" + (f"?before={before}" if before else "")
         page = parse_page(client.get(url).text, channel)
         if not page:
+            if page_idx == 0 and mtproto_reader is not None:
+                yield from mtproto_reader.iter_channel(
+                    channel,
+                    stop_id=stop_id,
+                    since_iso=since,
+                    limit=80 if max_pages <= 5 else 400,
+                )
             return
         for post in sorted(page, key=lambda p: -p.id):
             if post.id <= stop_id or (post.date and post.date[:10] < since):
@@ -183,6 +194,7 @@ def collect(offline: bool = False, quick: bool = False) -> dict:
     since = (datetime.now(timezone.utc) - timedelta(days=config.HISTORY_DAYS)).date().isoformat()
     stats = {}
     client = None if offline else PoliteClient()
+    mtproto_reader = None if offline else MTProtoReader()
     resolve_client = (
         None
         if offline
@@ -199,7 +211,7 @@ def collect(offline: bool = False, quick: bool = False) -> dict:
             else:
                 stop = int(db.get_meta(con, f"last:{channel}", 0))
                 try:
-                    feed = list(read_channel(channel, client, stop, since, max_pages=max_pages))
+                    feed = list(read_channel(channel, client, stop, since, max_pages=max_pages, mtproto_reader=mtproto_reader))
                 except httpx.HTTPError as e:
                     log.warning("%s: %s", channel, e)
                     feed = []
@@ -245,6 +257,8 @@ def collect(offline: bool = False, quick: bool = False) -> dict:
         db.set_meta(con, "updated_at", db.now())
         con.commit()
     finally:
+        if mtproto_reader:
+            mtproto_reader.close()
         if resolve_client:
             resolve_client.close()
         if client:

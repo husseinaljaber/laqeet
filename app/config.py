@@ -128,4 +128,7 @@ ADMIN_TOKEN = os.getenv("ADMIN_TOKEN", "")              # protects /admin; empty
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")  # optional LLM extractor
 LLM_MODEL = os.getenv("LLM_MODEL", "claude-haiku-5-5")
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
+TG_API_ID = int(os.getenv("TG_API_ID") or 0)
+TG_API_HASH = os.getenv("TG_API_HASH", "")
+TG_STRING_SESSION = os.getenv("TG_STRING_SESSION", "")
 PUBLIC_URL = os.getenv("PUBLIC_URL", "http://localhost:8000")

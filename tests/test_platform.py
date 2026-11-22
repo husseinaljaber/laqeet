@@ -560,3 +560,77 @@ def test_phase2_employer_self_manage_verified_badge_and_trust_metrics():
     st_closed = client.get(f"/api/employer/manage/{token}").json()
     assert st_closed["status"] == "expired" and st_closed["closed_at"] is not None
 
+
+def test_syria10102_channel_and_mtproto_fallback():
+    from types import SimpleNamespace
+    from app import collect, config, extract as ex
+    from app.sources import telegram as tg
+
+    assert "syria10102" in config.CHANNELS
+    assert config.CHANNELS["syria10102"]["country"] == "sy"
+    assert "syria10102" in config.SOURCE_LABEL
+
+    class MessageEntityTextUrl:
+        def __init__(self, offset: int, length: int, url: str):
+            self.offset = offset
+            self.length = length
+            self.url = url
+
+    class MessageEntityUrl:
+        def __init__(self, offset: int, length: int):
+            self.offset = offset
+            self.length = length
+
+    # Include 4-byte emoji (2 UTF-16 code units) before plain URL to verify UTF-16 slicing
+    text = "💼 مطلوب محاسب في دمشق — التقديم: اضغط هنا\n🔗 https://example.org/apply"
+    link_off = text.encode("utf-16-le").index("https://example.org/apply".encode("utf-16-le")) // 2
+    entities = [
+        MessageEntityTextUrl(0, 5, "https://apply.example.com/form"),
+        MessageEntityUrl(link_off, len("https://example.org/apply")),
+    ]
+    msg = SimpleNamespace(
+        id=4012,
+        date=NOW,
+        message=text,
+        entities=entities,
+    )
+    post = tg.message_to_post("syria10102", msg)
+    assert post is not None
+    assert post.url == "https://t.me/syria10102/4012"
+    assert post.links == ["https://apply.example.com/form", "https://example.org/apply"]
+
+    extracted = ex.extract(post.text, "syria10102", post.url, post.date, links=post.links, country="sy")
+    assert len(extracted) == 1
+    assert "محاسب" in extracted[0].title and "دمشق" in extracted[0].cities
+
+    # Fallback triggers ONLY when web preview returns empty on page 0
+    calls = []
+
+    class FakeMTProto:
+        def iter_channel(self, channel, stop_id=0, since_iso="2026-03-01", limit=200):
+            calls.append((channel, stop_id))
+            return [post]
+
+    class FakeHTTP:
+        def __init__(self, html: str):
+            self.html = html
+
+        def get(self, url: str):
+            return SimpleNamespace(text=self.html)
+
+    fallback_posts = list(collect.read_channel("syria10102", FakeHTTP("<html>no messages</html>"), 0, "2026-01-01", mtproto_reader=FakeMTProto()))
+    assert calls == [("syria10102", 0)]
+    assert [p.id for p in fallback_posts] == [4012]
+
+    # When web preview has HTML posts up to stop_id, MTProto must NOT be invoked
+    calls.clear()
+    html_with_msg = (
+        '<div class="tgme_widget_message" data-post="syria10102/4012">'
+        '<div class="tgme_widget_message_text">مطلوب محاسب</div>'
+        '<time datetime="2026-11-22T10:00:00+00:00"></time></div>'
+    )
+    existing_posts = list(collect.read_channel("syria10102", FakeHTTP(html_with_msg), 4012, "2026-01-01", mtproto_reader=FakeMTProto()))
+    assert existing_posts == []
+    assert calls == []
+
+

@@ -368,8 +368,6 @@ mark.hl{background:rgba(45,184,138,.26);color:inherit;padding:0 3px;border-radiu
 
 /* Options Row */
 .options-row{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding-top:8px;border-top:1px dashed var(--line-strong)}
-.toggle{display:inline-flex;align-items:center;gap:7px;font-size:.87rem;cursor:pointer;color:var(--ink)}
-.toggle input{accent-color:var(--accent);width:16px;height:16px;cursor:pointer}
 .reset-filters-btn{color:var(--exp-high);font-size:.85rem;margin-inline-start:auto}
 
 /* Legend */

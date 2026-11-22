@@ -1796,7 +1796,6 @@
     if ($('eduFilter')) $('eduFilter').value = splitCsv(state.edu)[0] || '';
     if ($('fieldFilter')) $('fieldFilter').value = splitCsv(state.field)[0] || '';
     Object.values(mselRegistry).forEach((w) => { if (w) w.sync(); });
-    if ($('lower')) $('lower').checked = state.lower;
     if ($('sortOrder')) $('sortOrder').value = state.sort;
     if (state.country === 'tr' && state.sector === 'gov') state.sector = '';
     document.querySelectorAll('#sectorTabs .sector-card').forEach((c) => {
@@ -2297,10 +2296,6 @@
     });
 
     // Toggles
-    $('lower').addEventListener('change', (e) => {
-      state.lower = e.target.checked;
-      refresh();
-    });
     $('newToday').addEventListener('click', (e) => {
       state.fresh = !state.fresh;
       e.currentTarget.setAttribute('aria-pressed', String(state.fresh));

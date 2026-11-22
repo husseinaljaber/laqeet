@@ -635,7 +635,8 @@ def test_pitch_generator_and_tracker_ui():
     assert 'id="savedOnly"' in index_html
     assert 'id="appliedOnly"' in index_html
     assert 'id="expiringSavedBanner"' in index_html
-    assert "?v=38" in index_html
+    assert 'id="lower"' not in index_html
+    assert "?v=39" in index_html
 
     for fn in (
         "function toggleApplied(",

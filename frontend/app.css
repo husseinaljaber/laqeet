@@ -443,7 +443,7 @@ mark.hl{background:rgba(45,184,138,.26);color:inherit;padding:0 3px;border-radiu
 .skel-foot{height:30px;width:100%;margin-top:4px;border-radius:999px}
 
 .top{display:flex;justify-content:space-between;gap:8px;align-items:center;font-size:.78rem;min-height:30px}
-.card-top-badges{display:flex;align-items:center;gap:6px;flex-wrap:nowrap;min-width:0;overflow:hidden}
+.card-top-badges{display:flex;align-items:center;gap:6px;flex-wrap:wrap;min-width:0}
 .card-top-tools{display:inline-flex;align-items:center;gap:6px;flex-shrink:0}
 .card-icon-btn{
   all:unset;cursor:pointer;width:30px;height:30px;border-radius:9px;
@@ -461,10 +461,13 @@ mark.hl{background:rgba(45,184,138,.26);color:inherit;padding:0 3px;border-radiu
 .official{background:var(--gov-bg);color:var(--gov);padding:3px 11px;border-radius:999px;font-weight:700;display:inline-flex;align-items:center;gap:5px;font-size:.8rem}
 .src{color:var(--muted)}
 
-.card h3,.card-title{margin:0;font-family:var(--font-display);font-size:1.06rem;font-weight:700;line-height:1.45;min-height:1.45em}
+.card h3,.card-title{
+  margin:0;font-family:var(--font-display);font-size:1.05rem;font-weight:700;
+  line-height:1.42;min-height:calc(1.42em * 2);display:flex;align-items:flex-start;
+}
 .card h3 button{
   all:unset;cursor:pointer;color:var(--ink);transition:color .15s;
-  display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
 }
 .card h3 button:hover{color:var(--accent);text-decoration:underline;text-underline-offset:4px}
 .card h3 button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
@@ -475,16 +478,18 @@ mark.hl{background:rgba(45,184,138,.26);color:inherit;padding:0 3px;border-radiu
 .sec-ngo{background:var(--accent-soft);color:var(--accent)}
 .sec-private{background:var(--surface-subtle);color:var(--ink);border:1px solid var(--line)}
 
+.trunc-txt{display:block;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .card-submeta{
   display:flex;align-items:center;gap:7px;font-size:.82rem;font-weight:600;
   color:var(--muted);min-width:0;white-space:nowrap;overflow:hidden;
   padding-bottom:8px;border-bottom:1px solid var(--line);
 }
 .card-org,.card-loc{display:inline-flex;align-items:center;gap:5px;min-width:0}
-.card-org{color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:58%}
-.card-org .ico-wrap{color:var(--muted);flex-shrink:0}
+.card-org{color:var(--ink);flex:1 1 auto}
+.card-org .ico-wrap,.card-loc .ico-wrap{color:var(--muted);flex-shrink:0}
+.card-loc .ico-wrap{color:var(--accent)}
 .card-dot{color:var(--line-strong);font-weight:700;flex-shrink:0}
-.card-loc{color:var(--accent);font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex-shrink:0}
+.card-loc{color:var(--accent);font-weight:700;flex-shrink:0;max-width:44%}
 .card-dl-pill{
   margin-inline-start:auto;display:inline-flex;align-items:center;gap:4px;
   font-size:.72rem;font-weight:700;color:var(--amber);background:var(--amber-bg);
@@ -492,9 +497,9 @@ mark.hl{background:rgba(45,184,138,.26);color:inherit;padding:0 3px;border-radiu
 }
 
 .card-desc{
-  font-size:.84rem;color:var(--muted);line-height:1.65;margin:0;
-  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
-  min-height:calc(1.65em * 2);
+  font-size:.845rem;color:var(--ink);opacity:.88;line-height:1.62;margin:0;
+  display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;
+  min-height:calc(1.62em * 3);
 }
 
 /* Match Badge («بتنطبق عليك») */
@@ -505,14 +510,13 @@ mark.hl{background:rgba(45,184,138,.26);color:inherit;padding:0 3px;border-radiu
 .fit.no{--c:var(--exp-high);color:var(--exp-high)}
 
 .badges{display:flex;flex-wrap:wrap;gap:6px}
-.badges.card-specs{flex-wrap:nowrap;overflow:hidden;align-items:center;min-height:26px}
+.badges.card-specs{flex-wrap:wrap;overflow:visible;align-items:center;min-height:28px;margin-top:auto}
 .b{
   display:inline-flex;align-items:center;gap:5px;
-  font-size:.75rem;padding:3px 9px;border-radius:7px;
+  font-size:.74rem;padding:3px 9px;border-radius:7px;
   background:var(--surface-subtle);border:1px solid var(--line);color:var(--ink);
   white-space:nowrap;
 }
-.badges.card-specs .b{overflow:hidden;text-overflow:ellipsis;max-width:11.5rem}
 .b .ico-wrap{color:var(--muted);flex-shrink:0}
 .b.city{font-weight:700;background:var(--accent-soft);color:var(--accent);border-color:transparent}
 .b.exp{border:0;font-weight:600;background:var(--ebg);color:var(--efg);flex-shrink:0}
@@ -522,7 +526,7 @@ mark.hl{background:rgba(45,184,138,.26);color:inherit;padding:0 3px;border-radiu
 /* Clean Single-Row Card Footer */
 .card-footer{
   display:flex;align-items:center;gap:7px;
-  margin-top:auto;padding-top:11px;border-top:1px solid var(--line);
+  margin-top:2px;padding-top:11px;border-top:1px solid var(--line);
 }
 .card-cta-main{
   flex:1;min-width:0;height:36px;padding:0 13px;border-radius:10px;

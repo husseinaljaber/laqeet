@@ -287,7 +287,7 @@
     if (!iso) return '';
     const h = Math.round((Date.now() - new Date(iso)) / 36e5);
     if (h < 1) return 'الآن';
-    if (h < 24) return h === 1 ? 'قبل ساعة' : h === 2 ? 'قبل ساعتين' : `قبل ${h} ساعات`;
+    if (h < 24) return h === 1 ? 'قبل ساعة' : h === 2 ? 'قبل ساعتين' : h <= 10 ? `قبل ${h} ساعات` : `قبل ${h} ساعة`;
     const d = Math.round(h / 24);
     return d === 1 ? 'أمس' : d === 2 ? 'قبل يومين' : d <= 10 ? `قبل ${d} أيام` : `قبل ${d} يوماً`;
   }
@@ -510,12 +510,12 @@
     const fresh = j.posted_at && Date.now() - new Date(j.posted_at) < 864e5;
     if (j.deadline) {
       const d = daysLeft(j.deadline);
-      if (d < 0) return el('span', { class: 'status' }, 'انتهى موعد التقديم');
-      if (d === 0) return el('span', { class: 'status soon' }, ico('alert', 'ico-sm'), 'آخر موعد للتقديم اليوم!');
+      if (d < 0) return el('span', { class: 'status' }, 'انتهى التقديم');
+      if (d === 0) return el('span', { class: 'status soon' }, ico('alert', 'ico-sm'), 'آخر موعد اليوم!');
       return el('span', { class: 'status ' + (d <= 3 ? 'soon' : fresh ? 'new' : 'open') },
         (fresh ? 'جديد · ' : '') + `متبقي ${d} ${d <= 10 ? 'أيام' : 'يوماً'}`);
     }
-    return el('span', { class: 'status ' + (fresh ? 'new' : 'open') }, (fresh ? 'جديد اليوم · ' : '') + 'نُشر ' + ago(j.posted_at));
+    return el('span', { class: 'status ' + (fresh ? 'new' : 'open') }, (fresh ? 'جديد · ' : 'نُشر ') + ago(j.posted_at));
   }
 
   function toggleSave(j) {
@@ -634,8 +634,46 @@
   const PORTAL_EMP_RE = /^(?:جهة\s*توظيف|منظمة\s*أممية\s*\/\s*دولية|فرص\s*عمل|شواغر|وظائف|توظيف)(?:\s+\S+){0,2}\s+عبر\s+.+$/i;
   const WRAPPER_EMP_RE = /(?:job\s*in\s*syria|worklink|ngos?\s*syria|ngosquare|reliefweb|unjobs|unjobnet|syria-?jobs\.com|shamhr|forsa-?sy|salam\s*jobs|jobsintr|adwhit|ab-ilan|sqrjobs|nsjobs|jobsyria|wazifturk|وظيفتورك)/i;
 
+  const UNICODE_JUNK_RE = /[\p{Extended_Pictographic}\uFE0F\u200D\u200B-\u200F\u202A-\u202E\u20E3\uFFFD]|[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/gu;
+  const CARD_EDU_LABEL = {
+    none: 'بدون شهادة',
+    basic: 'تعليم أساسي',
+    secondary: 'ثانوي',
+    institute: 'معهد تقاني',
+    bachelor: 'بكالوريوس',
+    master: 'ماجستير',
+    phd: 'دكتوراه'
+  };
+  const CARD_FIELD_LABEL = {
+    computer: 'تقنية وبرمجة',
+    engineering: 'هندسة وعمارة',
+    health: 'طب وصحة',
+    business: 'محاسبة ومالية',
+    sales: 'مبيعات وتسويق',
+    education: 'تعليم وتدريب',
+    media: 'إعلام وتصميم',
+    law: 'حقوق وقانون',
+    ngo: 'عمل إنساني',
+    hospitality: 'مطاعم وفنادق',
+    retail: 'محلات ومتاجر',
+    industry: 'معامل وصناعة',
+    driving: 'نقل وتوصيل',
+    security: 'حراسة وأمن',
+    cleaning: 'نظافة وخدمات',
+    care: 'رعاية الأطفال',
+    translation: 'ترجمة ولغات'
+  };
+
+  function stripUnicodeJunk(s) {
+    return String(s || '')
+      .replace(/[0-9#*]\uFE0F?\u20E3/g, ' ')
+      .replace(UNICODE_JUNK_RE, ' ')
+      .replace(/\s{2,}/g, ' ')
+      .trim();
+  }
+
   function cleanEmployer(j) {
-    const raw = (j.employer || '').trim();
+    const raw = stripUnicodeJunk(j.employer || '').replace(/\s+(?:عبر|عن)$/u, '').trim();
     if (!raw || PLACEHOLDER_EMP.has(raw.toLowerCase()) || PORTAL_EMP_RE.test(raw) || WRAPPER_EMP_RE.test(raw)) {
       return j.official ? 'جهة حكومية رسمية' : '';
     }
@@ -644,8 +682,8 @@
 
   function cleanSummary(s) {
     if (!s) return '';
-    return String(s)
-      .replace(/(?:\s*[·•\-|]\s*|\s+)(?:💎+\s*)?المصدر\s*[:：]\s*[^·\n]+/gi, '')
+    return stripUnicodeJunk(s)
+      .replace(/(?:\s*[·•\-|]\s*|\s+)المصدر\s*[:：]\s*[^·\n]+/gi, '')
       .replace(/\s*لدى\s+(?:جهة\s*توظيف|منظمة\s*أممية(?:\s*\/\s*دولية)?)\s+عبر\s+(?:job\s*in\s*syria|worklink|ngos?\s*syria|ngosquare|reliefweb|[^\s·,،.]+)[^·\n]*/gi, '')
       .replace(/\s*عبر\s+(?:منصة|موقع|قناة|بوابة)\s+(?:فريلانس\s*سوريا|ورك\s*لينك|ساحة\s*المنظمات|سلام\s*جوبز|وظائف\s*سوريا|فرص\s*عمل(?:\s+في\s+(?:تركيا|سوريا))?(?:\s+الرسمية)?|ngo(?:s)?\s*syria|job\s*in\s*syria|worklink|salam\s*jobs|jobsintr|reliefweb|unjobnet|syria-?jobs)[^·\n]*/gi, '')
       .replace(/^(?:\s*[·•\-]\s*)+|(?:\s*[·•\-]\s*)+$/g, '')
@@ -970,16 +1008,46 @@
       (j.tasks && j.tasks.length ? j.tasks.slice(0, 2).join(' · ') : '') ||
       (j.skills && j.skills.length ? j.skills.slice(0, 2).join(' · ') : '')
     );
-    let txt = String(raw || '')
-      .replace(/[💼📍🏢📢✨🔹🔸📌🎯🟣🟢🔵🟡🟠🔺🔻⚡🔥💎✅✔]+/g, ' ')
-      .replace(/^\s*فرص\s+عمل[^|·\n]*[|·]\s*(?:[^|·\n]*[|·]\s*)?/i, '')
+    let txt = stripUnicodeJunk(raw)
+      .replace(/^\s*(?:فرص[ةه]?\s+عمل|إعلان\s+توظيف)[^|·\n]*[|·]\s*(?:[^|·\n]*[|·]\s*)?/i, '')
       .replace(/^(?:\s*[·•\-|،,:]\s*)+/g, '')
       .replace(/\s{2,}/g, ' ')
       .trim();
     if (!txt || txt.length < 16) {
-      txt = `شاغر ${j.title} لدى ${ent.name} في ${cityTxt} — اضغط على المسمى الوظيفي لعرض كامل التفاصيل والشروط.`;
+      txt = `شاغر ${stripUnicodeJunk(j.title)} لدى ${ent.name} في ${cityTxt} — اضغط على المسمى الوظيفي لعرض التفاصيل والشروط.`;
     }
-    return txt;
+    if (txt.length > 165) {
+      const clauses = txt.split(' · ').map((c) => c.trim()).filter(Boolean);
+      const kept = [];
+      for (const c of clauses) {
+        const next = kept.concat(c).join(' · ');
+        if (next.length <= 165 || !kept.length) kept.push(c);
+        else break;
+      }
+      txt = kept.join(' · ');
+      if (txt.length > 165) {
+        let cut = txt.slice(0, 165);
+        const sp = cut.lastIndexOf(' ');
+        if (sp > 90) cut = cut.slice(0, sp);
+        txt = cut.replace(/[·•\-:،,\s]+$/u, '');
+      }
+    }
+    return txt.replace(/\s+(?:في|من|إلى|عن|مع|على)\s*$/u, '').trim();
+  }
+
+  function formatCardSalary(raw) {
+    let s = stripUnicodeJunk(raw)
+      .replace(/ليرة\s+سورية\s+جديدة/g, 'ل.س جديدة')
+      .replace(/ليرة\s+سورية/g, 'ل.س')
+      .replace(/ليرة\s+تركية/g, 'ل.ت')
+      .replace(/دولار\s+أمريكي/g, '$');
+    if (s.length > 26) {
+      let cut = s.slice(0, 26);
+      const sp = cut.lastIndexOf(' ');
+      if (sp > 10) cut = cut.slice(0, sp);
+      s = cut.trim();
+    }
+    return s;
   }
 
   function cardBadges(j) {
@@ -987,14 +1055,15 @@
       el('span', { class: 'b exp' }, expText(j.experience))
     ];
     if (j.education) {
-      b.push(el('span', { class: 'b' }, ico('graduation-cap', 'ico-sm'), EDU_LABEL[j.education] || j.education));
+      b.push(el('span', { class: 'b' }, ico('graduation-cap', 'ico-sm'), CARD_EDU_LABEL[j.education] || EDU_LABEL[j.education] || j.education));
     }
     if (j.salary) {
-      b.push(el('span', { class: 'b b-sal' }, ico('coins', 'ico-sm'), j.salary.slice(0, 22)));
+      b.push(el('span', { class: 'b b-sal' }, ico('coins', 'ico-sm'), formatCardSalary(j.salary)));
     } else if (j.field && j.field !== 'other') {
-      b.push(el('span', { class: 'b' }, ico('briefcase', 'ico-sm'), j.subfield ? subLabel(j.subfield) : fieldLabel(j.field)));
+      const lbl = j.subfield ? subLabel(j.subfield) : (CARD_FIELD_LABEL[j.field] || fieldLabel(j.field));
+      b.push(el('span', { class: 'b' }, ico('briefcase', 'ico-sm'), lbl));
     } else if (j.shift) {
-      b.push(el('span', { class: 'b' }, ico('clock', 'ico-sm'), j.shift.slice(0, 22)));
+      b.push(el('span', { class: 'b' }, ico('clock', 'ico-sm'), formatCardSalary(j.shift)));
     }
     return b;
   }
@@ -1073,10 +1142,12 @@
       }
     }, ico('check-circle', 'ico-sm'), el('span', null, isApp ? (appDay ? `قدّمت (${appDay})` : 'قدّمت') : 'قدّمت'));
 
+    const cleanEmp = cleanEmployer(j);
+    const subOrgLabel = cleanEmp || (sec === 'gov' ? 'جهة حكومية رسمية' : sec === 'ngo' ? 'منظمة إنسانية' : 'صاحب عمل / شركة خاصة');
     const subMeta = el('div', { class: 'card-submeta' },
-      el('span', { class: 'card-org', title: ent.name }, ico(ent.ico, 'ico-sm'), ...highlightNodes(ent.name, state.terms)),
+      el('span', { class: 'card-org', title: ent.name }, ico(ent.ico, 'ico-sm'), el('span', { class: 'trunc-txt' }, ...highlightNodes(subOrgLabel, state.terms))),
       el('span', { class: 'card-dot', 'aria-hidden': 'true' }, '·'),
-      el('span', { class: 'card-loc', title: cityTxt }, ico('map-pin', 'ico-sm'), ...highlightNodes(cityTxt, state.terms)),
+      el('span', { class: 'card-loc', title: cityTxt }, ico('map-pin', 'ico-sm'), el('span', { class: 'trunc-txt' }, ...highlightNodes(cityTxt, state.terms))),
       dlDay ? el('span', { class: 'card-dl-pill', title: `آخر موعد للتقديم: ${dlDay}` }, ico('hourglass', 'ico-sm'), dlDay) : null
     );
 
@@ -1193,7 +1264,7 @@
         )
       ),
       trackSlot,
-      el('h3', { class: 'card-title' }, el('button', { onclick: () => openDetail(j) }, ...highlightNodes(j.title, state.terms))),
+      el('h3', { class: 'card-title' }, el('button', { onclick: () => openDetail(j) }, ...highlightNodes(stripUnicodeJunk(j.title), state.terms))),
       subMeta,
       trackerRow,
       desc,

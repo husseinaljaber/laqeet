@@ -25,10 +25,11 @@ F = soft_fold
 
 # A bullet that marks a list item. Decorated "info" markers (🔹 ✔️ ⚠️ 📍 …) are NOT here on purpose:
 # they start notes like «🔹 إعلان عبر بوابة التوظيف» or «✔️ يتم تقديم الطلب…». 🔹/🟧 count only inside a list block.
-_ITEM_BULLET = re.compile(r"^\s*(?:[▪▫◾◽■□•●◦‣⁃·\-–—*]+️?|\d{1,2}\s*[-.)]|[٠-٩]{1,2}\s*[-.)]|o\s+(?=[ء-ي]))\s*")
+_ITEM_BULLET = re.compile(r"^\s*(?:[▪▫◾◽■□•●◦‣⁃·\-–—*]+️?|[1-9]\ufe0f?\u20e3|\d{1,2}\s*[-.)]|[٠-٩]{1,2}\s*[-.)]|o\s+(?=[ء-ي]))\s*")
 _SOFT_BULLET = re.compile(r"^\s*(?:🔹|🔸|🔷|🔶|🟧|🟦|🟩|🔺|🔻|✅|☑️|✔️|➖|👈|📌|⭐|🌟|💠)️?\s*")
 _ORDINAL = re.compile(F(r"^\s*(اولا|ثانيا|ثالثا|رابعا|خامسا|سادسا|سابعا|ثامنا|تاسعا|عاشرا)\s*[:\-–]\s*"))
-_EMOJI = re.compile("[\U0001F000-\U0001FAFF☀-➿️‍⬀-⯿←-⇿■-◿]")
+_KEYCAP_EMOJI = re.compile(r"[0-9#*]\ufe0f?\u20e3")
+_EMOJI = re.compile(r"[\U0001F000-\U0001FAFF\u231A-\u23FA\u25AA-\u25FE☀-➿\u2B00-\u2BFF\uFE00-\uFE0F\u200B-\u200F\u202A-\u202E\uFFFD]")
 
 # The line that opens a list of job titles.
 _LIST_HEADER = re.compile(F(
@@ -91,15 +92,16 @@ _TITLE_PATTERNS = [
 _TITLE_CUT = re.compile(
     r"\s*(?:(?<![ء-ي])\.(?![ء-ي])|[،,؛!؟]|\s[–\-|]\s|\bدوام\b|\bالدوام\b|\bالعمر\b|\bعمر\b|\bمن الساعة\b|\bالراتب\b|\bبراتب\b|\bللتواصل\b|\bيفضل\b|"
     r"\bبدون خبر[ةه]\b|\bبخبرة\b|\bخبرة\b|\bالخبرة\b|\bشرط\b|\bيشترط\b|\bمع شهادة\b|\bللتقديم\b|\bفي (?:مدينة|محافظة|منطقة)\b|\bبمنطقة\b|\bضمن\b|"
-    r"\bفي محافظ|\bلدى\b|\bلديها\b|\bلديه\b|\bوفق\b|\bحسب\b|\bالعنوان\b|\bالمنطقة\b|\bالسكن\b|\bمو مهم\b|\bيكون\b|\bتكون\b|"
+    r"\bفي محافظ|\bلدى\b|\bلديها\b|\bلديه\b|\bلديهم\b|\bلديهما\b|\bعندهم\b|\bمجال\s+العمل\b|\bوفق\b|\bحسب\b|\bالعنوان\b|\bالمنطقة\b|\bالسكن\b|\bمو مهم\b|\bيكون\b|\bتكون\b|"
     r"\bذو\b|\bذات\b|\bللانضمام\b|\bيجيد\b|\bتجيد\b|\bلا يتجاوز\b|\bذات مظهر\b|\bالشغل\b|\bفاضي\b|\bصباحي\b|\bمسائي\b|\bسكن مؤمن\b|\bالسكن مؤمن\b|"
-    r"\bبشارع\b|\bع\s*طريق\b|\bعلى\s*طريق\b|\bقبل\s+مفرق\b|\bبعد\s+مفرق\b|\bيومي[ةه]\b|\bبس\s+مو\s+اكتر\b)")
-_TITLE_TRAIL = re.compile(r"(?:^|\s+)(?:فورا|فوراً|بشكل فوري|بشكل عاجل|عاجل|للعمل|بدون|في|ب|ضمن|من|ل|و|او|أو|على|عند|مع)\s*$")
+    r"\bبشارع\b|\bع\s*طريق\b|\bعلى\s*طريق\b|\bقبل\s+مفرق\b|\bبعد\s+مفرق\b|\bيومي[ةه]\b|\bبس\s+مو\s+اكتر\b|"
+    r"(?:\s+|^)(?:09|٠٩|\+963|00963|\+90|0090)[0-9٠-٩\s\-]{7,})")
+_TITLE_TRAIL = re.compile(r"(?:^|\s+)(?:فورا|فوراً|بشكل فوري|بشكل عاجل|عاجل|للعمل|بدون|في|ب|ضمن|من|ل|و|او|أو|على|عند|عندهم|لديهم|لدينا|مع)\s*$")
 _EMPLOYER = [
     re.compile(r"(?:^|\n)[^\w\n]{0,6}(?:الجهة(?:\s+المعلنة|\s+الموظِّ?فة)?|المعلن)\s*[:：]\s*([^\n]+)"),
     re.compile(r"(?:تُ?علِ?ن|تعلن|يُ?علِ?ن|يعلن|ترغب|يرغب|ترحّب|ترحب)\s+(?:عن\s+)?((?:ال)?(?:شركة|منظمة|جمعية|مؤسسة|مشفى|مستشفى|مجموعة|مركز|"
                r"معهد|جامعة|مدارس|مدرسة|بوابة|منصة|هيئة|وزارة|مديرية|محافظة|صندوق|الصندوق|الهلال|مصرف|بنك|وحدة|الرهبانية|"
-               r"عائلة|فريق|مكتب|مطعم|مجمع|اتحاد|نقابة|مؤسسه|شركه)[^\n،,.:]{2,70}?)[،,]?\s+(?:عن\s|بالتنسيق|بحاجتها|حاجتها|حاجته|بالتعاقد|ب?رفد|الشواغر|ترحّب|بكل)"),
+               r"عائلة|فريق|مكتب|مطعم|مجمع|اتحاد|نقابة|مؤسسه|شركه)[^\n،,.:]{2,70}?)[،,]?\s+(?:عبر\s+(?:فرع|مكتب|بوابة|منصة)|عن\s|بالتنسيق|بحاجتها|حاجتها|حاجته|بالتعاقد|ب?رفد|الشواغر|ترحّب|بكل)"),
     re.compile(r"(?:لدى|الجهة\s+الموظِّ?فة\s*:)\s*((?:ال)?(?:شركة|منظمة|جمعية|مؤسسة|مشفى|مستشفى|مجموعة|مركز|مصرف|بنك|مطعم|فندق|معهد|جامعة|صندوق|الصندوق|وزارة|مديرية|محافظة|هيئة|أمانة|مجلس)\s+[^\n،,.:]{2,50}?)(?:\s+في\s|\s*$|\s*[\n،,.])"),
     re.compile(r"(?:للعمل[ \t]+(?:في|لدى|ضمن|ب)[ \t]*|ب)(صيدلي[ةه][ \t]+[^\n،,.]{2,35}|(?:شرك[ةه]|معمل|مطعم|مكتب|عياد[ةه]|مشفى|مستشفى|مركز|منظم[ةه]|جمعي[ةه]|مؤسس[ةه]|لجن[ةه]|المجلس)[ \t]+(?!الدوام\b|دوام\b|الراتب\b|راتب\b)[^\n،,.:]{2,45}?)(?=[ \t]+(?:في|بريف|بمدينة|بمنطقة|بدوام|دوام|للتواصل|للتقديم)\b|[ \t]*[\n،,.]|$)"),
 ]
@@ -149,11 +151,13 @@ _ABROAD = re.compile(F(r"تركيا|\bturkey\b|türkiye|اسطنبول|استا�
 _TR_PHONE_IN_TEXT = re.compile(r"(?:\+?90|0090|wa\.me/90)[\s-]?5\d{2}")
 _MOAD_LINK = re.compile(r"bit\.ly/hiring|moad\.gov\.sy/recruitment")
 _GENERIC_PERSON = re.compile(F(r"^(شب|شاب|شباب|صبيه|صبايا|بنت|بنات|بنتين|انسه|سيده|امراه|مقيم|مقيمه|موظف|موظفه|موظفين|موظفات|عامل|عامله|عمال|عاملات|"
-                               r"شخص|اشخاص|كادر|فريق|شباب وصبايا|شاب او صبيه|امراه او صبيه|صبيتين|شابين|شابان|اكتر من صبيه|انسه|انسات)$"))
+                               r"شخص|اشخاص|كادر|فريق|شباب وصبايا|شاب او صبيه|امراه او صبيه|صبيتين|شابين|شابان|اكتر من صبيه|انسه|انسات|فنيين|فنيون|موظفون|عاملون)$"))
 
 
 def _strip_emoji(s: str) -> str:
-    return re.sub(r"\s+", " ", _EMOJI.sub(" ", s)).strip()
+    s = _KEYCAP_EMOJI.sub(" ", s or "")
+    s = _EMOJI.sub(" ", s)
+    return re.sub(r"\s+", " ", s).strip()
 
 
 def _clean_parens(s: str) -> str:
@@ -221,6 +225,8 @@ def normalize_title_display(s: str, keep_matlob: bool = False) -> str:
         if not s[94:95].isspace() and " " in cut[40:]:
             cut = cut.rsplit(" ", 1)[0]
         s = cut.strip(" -–:،,.")
+    for _ in range(3):
+        s = _TITLE_TRAIL.sub("", s).strip(" -–:،,.")
     s = _clean_parens(s)
     return s.strip(" -–:،,.")
 
@@ -322,11 +328,12 @@ def _employer(text: str) -> str | None:
     for rx in _EMPLOYER:
         if m := rx.search(text):
             name = re.sub(r"\s+", " ", m.group(1)).strip(" :،,")
-            name = re.sub(r"\s+عن$", "", name)
+            name = re.sub(r"\s+(?:عن|عبر)$", "", name)
             if re.fullmatch(r"ال\S+", name):  # «المديرية», «الشركة»: no name given
                 continue
             name = re.sub(r"\s+(?:فرع|في)\s+\S+$", "", name) if len(name) > 40 else name
             name = _strip_emoji(name)
+            name = re.sub(r"\s+(?:عن|عبر)$", "", name).strip()
             if _PORTAL_EMPLOYER.search(F(name)) or _GENERIC_EMP_RE.search(F(name)):
                 continue
             return name
@@ -336,7 +343,7 @@ def _employer(text: str) -> str | None:
 def _clean_lines(text: str) -> list[str]:
     out = []
     for line in text.splitlines():
-        s = line.strip()
+        s = re.sub(r"[\u200b-\u200f\u202a-\u202e\ufffd]+", "", line).strip()
         if not s or _NOISE_LINE.search(F(s)) or not re.search(r"\w", s):
             continue
         if re.fullmatch(r"(#\S+\s*)+", s):  # a line of hashtags only
@@ -616,9 +623,10 @@ _NOT_TITLE = re.compile(r"^(?:ال)?سلام عليكم|^مرحبا|^من (?:ب�
                         r"^يوجد|^الهلال الأحمر|^مشفى(?![^\n]*(?:بحاج[ةه]|مطلوب|تطلب|يلزم|شاغر|توظيف))|^مستشفى(?![^\n]*(?:بحاج[ةه]|مطلوب|تطلب|يلزم|شاغر|توظيف))|^رابط|^الطبية$|^الشركات|^(?:ما\s+(?:هو|هي)|النجاح\s+هو|التوظيف\s+هو)|"
                         r"^في\s|^ضمن\s|^اشتراك|^باقة|^www\.|^فرص[ةه]?$|^فرصتك|^فرصة تعاقد|(?:^|\s)لتوريد\b|توريد (?:خدمات|مواد|وقود)|مناقصة|عروض أسعار|"
                         r"^اليوم والتاريخ|^التوقيت|^الوثائق المطلوبة|^يرجى التواجد|^أجرى|^تفاصيل وموعد|^موعد (?:الاختبار|المقابلة|الامتحان)|^الكسل الوظيفي|^تشكل نقاط|^تصريح|^المساعدات الإنسانية|^الرواتب الشهرية|^المدينة الصناعية|^سانا$|"
-                        r"^وظيف[ةه](?:\s+جديد[ةه])?$|^الشواغر\s+(?:الوظيفي[ةه]|المتاح[ةه])$|^الرمز\s+الوظيف[يى]|^المميزات\b|^نبذ[ةه]\b|^رواتب\s+عالي[ةه]|^بيئ[ةه]\s+عمل|^اجازات\s+سنوي[ةه]|^تأمين\s+صح[يى]|"
+                        r"^وظيف[ةه](?:\s+جديد[ةه])?$|^الشواغر\s+(?:الوظيفي[ةه]|المتاح[ةه])$|^(?:ال)?شواغر\s+(?:ال)?مطلوب[ةه](?:\s+والشروط)?$|^الرمز\s+الوظيف[يى]|^المميزات\b|^نبذ[ةه]\b|^رواتب\s+عالي[ةه]|^بيئ[ةه]\s+عمل|^اجازات\s+سنوي[ةه]|^تأمين\s+صح[يى]|"
                         r"^العدد\s*[\d٠-٩]+$|^وصف\s+مختصر\s+ل|^نموذج\s+الأعمال\s+السابقة|"
-                        r"^(?:المهام|المسؤوليات|الشروط|المهارات|المؤهلات|المتطلبات|ال[إا]ختصاصات|التعاقد\s+مع\s+الشركات|الرواتب)\b|"
+                        r"\b(?:التفاصيل\s+حول\s+الشواغر|(?:يتم\s+)?تقديم\s+طلب\s+التوظيف|ضمن\s+الرابط\s+(?:الآتي|التالي))\b|"
+                        r"^(?:موظفين?|شواغر)\s+للعمل\s+ضمن\s+الاختصاصات\b|^(?:المهام|المسؤوليات|الشروط|المهارات|المؤهلات|المتطلبات|ال[إا]ختصاصات|التعاقد\s+مع\s+الشركات|الرواتب|لاعطاء\s+المواد)\b|"
                         r"^(?:للاطلاع\s+على|هل\s+أنت\s+مهتم|رفد\s+ك[وا]+در|ك[وا]+در(?:\s+(?:وطني[ةه]|مؤهل[ةه]|للعمل))?$|شواغر\s+(?:توظيف|وظيفي[ةه])|\d+\s*شواغر|"
                         r"نوع\s+الدوام|الدوام\b|دوام\s+(?:كامل|جزئي)|الراتب(?:\s*[:：]|$)|راتب\s+(?:شهري\s+عالي|ثابت|مجز)|"
                         r"خبر[ةه]\s+(?:في|لا\s*تقل)|العمر\b|السن\b|فرع\s+(?:إدلب|ادلب|دمشق|حلب|حمص|حماة|الحريقة)|شهاد[ةه]\s+معهد)|"
@@ -708,9 +716,35 @@ def _all_needs(text: str) -> list[str]:
     return out
 
 
+def rewrite_freelance_title(title: str, context_text: str = "") -> str:
+    """Turn verbose 'مزود خدمة مستقل لتقديم خدمات...' headlines into '<Specialty> — مزود خدمة مستقل'."""
+    t = (title or "").strip()
+    if F("مزود خدمة مستقل") not in F(t):
+        return t
+    if m := re.search(r"مزود\s+خدم[ةه]\s+مستقل\s*\(([^)\n]{3,45})\)", f"{t}\n{context_text[:500]}"):
+        spec = _clean_title(m.group(1))
+        if spec and "مزود خدمة" not in spec:
+            return f"{spec} — مزود خدمة مستقل"
+    if m := re.search(r"خدمات\s+تخصصي[ةه]\s+في\s+([^\n،,.]{3,38}?)(?:\s+ضمن\b|$)", t):
+        spec = re.sub(r"^\s*في\s+", "", m.group(1)).strip(" -–:،,.")
+        if spec and len(spec) >= 4:
+            if not re.search(r"^(?:طبيب|أخصائي|ممرض|مهندس|مدرب|محاسب|أخصائية)", spec):
+                spec = f"أخصائي {spec}"
+            return f"{spec} — مزود خدمة مستقل"
+    return t
+
+
+_WORKPLACE_INTRO_RE = re.compile(
+    F(r"^(?:مركز|معمل|مطعم|كافيه|مشفى|مستشفى|عياد[ةه]|مدرس[ةه]|معهد|جامع[ةه]|مصرف|بنك|فندق|محل)\s+"
+      r"(?:تعليم[يى]|طب[يى]|تجار[يى]|صناع[يى]|في\s+ح[يى]|في\s+منطق[ةه]|بـ?(?:ح[يى]|منطق[ةه]))\b"),
+    re.I,
+)
+
+
 def _single_title(text: str, lines: list[str]) -> tuple[str, str]:
     """(title, the line it came from) for a one-job post."""
     head = "\n".join(text.split("\n")[:2])
+    has_haja = bool(_HAJA_RX.search(text))
     order = _TITLE_PATTERNS[:5] + ([_NEED_LINE] if _NEED_LINE.search(head) else []) + _TITLE_PATTERNS[5:] + [_NEED_LINE]
     for rx in order:
         for m in rx.finditer(text):
@@ -722,6 +756,9 @@ def _single_title(text: str, lines: list[str]) -> tuple[str, str]:
             # «حاجتها إلى موظف/ موظفة مبيعات للعمل بدوام كامل»
             if re.match(r"\s*https?://", raw) or re.match(r"\s*(?:منظمة|شركة|مؤسسة|جمعية|لدى|في)\s", _strip_emoji(raw)):
                 continue
+            raw_plain = _strip_emoji(raw)
+            if has_haja and _WORKPLACE_INTRO_RE.match(F(raw_plain)):
+                continue  # «إعلان توظيف – مركز تعليمي في حي الفرقان» is a header, not the job title below
             raw = re.sub(r"\s(?:ذو|ذات|ذوي)\s+(?:منظر|مظهر)\s+لائق", "", raw)
             raw = re.sub(
                 r"^\s*(?:شاب|شباب|صبي[ةه]|صبايا|آنس[ةه]|انسه|سيد[ةه]|شخص|موظف[ةه]?|عامل[ةه]?)\s+"
@@ -729,7 +766,7 @@ def _single_title(text: str, lines: list[str]) -> tuple[str, str]:
                 "",
                 raw,
             )
-            title = _cut_title(raw)
+            title = rewrite_freelance_title(_cut_title(raw), text)
             if re.search(r"التالي|الآتي|الاتي|ما يلي", title):
                 continue
             words = F(title).split()
@@ -737,7 +774,7 @@ def _single_title(text: str, lines: list[str]) -> tuple[str, str]:
                 continue  # «شخص يجمع بين الحس الإبداعي…»
             if _GENERIC_PERSON.match(F(title)) and re.search(r"للعمل|تعمل|تشتغل|يشتغل|للانضمام|لكادر", raw):
                 # «شباب للعمل في مطعم» → keep the workplace: it is what the job is.
-                title = _clean_title(re.split(r"\s(?:دوام|الدوام|العمر|من الساعة|للتواصل|يفضل|براتب|الراتب|لدينا)\b|[.،,]", raw)[0])[:70]
+                title = _clean_title(re.split(r"\s(?:دوام|الدوام|العمر|من الساعة|للتواصل|يفضل|براتب|الراتب|لدينا|مجال\s+العمل)\b|[.،,]", raw)[0])[:70]
             if _good_title(title) and not _NOISE_LINE.search(F(title)):
                 return title, src
     for l in lines:
@@ -746,13 +783,13 @@ def _single_title(text: str, lines: list[str]) -> tuple[str, str]:
         t = _cut_title(l)
         if _good_title(t) and not l.startswith("#") and not _LIST_END.search(F(t)) and not _ANNOUNCE.search(F(t)) \
                 and not re.match(r"^[^\w\n:：]{0,4}[^:：\n]{2,55}[:：]", l) and not _NOT_FALLBACK.search(F(t)) and not _only_places(t):
-            return t, l
+            return rewrite_freelance_title(t, text), l
     return "", ""
 
 
 # First lines that name the employer or the place, not the job («لجنة الانقاذ الدولية», «إدلب _ سرمدا»).
 _NOT_FALLBACK = re.compile(F(r"^(لجنه|منظمه|جمعيه|مؤسسه|الاونروا|برنامج|شركه|الهيئه|المجلس|unicef|unhcr|wfp)\b|الصوره|ضمن الشروط|"
-                             r"المحافظ(?:ات|ه)\s*المطلوب|محافظه العمل|بطاقه الوصف|رابط التقديم|^كفاءات|^نبحث عن كفاءات"), re.I)
+                             r"المحافظ(?:ات|ه)\s*المطلوب|محافظه العمل|بطاقه الوصف|رابط التقديم|^كفاءات|^نبحث عن كفاءات|لاعطاء المواد"), re.I)
 
 
 _PLACE_ONLY_EXTRA = sorted(
@@ -879,24 +916,25 @@ def _extract_tasks_and_skills(text: str) -> tuple[list[str], list[str]]:
     current = None
     task_rx = re.compile(r"^(?:(?:ال)?مهام|(?:ال)?مسؤوليات|الواجبات|طبيعة العمل|responsibilities|duties|what you will do)\b", re.I)
     skill_rx = re.compile(r"^(?:(?:ال)?شروط|(?:ال)?متطلبات|(?:ال)?مؤهلات|(?:ال)?مهارات|requirements|qualifications|skills)\b", re.I)
+    stop_rx = re.compile(r"^(?:تفاصيل|مكان العمل|موقع العمل|العنوان|الراتب|الدوام|طريقة التقديم|للتقديم|للتواصل|معلومات التواصل|ملاحظات|المصدر|معلومات التوظيف|رابط|للمزيد|تابعونا)", re.I)
     for line in text.splitlines():
-        line = line.strip()
+        line = re.sub(r"[\u200b-\u200f\u202a-\u202e\ufffd]+", "", line).strip()
         if not line:
             continue
-        cleaned = re.sub(r"^[\s#*•🔹▪️▫️🔻👇👉✔️✅\-]+\s*", "", line).strip(" :：")
+        cleaned = _strip_emoji(re.sub(r"^[\s#*•🔹▪️▫️🔻👇👉✔️✅\-]+\s*", "", line)).strip(" :：")
         if task_rx.match(cleaned) and len(cleaned) <= 45:
             current = "tasks"
             continue
         elif skill_rx.match(cleaned) and len(cleaned) <= 45:
             current = "skills"
             continue
-        elif re.match(r"^(?:تفاصيل|مكان العمل|الراتب|الدوام|طريقة التقديم|للتواصل|ملاحظات|المصدر|معلومات التوظيف)", cleaned):
+        elif stop_rx.match(cleaned) or "📲" in line or re.search(r"إرسال\s+السيرة\s+الذاتية", cleaned):
             current = None
             continue
         if current in ("tasks", "skills"):
             m_bullet = re.match(r"^[\s*•🔹▪️▫️🔻👇👉✔️✅\-]+\s*(.+)$", line)
-            item = m_bullet.group(1).strip() if m_bullet else cleaned
-            if (m_bullet or (12 <= len(item) <= 150 and ":" not in item[:30])) and 5 <= len(item) <= 160:
+            item = _strip_emoji(m_bullet.group(1).strip() if m_bullet else cleaned)
+            if (m_bullet or (12 <= len(item) <= 150 and ":" not in item[:30])) and 5 <= len(item) <= 160 and not _NOISE_LINE.search(F(item)):
                 if current == "tasks" and len(tasks) < 8:
                     tasks.append(item)
                 elif current == "skills" and len(skills) < 8:

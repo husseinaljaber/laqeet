@@ -635,7 +635,7 @@ def test_pitch_generator_and_tracker_ui():
     assert 'id="savedOnly"' in index_html
     assert 'id="appliedOnly"' in index_html
     assert 'id="expiringSavedBanner"' in index_html
-    assert "?v=35" in index_html
+    assert "?v=36" in index_html
 
     for fn in (
         "function toggleApplied(",
@@ -643,8 +643,11 @@ def test_pitch_generator_and_tracker_ui():
         "function isExpiringWithin48h(",
         "function renderExpiringSavedBanner(",
         "function buildCardTrackBadges(",
+        "function stripUnicodeJunk(",
         "function cleanCardSummary(",
         "function cardBadges(",
+        "CARD_EDU_LABEL",
+        "CARD_FIELD_LABEL",
         "tpl-subject-input",
     ):
         assert fn in app_js
@@ -657,11 +660,51 @@ def test_pitch_generator_and_tracker_ui():
         ".card-submeta",
         ".card-cta-main",
         ".card-applied-btn",
+        ".trunc-txt",
     ):
         assert cls in app_css
 
     assert 'id="pitchSubjectText"' in api_py
     assert 'id="pitchBodyText"' in api_py
     assert "?subject=" in api_py
+
+
+def test_clean_titles_summaries_and_no_unicode_surrogate_leaks():
+    from app import db, extract as ex
+
+    assert ex.rewrite_freelance_title(
+        "مزود خدمة مستقل لتقديم خدمات تخصصية في أمراض الأطفال",
+        "دعوة للتعاقد مع مزود خدمة مستقل (طبيب أطفال)\nتعلن مؤسسة SDI...",
+    ) == "طبيب أطفال — مزود خدمة مستقل"
+
+    js_sana = ex.extract(
+        "وزارة التنمية الإدارية تعلن عن توفر شواغر وظيفية لصالح وزارة الإدارة المحلية والبيئة في دمشق.\n- التفاصيل حول الشواغر المتاحة متوفرة ضمن الرابط الآتي\nhttps://example.gov.sy/jobs",
+        "sana",
+        "https://t.me/sana_gov/1",
+        "2026-11-22T10:00:00+00:00",
+    )
+    assert all("الرابط الآتي" not in j.title and "التفاصيل حول" not in j.title for j in js_sana)
+
+    d = {
+        "title": "الشواغر المطلوبة والشروط",
+        "employer": "شركة الترك للصناعات (ALTURK) عبر",
+        "cities": ["طرطوس"],
+        "country": "sy",
+        "phones": ["0933232080"],
+        "raw": (
+            "إعلان توظيف — فرص عمل في طرطوس\n"
+            "\u200bتعلن شركة الترك للصناعات عبر فرع طرطوس عن حاجتها:\n"
+            "\u200bالشواغر المطلوبة والشروط:\n"
+            "\u200bسكرتيرة:\nإجادة استخدام الحاسوب.\n\n"
+            "\u200bصانع مخرطة:\nالخبرة مطلوبة.\n\n"
+            "\u200bمعلومات التواصل والموقع:\nطرطوس\n0933232080"
+        ),
+    }
+    db._enrich_from_raw(d)
+    assert d["title"] == "سكرتيرة / صانع مخرطة"
+    assert d["employer"] == "شركة الترك للصناعات (ALTURK)"
+    assert "معلومات التواصل" not in (d["summary"] or "")
+    assert "\u200b" not in (d["summary"] or "") and "\ufffd" not in (d["summary"] or "")
+
 
 

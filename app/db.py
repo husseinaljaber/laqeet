@@ -773,11 +773,24 @@ _SUMMARY_SOURCE_TAIL_RE = re.compile(
     r"https?://\S+|(?<!\S)#[^\s]+",
     re.I,
 )
+_UI_KEYCAP_RE = re.compile(r"[0-9#*]\ufe0f?\u20e3")
+_UI_JUNK_RE = re.compile(r"[\U0001F000-\U0001FAFF\u231A-\u23FA\u25AA-\u25FE\u2600-\u27BF\u2B00-\u2BFF\uFE00-\uFE0F\u200B-\u200F\u202A-\u202E\uFFFD]")
 _PORTAL_TAGS = frozenset({"Job In Syria", "ورك لينك", "NGOs Syria"})
 
 
+def _strip_ui_junk(text: str | None) -> str:
+    """Remove emojis, keycap digits, variation selectors, zero-width marks, and replacement chars cleanly."""
+    if not text:
+        return ""
+    s = str(text).replace("<PRIVATE_PERSON>", "")
+    s = _UI_KEYCAP_RE.sub(" ", s)
+    s = _UI_JUNK_RE.sub(" ", s)
+    return re.sub(r"[ \t]+", " ", s).strip()
+
+
 def _clean_employer_val(emp: str | None, official: bool = False) -> str:
-    raw = (emp or "").strip()
+    raw = _strip_ui_junk(emp)
+    raw = re.sub(r"\s+(?:عبر|عن)$", "", raw).strip(" -–:،,")
     if not raw or raw.lower() in _PLACEHOLDER_EMP or _PORTAL_EMP_RE.search(raw) or _LOCATION_AS_EMP_RE.search(raw):
         return "جهة حكومية رسمية" if official else ""
     return raw
@@ -786,7 +799,8 @@ def _clean_employer_val(emp: str | None, official: bool = False) -> str:
 def _clean_summary_text(text: str | None) -> str:
     if not text:
         return ""
-    s = _SUMMARY_SOURCE_TAIL_RE.sub("", text)
+    s = _strip_ui_junk(text)
+    s = _SUMMARY_SOURCE_TAIL_RE.sub("", s)
     s = re.sub(r"(?:\s*[:：]?\s*\bht{1,2}p?s?\b|\s*:\s*)$", "", s, flags=re.I)
     s = re.sub(r"^(?:\s*[·•\-:]\s*)+|(?:\s*[·•\-:]\s*)+$", "", s)
     return re.sub(r"\s{2,}", " ", s).strip()
@@ -1059,24 +1073,46 @@ _SKILLS_SEC_RE = re.compile(
     r"(?:الشروط والمؤهلات|المؤهلات والخبرات|الشروط المطلوبه|الشروط المطلوبة|المتطلبات|ملاحظات للمتقدم)\s*[:：]?\s*([\s\S]{15,700}?)(?=\r?\n\s*(?:المهام|التقديم|للتقديم|رابط|🔗|📄|$))"
 )
 _SKIP_SUMMARY_LINE = re.compile(
-    r"^(?:سلام عليكم|وعليكم السلام|التفاصيل|قبل أن تتقدّم|قبل ان تتقدم|"
-    r"(?:التقديم|للتقديم|للتواصل والتقديم|تقدم الآن|تقدّم الآن)\s*:?\s*$|"
+    r"^(?:سلام عليكم|السلام عليكم|وعليكم السلام|حياكم الله|تحية طيبة|التفاصيل|قبل أن تتقدّم|قبل ان تتقدم|"
+    r"(?:التقديم|للتقديم|للتواصل والتقديم|تقدم الآن|تقدّم الآن|طريقة التقديم(?:\s+والاستفسار)?|للتقديم والاستفسار(?:\s*[،,]\s*يرجى\s+التواصل)?|للتواصل والاستفسار|للاطلاع على التفاصيل|للاطلاع على التفاصيل يمكن زيارة الرابط التالي|للمزيد من التفاصيل|رابط التقديم)\s*:?\s*$|"
+    r"(?:يتم\s+)?التواصل\s+عبر\s+(?:واتساب|الرقم).*?(?:التالي)?\s*:?\s*$|"
     r"للتواصل والتقديم عبر الرقم المرفق|"
-    r"📢\s*وظيفة جديدة|الوصف المستخرج|🔗|🏢\s*الجهة|📍\s*الموقع|📅\s*آخر موعد|الفئة الوظيفية|محافظة العمل|"
+    r"وظيفة جديدة|الوصف المستخرج|🔗|🏢\s*الجهة|📍\s*الموقع|📅\s*آخر موعد|الفئة الوظيفية|محافظة العمل|"
+    r"(?:المسم[ىي]\s*الوظيف[يى]|المسميات\s*الوظيفية|الشواغر\s*(?:الوظيفية|المطلوبة(?:\s*والشروط)?)|"
+    r"الشروط\s*(?:المطلوبة|والمؤهلات|اللازمة)?|المتطلبات(?:\s*والشروط)?|المهام(?:\s*والمسؤوليات(?:\s*الرئيسية)?)?|"
+    r"المزايا|المميزات|طبيعة\s+العمل|طبيعة\s+الدوام|شروط\s+ومعلومات\s+العمل|معلومات\s+التواصل(?:\s+والموقع)?|لاعطاء\s+المواد(?:\s+التالية)?)\s*:?\s*$|"
+    r"(?:محافظة|مدينة)\s+(?:دمشق|ريف\s+دمشق|حلب|حمص|حماة|طرطوس|اللاذقية|إدلب|درعا|السويداء|القنيطرة|دير\s*الزور|الحسكة|الرقة)\s*$|"
+    r"نصيحة\s+\S+|تم\s+نشر\s+الإعلان|لا\s+تتحمل\s+(?:منصة|قناة)|إذا\s+كنت\s+تبحث\s+عن\s+فرصة|^عند التواصل(?:،|\s+للتقدم)|"
+    r"تواصل معنا.*لنشر فرص العمل|للعمل ضمن كوادره،?\s*وفق الشروط التالية|"
     r"(?:https?://)?[A-Za-z0-9.-]+\.[A-Za-z]{2,}/\S*$|#|\*?\s*(?:للتواصل|الاتصال|مطلوب)\s*:?\s*$)|"
     r"للمزيد من فرص العمل|وبإمكانكم متابعة قناتنا|تابعوا قنواتنا|قناة التلغرام|قناة الواتساب|تابعونا على تلغرام|"
     r"تفاصيل المهام في ملف الوصف الوظيفي|"
     r"لنشر ما لديكم|راسلونا دايركت|للتواصل ولمعلومات|الاتصال على الرقم|"
-    r"(?:💎+\s*)?المصدر\s*[:：]|عبر\s+(?:Job\s*In\s*Syria|WorkLink|NGOs?\s*Syria|salam\s*jobs|jobsintr)|"
+    r"(?:المصدر|عبر\s+(?:Job\s*In\s*Syria|WorkLink|NGOs?\s*Syria|salam\s*jobs|jobsintr))\s*[:：]?|"
     r"(?:^|[\s(])@[A-Za-z0-9_]{3,}(?!\.[A-Za-z0-9-])",
     re.I,
 )
-
+_BOILERPLATE_PREFIX_RE = re.compile(
+    r"^(?:فرص[ةه]?\s+عمل(?:\s+في\s+مجال|\s+إداري[ةه]|\s+جديد[ةه])?[^|\n]*[|·–\-]?\s*|"
+    r"إعلان\s+(?:توظيف|شاغر)[^|\n—–\-]*[|—–\-]?\s*|"
+    r"دعوة\s+للتعاقد[^:\n]*[:：]?\s*|"
+    r"فرص\s+وظيفية\s+جديدة\s+في\s+[^\n·]+|"
+    r"(?:تُ?عل[ن]?|يُ?عل[ن]?|نُ?عل[ن]?)\s+[^\n.،]{3,85}?\s+(?:عن\s+(?:حاجتها|حاجته|رغبتها|توفر|توافر|فتح\s+باب\s+التقديم))\s*)",
+    re.I,
+)
+_BOILERPLATE_SUM_RE = re.compile(
+    r"(?:التقديم متاح مباشرة عبر الرابط المرفق|فرص[ةه]?\s+عمل\s+في\s+مجال|"
+    r"للانضمام\s+[إا]ل[ىي]\s+فريق|عن\s+فتح\s+باب\s+التقديم\s+لاستقطاب|"
+    r"عن\s+توفر\s+عدد\s+من\s+الشواغر|دعوة\s+للتعاقد\s+مع\s+مزود\s+خدمة\s+مستقل|"
+    r"(?:تُ?علن|يُ?علن)\s+.{3,70}\s+عن\s+(?:حاجتها|رغبتها)|إعلان\s+توظيف\s*[—–\-])"
+)
+_DANGLING_TAIL_RE = re.compile(r"\s+(?:في|من|إلى|الى|عن|على|مع|لدى|عند|و|أو)\s*$", re.I)
 
 _NUMBERED_LIST_ITEM_RE = re.compile(
-    r"^(?:[1-9]\d?|[١-٩][٠-٩]?|1️⃣|2️⃣|3️⃣|4️⃣|5️⃣|6️⃣|7️⃣|8️⃣|9️⃣|🔟)\s*[-.)–]|^(?:أولا|اولا|ثانيا|ثالثا|رابعا|خامسا)\s*[:\-–]"
+    r"^(?:[1-9]\d?|[١-٩][٠-٩]?|1️⃣|2️⃣|3️⃣|4️⃣|5️⃣|6️⃣|7️⃣|8️⃣|9️⃣|🔟)\s*(?:[-.)–]|\s+(?=[ء-يA-Za-z]))|^(?:أولا|اولا|ثانيا|ثالثا|رابعا|خامسا)\s*[:\-–]"
 )
 _SPAM_BULLET_RE = re.compile(r"ادعمولنا|ادعمونا|عبتستفيد|شاركوا البوست|لايك|شير", re.I)
+_APPLY_LEAK_RE = re.compile(r"للتقديم والاستفسار|يرجى إرسال السيرة الذاتية|أو عبر البريد الإلكتروني|^طريقة التقديم", re.I)
 
 
 def _clean_bullets(block: str, limit: int = 5) -> list[str]:
@@ -1118,15 +1154,183 @@ def _fallback_summary(d: dict) -> str:
     return f"{head} — {how}" if how else head
 
 
+def _clip_clause(text: str, max_len: int = 185) -> str:
+    """Shorten text strictly at clause/word boundaries without trailing dangling prepositions."""
+    s = re.sub(r"\s{2,}", " ", (text or "")).strip(" ·•-–:،,.")
+    if len(s) > max_len:
+        parts = [p.strip() for p in s.split(" · ") if p.strip()]
+        kept: list[str] = []
+        for p in parts:
+            cand = " · ".join(kept + [p])
+            if len(cand) <= max_len or not kept:
+                kept.append(p)
+            else:
+                break
+        s = " · ".join(kept)
+        if len(s) > max_len:
+            cut = s[:max_len]
+            if not s[max_len:max_len + 1].isspace() and " " in cut[30:]:
+                cut = cut.rsplit(" ", 1)[0]
+            s = cut.strip(" ·•-–:،,.")
+    while _DANGLING_TAIL_RE.search(s):
+        s = _DANGLING_TAIL_RE.sub("", s).strip(" ·•-–:،,.")
+    return s
+
+
+def _strip_intro_fluff(line: str, emp: str = "") -> str:
+    """Extract the useful core from a promo/announcement sentence, or return '' if pure fluff."""
+    s = _strip_ui_junk(re.sub(r"https?://\S+", "", line))
+    s = re.sub(r"\s*[:：]\s*$", "", s).strip(" •-*–\t\r")
+    if not s or _SKIP_SUMMARY_LINE.search(s):
+        return ""
+    if re.match(r"^(?:فرص[ةه]?\s+عمل|إعلان\s+(?:توظيف|شاغر)|فرص\s+وظيفية)\b", s):
+        if "|" in s:
+            parts = [p.strip() for p in s.split("|") if p.strip()]
+            rest = [p for p in parts[1:] if (not emp or emp not in p) and not re.match(r"^(?:شركة|مؤسسة|منظمة|مطعم)\s+", p)]
+            rest = [p for p in rest if len(p) >= 12 and not re.match(r"^(?:دمشق|حلب|حمص|حماة|طرطوس|اللاذقية|إدلب)\s*[–\-]", p)]
+            return " · ".join(rest) if rest else ""
+        return ""
+    if re.match(r"^(?:تُ?عل[ن]?|يُ?عل[ن]?|نُ?عل[ن]?)\b", s):
+        if m := re.search(
+            r"(?:لتقديم\s+(خدمات[^.\n]+)|(?:بتشغيل|بصيانة|لبيع|في\s+مجال\s+[^\n.]+))",
+            s,
+        ):
+            core = (m.group(1) or m.group(0)).strip(" .-–،,:")
+            if core.startswith("خدمات "):
+                core = "تقديم " + core
+            core = re.sub(r"\s+للانضمام\s+[إا]ل[ىي]\s+فريق.*$", "", core).strip()
+            return core if len(core) >= 18 else ""
+        if re.search(r"(?:للانضمام\s+[إا]ل[ىي]\s+فريق|فتح\s+باب\s+التقديم|توفر\s+عدد\s+من\s+الشواغر|بالوظائف\s+الشاغرة\s+التالية|الشاغر\s+التالي|عن\s+حاجته[ا]?\s+(?:إلى|الى|ل|لتعيين))", s):
+            return ""
+    s = _BOILERPLATE_PREFIX_RE.sub("", s).strip(" ·•—-–:،,")
+    s = re.sub(r"^(?:إل[ىي]|عن\s+حاجته[ا]?)\s+", "", s).strip(" ·•—-–:،,")
+    s = re.sub(r"\s+للانضمام\s+[إا]ل[ىي]\s+فريق.*$", "", s).strip(" ·•—-–:،,")
+    if s and _SKIP_SUMMARY_LINE.search(s):
+        return ""
+    return s
+
+
+_COLON_EXCLUDE_RE = re.compile(
+    r"^(?:الشروط.*|المتطلبات.*|المهام.*|معلومات\s+التواصل.*|طريقة\s+التقديم.*|طبيعة\s+(?:العمل|الدوام).*|"
+    r"الموقع|العنوان|مكان\s+العمل|للتواصل.*|للتقديم.*|الشواغر\s+المطلوبة.*|ملاحظات.*)$",
+    re.I,
+)
+
+
+def _repair_title_and_emp(d: dict) -> tuple[str, str]:
+    """Repair noisy, generic, or clipped stored job titles and employers cleanly."""
+    from . import extract as ex
+
+    raw = "\n".join(_strip_ui_junk(ln) for ln in (d.get("raw") or "").splitlines()).strip()
+    title = _strip_ui_junk(d.get("title") or "")
+    title = re.sub(r"(?:\s+|^)(?:09|٠٩|\+963|00963|\+90|0090)[0-9٠-٩\s\-]{7,}", "", title)
+    title = re.sub(r"\s*#\S+", "", title).strip(" -–:،,.|/")
+    emp = _clean_employer_val(d.get("employer"), bool(d.get("official")))
+
+    if m_dom := re.search(r"\s+مجال\s+العمل\s+(.+)$", title):
+        base_t = title[:m_dom.start()].strip(" -–:،,.")
+        dom = m_dom.group(1).strip()
+        if raw and (m_raw_dom := re.search(r"مجال\s+العمل\s+([^\n]+)", raw)):
+            dom = re.split(r"\s*\*?\s*للتواصل\b", m_raw_dom.group(1))[0].strip(" .،,-")
+        if len(base_t) >= 8:
+            title = base_t
+            if not d.get("summary"):
+                d["_extra_scope"] = f"مجال العمل: {dom}"
+
+    title = ex.rewrite_freelance_title(title, raw)
+
+    bad_title_re = re.compile(
+        r"الشواغر\s+المطلوبة|التفاصيل\s+حول\s+الشواغر|تقديم\s+طلب\s+التوظيف|ضمن\s+الرابط\s+الآتي|"
+        r"موظفين\s+للعمل\s+ضمن\s+الاختصاصات|إرسال\s+السيرة\s+الذاتية|^ارسال\s+السير|^مركز\s+تعليمي\s+في\s+ح[يى]|"
+        r"^فنيين\s+لديهم$|^نمذجة$|^شاغر\s+وظيفي$|^إعلان\s+توظيف$|^فرصة\s+للعطاء\s+المعرفي$",
+        re.I,
+    )
+    if raw and (bad_title_re.search(title) or _DANGLING_TAIL_RE.search(title)):
+        if "وزارة " in raw and ("الرابط الآتي" in title or "الشواغر" in title):
+            if m_min := re.search(r"لصالح\s+(وزارة\s+[^\n،,.(]{4,45})", raw):
+                title = f"شواغر {m_min.group(1).strip()}"
+            elif m_min2 := re.search(r"(وزارة\s+[^\n،,.(]{4,45})", raw):
+                title = f"شواغر {m_min2.group(1).strip()}"
+        elif "مركز تعليمي" in title and (m_r := re.search(r"عن\s+حاجت[ه]?\s+إل[ىي]\s+([^\n]{3,45})", raw)):
+            cand_r = ex.normalize_title_display(m_r.group(1))
+            if cand_r:
+                title = cand_r
+        elif title == "فنيين لديهم" and (m_fn := re.search(r"مطلوب\s+(فنيين\s+[^\n–\-]{4,45})", raw)):
+            title = ex.normalize_title_display(m_fn.group(1))
+        elif title == "فنيين لديهم" and re.search(r"محاسب\s+تكاليف", raw):
+            title = "محاسب تكاليف (Cost Accountant)"
+        elif title == "نمذجة" and (m_eng := re.search(r"مطلوب\s+(مهندسين\s+[^\n]{4,35})", raw)):
+            cand = re.sub(r"\s+لصالح.*$", "", m_eng.group(1)).strip()
+            title = f"{cand} (تدريس مواد هندسية)"
+        elif "الشواغر المطلوبة" in title:
+            roles = [
+                m_c.group(1).strip()
+                for ln in raw.splitlines()
+                if (m_c := re.match(r"^\s*([ء-يA-Za-z /\-()]{3,28})\s*[:：]\s*$", ln))
+                and not _COLON_EXCLUDE_RE.match(m_c.group(1).strip())
+            ]
+            if roles:
+                title = " / ".join(roles[:4])
+                d["_colon_roles"] = roles
+        elif "ضمن الاختصاصات التالية" in title:
+            after_hdr = re.split(r"الاختصاصات\s+التالية\s*[:：]?", raw, maxsplit=1)[-1]
+            role_cands: list[str] = []
+            for ln in after_hdr.splitlines():
+                p = _strip_ui_junk(ln).strip(" .،,-")
+                if not p or len(p) < 3 or len(p) > 35:
+                    continue
+                if re.match(r"^(?:يشترط|يفضل)\b", p):
+                    continue
+                if _COLON_EXCLUDE_RE.match(p.rstrip(":：")) or re.match(r"^(?:طبيعة\s+العمل|طبيعة\s+الدوام|شروط|طريقة\s+التقديم|للتواصل)\b", p):
+                    break
+                role_cands.append(p)
+            if role_cands:
+                title = " / ".join(role_cands[:4])
+                d["_colon_roles"] = role_cands
+        elif "إرسال السيرة" in title or "ارسال السير" in title:
+            re_jobs = ex.extract(raw, d.get("source") or "telegram", d.get("post_url") or "", d.get("posted_at"))
+            if re_jobs and not bad_title_re.search(re_jobs[0].title):
+                title = re_jobs[0].title
+
+    while _DANGLING_TAIL_RE.search(title) and len(title) > 12:
+        title = _DANGLING_TAIL_RE.sub("", title).strip(" -–:،,.")
+    d["title"] = title or d.get("title") or ""
+    d["employer"] = emp or None
+    return d["title"], emp
+
+
+def _find_multi_item_context(raw_orig: str, title: str) -> str:
+    """When a post lists numbered vacancies with per-item sublines, extract only those sublines."""
+    raw_norm = _UI_KEYCAP_RE.sub(lambda m: f"{m.group(0)[0]}. ", raw_orig or "")
+    lines = [_strip_ui_junk(ln) for ln in raw_norm.splitlines()]
+    t_core = re.split(r"[–\-/|(]", title)[0].strip()
+    if len(t_core) < 4:
+        return ""
+    for idx, ln in enumerate(lines):
+        if _NUMBERED_LIST_ITEM_RE.match(ln) and t_core in ln:
+            parts: list[str] = []
+            clean_head = re.sub(r"^\s*\d{1,2}\s*[-.)–]\s*", "", ln).strip(" .")
+            if clean_head and clean_head != title and "–" in clean_head:
+                parts.append(clean_head)
+            for sub in lines[idx + 1: idx + 5]:
+                if not sub or _NUMBERED_LIST_ITEM_RE.match(sub):
+                    break
+                if re.match(r"^(?:الوصف الوظيفي والتقديم|طريقة التقديم|للتقديم|رابط)\s*[:：]?$", sub):
+                    continue
+                sub_c = re.sub(r"https?://\S+", "", sub).strip(" .·")
+                if sub_c and not _SKIP_SUMMARY_LINE.search(sub_c):
+                    parts.append(sub_c)
+            if parts:
+                return _clean_summary_text(" · ".join(parts))
+    return ""
+
+
 def _enrich_from_raw(d: dict) -> None:
-    raw = (d.get("raw") or "").replace("\ufffd", "").replace("<PRIVATE_PERSON>", "").strip()
+    raw_orig = d.get("raw") or ""
+    raw = "\n".join(_strip_ui_junk(ln) for ln in raw_orig.splitlines()).strip()
     if d.get("raw"):
         d["raw"] = raw
-    title = (d.get("title") or "").strip()
-    emp_raw = (d.get("employer") or "").strip()
-    cleaned_emp = _clean_employer_val(d.get("employer"), bool(d.get("official")))
-    if cleaned_emp != emp_raw:
-        d["employer"] = cleaned_emp or None
+    title, emp = _repair_title_and_emp(d)
     if d.get("tags"):
         d["tags"] = [t for t in d["tags"] if t not in _PORTAL_TAGS]
     if d.get("apply_url"):
@@ -1135,7 +1339,7 @@ def _enrich_from_raw(d: dict) -> None:
     if raw:
         if not d.get("specialty"):
             if m := _SPEC_RE.search(raw):
-                spec = m.group(1).strip(" .-–|")
+                spec = _strip_ui_junk(m.group(1)).strip(" .-–|")
                 if 2 < len(spec) <= 90:
                     d["specialty"] = spec
         if not d.get("tasks"):
@@ -1146,71 +1350,99 @@ def _enrich_from_raw(d: dict) -> None:
                 d["skills"] = _clean_bullets(m.group(1))
     if d.get("tasks"):
         d["tasks"] = [
-            re.sub(r"^\s*(?:[1-9]\d?|[١-٩][٠-٩]?)\s*[-.)–]\s*", "", str(t)).strip()
+            _strip_ui_junk(re.sub(r"^\s*(?:[1-9]\d?|[١-٩][٠-٩]?)\s*[-.)–]\s*", "", str(t))).strip()
             for t in d["tasks"]
-            if not _SPAM_BULLET_RE.search(str(t))
+            if not _SPAM_BULLET_RE.search(str(t)) and not _APPLY_LEAK_RE.search(str(t))
         ]
     if d.get("skills"):
-        d["skills"] = [s for s in d["skills"] if not _SPAM_BULLET_RE.search(str(s))]
+        d["skills"] = [
+            _strip_ui_junk(str(s))
+            for s in d["skills"]
+            if not _SPAM_BULLET_RE.search(str(s)) and not _APPLY_LEAK_RE.search(str(s))
+        ]
 
     multi_list_raw = bool(
-        raw and len(re.findall(r"(?m)^\s*(?:[1-9]\d?|[١-٩][٠-٩]?|1️⃣|2️⃣|3️⃣|4️⃣|5️⃣)\s*[-.)–]", raw)) >= 2
+        raw_orig and len(re.findall(r"(?m)^\s*(?:[1-9]\d?|[١-٩][٠-٩]?|1️⃣|2️⃣|3️⃣|4️⃣|5️⃣)\s*(?:[-.)–]|\ufe0f?\u20e3|\s+[ء-يA-Za-z])", raw_orig)) >= 2
     )
 
-    # Replace any stale synthetic, corrupted, or third-party-source summary
-    cur_sum = _clean_summary_text((d.get("summary") or "").replace("\ufffd", "").replace("<PRIVATE_PERSON>", "").strip())
+    cur_raw_sum = d.get("summary") or ""
+    has_bad_cur = bool(
+        "\ufffd" in cur_raw_sum
+        or _UI_JUNK_RE.search(cur_raw_sum)
+        or _BOILERPLATE_SUM_RE.search(cur_raw_sum)
+        or _DANGLING_TAIL_RE.search(cur_raw_sum)
+    )
+    cur_sum = _clean_summary_text(cur_raw_sum)
     if cur_sum and (
-        "التقديم متاح مباشرة عبر الرابط المرفق" in cur_sum
+        has_bad_cur
         or len(cur_sum) < 20
         or cur_sum == title
         or (multi_list_raw and not d.get("tasks"))
     ):
         d["summary"] = None
     else:
-        d["summary"] = cur_sum or None
+        d["summary"] = _clip_clause(cur_sum) if cur_sum else None
 
     if not d.get("summary"):
         if d.get("tasks"):
-            d["summary"] = _clean_summary_text(" · ".join(d["tasks"][:2])[:240]) or None
-        elif multi_list_raw:
-            d["summary"] = _fallback_summary(d)
+            d["summary"] = _clip_clause(_clean_summary_text(" · ".join(d["tasks"][:2])))
+        elif d.get("_extra_scope"):
+            scope = d.pop("_extra_scope")
+            d["summary"] = _clip_clause(scope)
+        elif d.get("_colon_roles"):
+            roles = d.pop("_colon_roles")
+            default_c = "تركيا" if d.get("country") == "tr" else "سوريا"
+            cs = "، ".join((d.get("cities") or [])[:2]) or default_c
+            d["summary"] = _clip_clause(f"الشواغر المطلوبة ({cs}): " + " · ".join(roles[:5]))
+        elif multi_list_raw and raw_orig:
+            item_ctx = _find_multi_item_context(raw_orig, title)
+            d["summary"] = _clip_clause(item_ctx) if item_ctx else _fallback_summary(d)
         elif raw:
+            # If two distinct posts were glued into raw, start from the section matching this job's title
+            raw_scan = raw
+            t_kw = next((w for w in re.split(r"\s+", re.split(r"[–\-/|(]", title)[0]) if len(w) >= 4), "")
+            if t_kw and raw.count("مطلوب ") >= 2:
+                idx_hit = raw.find(t_kw)
+                if idx_hit > 60:
+                    raw_scan = raw[max(0, raw.rfind("\n", 0, idx_hit)):]
             lines: list[str] = []
             title_head = title.split("—")[0].strip()
-            for ln in raw.splitlines():
+            for ln in raw_scan.splitlines():
                 if _NUMBERED_LIST_ITEM_RE.match(ln.strip()):
                     continue
-                s = _clean_summary_text(re.sub(r"https?://\S+", "", ln))
-                s = re.sub(r"\s+", " ", s).strip(" •-*–\t\r")
+                core = _strip_intro_fluff(ln, emp)
+                if not core:
+                    continue
+                s = _clean_summary_text(core)
                 if not s or len(s) < 12 or _NUMBERED_LIST_ITEM_RE.match(s):
                     continue
-                if s == title or (title_head and s == title_head) or s == emp_raw or s in city_set:
-                    continue
-                if _SKIP_SUMMARY_LINE.search(s):
+                if s == title or (title_head and s == title_head) or s == emp or s in city_set:
                     continue
                 if re.fullmatch(r"[\d\s+\-()،,./:]+", s):
                     continue
                 if s.startswith("الفئة الوظيفية:") or s.startswith("محافظة العمل:") or s.startswith("المستوى التعليمي:"):
                     continue
                 lines.append(s)
-                if sum(len(x) for x in lines) >= 180 or len(lines) >= 2:
+                if sum(len(x) for x in lines) >= 160 or len(lines) >= 2:
                     break
             if lines:
-                d["summary"] = _clean_summary_text(" · ".join(lines)[:240]) or None
+                d["summary"] = _clip_clause(_clean_summary_text(" · ".join(lines)))
+        d.pop("_extra_scope", None)
+        d.pop("_colon_roles", None)
         if not d.get("summary") and d.get("skills"):
-            d["summary"] = _clean_summary_text(" · ".join(d["skills"][:2])[:240]) or None
+            d["summary"] = _clip_clause(_clean_summary_text(" · ".join(d["skills"][:2])))
         if not d.get("summary"):
             d["summary"] = _fallback_summary(d)
 
     cur_s = d.get("summary") or ""
-    if not cur_s or len(cur_s) < 20 or cur_s == title:
+    if not cur_s or len(cur_s) < 18 or cur_s == title:
         d["summary"] = _fallback_summary(d)
     elif not re.search(r"[ء-ي]", cur_s):
         emp_ar = _clean_employer_val(d.get("employer"), bool(d.get("official")))
         default_country = "تركيا" if d.get("country") == "tr" else "سوريا"
         cs_ar = "، ".join((d.get("cities") or [])[:2]) or default_country
         prefix = f"شاغر لدى {emp_ar} في {cs_ar}" if emp_ar else f"شاغر عمل في {cs_ar}"
-        d["summary"] = f"{prefix} — {cur_s}"[:240]
+        d["summary"] = _clip_clause(f"{prefix} — {cur_s}")
 
 
 def trust_metrics(con: sqlite3.Connection) -> dict:

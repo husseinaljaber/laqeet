@@ -635,7 +635,7 @@ def test_pitch_generator_and_tracker_ui():
     assert 'id="savedOnly"' in index_html
     assert 'id="appliedOnly"' in index_html
     assert 'id="expiringSavedBanner"' in index_html
-    assert "?v=37" in index_html
+    assert "?v=38" in index_html
 
     for fn in (
         "function toggleApplied(",
@@ -779,6 +779,35 @@ def test_bugfixes_city_hours_title_moad_and_specs_drawer():
     assert orphan_shift_row["employer"] == "شركة M.ONE Fashion Wear"
     assert orphan_shift_row["shift"] == "من 9 لـ 6"
     assert orphan_shift_row["cities"] == ["اللاذقية"]
+
+    assert ex.strip_person_role_prefix("شاب للعمل معلم صاج") == "معلم صاج"
+    assert ex.strip_person_role_prefix("شاب للعمل في مطعم") == "شاب للعمل في مطعم"
+    saj = ex.extract(
+        "مطلوب شاب للعمل معلم صاج براتب ممتاز في طرطوس\nللتواصل 0933111222",
+        "syrianjobs2",
+        "https://t.me/syrianjobs2/9999",
+        "2026-11-22T09:00:00+00:00",
+    )
+    assert len(saj) == 1 and saj[0].title == "معلم صاج"
+
+    skills_card = {
+        "title": "فني صيانة كهربائية",
+        "employer": "شركة برولاين فارما للصناعات الدوائية والتجميلية",
+        "cities": ["ريف دمشق"],
+        "education": "institute",
+        "email": "hr@prolinepharma.com",
+        "skills": [
+            "خريج معهد تقني أو مهني في الاختصاص المطلوب.",
+            "خبرة عملية لا تقل عن 5 سنوات في مجال الاختصاص.",
+            "القدرة على تشخيص الأعطال وتنفيذ أعمال الصيانة الوقائية والتصحيحية.",
+        ],
+        "tasks": [],
+        "summary": "فرصة عمل لدى شركة برولاين فارما للصناعات الدوائية والتجميلية (ريف دمشق) · المؤهل: معهد تقاني / متوسط",
+    }
+    db._enrich_from_raw(skills_card)
+    assert "المؤهل:" not in (skills_card["summary"] or "")
+    assert "خبرة عملية لا تقل عن 5 سنوات" in (skills_card["summary"] or "")
+
 
 
 

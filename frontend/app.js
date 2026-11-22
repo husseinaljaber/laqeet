@@ -1003,18 +1003,30 @@
   }
 
   function cleanCardSummary(j, ent, cityTxt) {
-    const raw = cleanSummary(
-      j.summary ||
-      (j.tasks && j.tasks.length ? j.tasks.slice(0, 2).join(' · ') : '') ||
-      (j.skills && j.skills.length ? j.skills.slice(0, 2).join(' · ') : '')
-    );
+    const taskTxt = (j.tasks && j.tasks.length) ? j.tasks.slice(0, 2).join(' · ') : '';
+    const subSkills = (j.skills || []).filter((s) => !/^(?:خريج|شهاد[ةه]|الحصول\s+على\s+شهاد[ةه])/i.test(String(s).trim()));
+    const skillTxt = subSkills.length ? subSkills.slice(0, 2).join(' · ') : ((j.skills && j.skills.length) ? j.skills.slice(0, 2).join(' · ') : '');
+    const raw = cleanSummary(j.summary || taskTxt || skillTxt);
     let txt = stripUnicodeJunk(raw)
       .replace(/^\s*(?:فرص[ةه]?\s+عمل|إعلان\s+توظيف)[^|·\n]*[|·]\s*(?:[^|·\n]*[|·]\s*)?/i, '')
       .replace(/^(?:\s*[·•\-|،,:]\s*)+/g, '')
       .replace(/\s{2,}/g, ' ')
       .trim();
+    if (j.education && !/\(الفئة/.test(txt)) {
+      txt = txt
+        .replace(/(?:^|·\s*)المؤهل:\s*[^·]+/g, '')
+        .replace(/(?:^|·\s*)الخبرة:\s*غير مطلوبة/g, '')
+        .replace(/^(?:\s*·\s*)+|(?:\s*·\s*)+$/g, '')
+        .trim();
+    }
     if (!txt || txt.length < 16) {
-      txt = `شاغر ${stripUnicodeJunk(j.title)} لدى ${ent.name} في ${cityTxt} — اضغط على المسمى الوظيفي لعرض التفاصيل والشروط.`;
+      const alt = taskTxt || skillTxt || [
+        j.shift ? 'الدوام: ' + j.shift : '',
+        j.salary ? 'الراتب: ' + j.salary : '',
+        j.email ? 'للتقديم: إرسال السيرة الذاتية إلى ' + j.email : '',
+        j.deadline ? 'آخر موعد للتقديم: ' + formatDate(j.deadline) : ''
+      ].filter(Boolean).join(' · ');
+      txt = cleanSummary(alt) || 'اضغط على «المواصفات» لعرض شروط العمل وطريقة التقديم.';
     }
     if (txt.length > 165) {
       const clauses = txt.split(' · ').map((c) => c.trim()).filter(Boolean);

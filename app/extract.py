@@ -181,6 +181,22 @@ def _clean_parens(s: str) -> str:
     return re.sub(r"\s+", " ", s).strip()
 
 
+_PERSON_ROLE_PREFIX_RE = re.compile(
+    r"^\s*(?:شاب|شباب|صبي[ةه]|صبايا|آنس[ةه]|انسه)\s+"
+    r"(?:(?:مطلوب\s+)?للعمل|مطلوب)\s+"
+    r"(?:(?:كـ|بصف[ةه])\s+)?"
+    r"(?!(?:\s|(?:في|على|ضمن|لدى|عند|بـ|ب(?:ورشة|محل|معمل|مصنع|مطعم|مخبز|شرك[ةه]|مكتب|مركز|عياد[ةه]|صيدلي[ةه]|مجمع|صال[ةه]|مول|قسم|مستودع|فندق|مقه[ىي]|كافيه)|ل(?:عمل|لمساعدة)|العمل|دوام|فتر[ةه]|راتب|مرتب)\b))",
+)
+
+
+def strip_person_role_prefix(s: str) -> str:
+    """Strip vague person preamble before a concrete role ('شاب للعمل معلم صاج' -> 'معلم صاج')."""
+    cand = _PERSON_ROLE_PREFIX_RE.sub("", s or "").strip(" -–:،,.|/")
+    if cand != (s or "").strip(" -–:،,.|/") and len(cand) >= 4 and not re.fullmatch(r"[\d\s\W]+", cand):
+        return cand
+    return s
+
+
 def normalize_title_display(s: str, keep_matlob: bool = False) -> str:
     """Normalize a display job title cleanly: strip emojis, announcements, leading single count, doubled shifts, dangling '('."""
     s = _strip_emoji(normalize(s))
@@ -207,6 +223,8 @@ def normalize_title_display(s: str, keep_matlob: bool = False) -> str:
                 s,
                 flags=re.I,
             )
+    if not keep_matlob:
+        s = strip_person_role_prefix(s)
     s = re.sub(r"^\s*(?:أولا|اولا|ثانيا|ثالثا|رابعا|خامسا|سادسا)ً?\s*[:\-–]\s*", "", s)
     s = re.sub(r"\s*[-–]\s*غير محدد\s*$", "", s)
     s = re.sub(r"[#@]\S+", " ", s)

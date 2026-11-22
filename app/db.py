@@ -1152,6 +1152,17 @@ _EDU_AR = {
 }
 
 
+def _summarize_skills(skills: list[str]) -> str:
+    """Turn requirement/skill bullets into a concise card summary, preferring concrete specs over generic degree lines."""
+    clean = [_clean_summary_text(str(s)) for s in (skills or []) if str(s).strip()]
+    clean = [s for s in clean if len(s) >= 18 and len(s.split()) >= 3]
+    if not clean:
+        return ""
+    substantive = [s for s in clean if not re.match(r"^(?:خريج|شهاد[ةه]|الحصول\s+على\s+شهاد[ةه]|إجاز[ةه]\s+في)\b", s)]
+    chosen = substantive[:2] if substantive else clean[:2]
+    return _clip_clause(" · ".join(chosen), 185)
+
+
 def _fallback_summary(d: dict) -> str:
     emp = _clean_employer_val(d.get("employer"), bool(d.get("official")))
     default_country = "تركيا" if d.get("country") == "tr" else "سوريا"
@@ -1162,14 +1173,10 @@ def _fallback_summary(d: dict) -> str:
         spec = _strip_ui_junk(d["specialty"])
         spec = re.sub(r"\bالتقان(?=\s|$)", "التقاني", spec)
         facts.append(f"التخصص: {spec[:70]}")
-    if d.get("education") and d["education"] in _EDU_AR:
-        edu_s = _EDU_AR[d["education"]]
-        if d.get("grade"):
-            edu_s += f" (الفئة {d['grade']})"
-        facts.append(f"المؤهل: {edu_s}")
-    if d.get("experience") is not None:
-        exp_n = d["experience"]
-        facts.append("الخبرة: غير مطلوبة" if exp_n == 0 else f"الخبرة: {exp_n} سنوات")
+    if d.get("grade") and d.get("education") and d["education"] in _EDU_AR:
+        facts.append(f"المؤهل: {_EDU_AR[d['education']]} (الفئة {d['grade']})")
+    if d.get("experience"):
+        facts.append(f"الخبرة: {d['experience']} سنوات")
     if d.get("shift"):
         facts.append(f"الدوام: {d['shift']}")
     if d.get("salary"):
@@ -1183,21 +1190,26 @@ def _fallback_summary(d: dict) -> str:
 
     if facts:
         prefix = f"فرصة عمل لدى {emp} ({cs})" if emp else f"فرصة عمل في {cs}"
-        if has_link and not d.get("tasks") and not d.get("skills") and len(facts) < 2:
+        if has_email and len(facts) < 2:
+            facts.append(f"للتقديم: {d['email']}")
+        elif phones and not has_link and len(facts) < 2:
+            facts.append(f"للتواصل: {phones[0]}")
+        elif has_link and not d.get("tasks") and not d.get("skills") and len(facts) < 2:
             facts.append("المهام والشروط ضمن الرابط")
         return _clip_clause(f"{prefix} · " + " · ".join(facts), 185)
 
-    title = (d.get("title") or "شاغر وظيفي").strip()
-    head = f"شاغر {title} لدى {emp} في {cs}" if emp else f"شاغر {title} في {cs}"
+    if d.get("skills"):
+        sk_sum = _summarize_skills(d["skills"])
+        if sk_sum:
+            return sk_sum
+
     if has_email and not has_link:
-        how = f"للتقديم: إرسال السيرة الذاتية إلى {d['email']}"
-    elif phones and not has_link and not has_email:
-        how = f"للتواصل المباشر والتقديم: {phones[0]}"
-    elif has_link:
-        how = "بطاقة الوصف والمهام الكاملة متوفرة في رابط التقديم الرسمي."
-    else:
-        how = ""
-    return f"{head} — {how}" if how else head
+        return f"للتقديم: إرسال السيرة الذاتية إلى {d['email']} · اضغط على «المواصفات» للتفاصيل"
+    if phones and not has_link and not has_email:
+        return f"للتواصل المباشر والتقديم: {phones[0]} · اضغط على «المواصفات» للتفاصيل"
+    if has_link:
+        return "بطاقة الوصف والمهام الكاملة متوفرة في رابط التقديم الرسمي."
+    return "اضغط على «المواصفات» للاطلاع على تفاصيل الشاغر وطريقة التقديم."
 
 
 def _clip_clause(text: str, max_len: int = 185) -> str:
@@ -1275,6 +1287,7 @@ def _repair_title_and_emp(d: dict) -> tuple[str, str]:
     title = re.sub(r"\bلوجست(?=\s|$|\))", "لوجستي", title)
     title = re.sub(r"\b(?:إداري|مساعد|باحث|فني)\s+ثان(?=\s|\(|$)", lambda m: m.group(0) + "ي", title)
     title = re.sub(r"\s+\b(?:المنام[ةه]\s+مؤمن[ةه]|السكن\s+مؤم[ن]?|ل[إأا]?ستفسار|الاتصال\s+على)\b.*$", "", title).strip(" -–:،,.|/")
+    title = ex.strip_person_role_prefix(title)
     emp = _clean_employer_val(d.get("employer"), bool(d.get("official")))
     if not emp and raw:
         emp = _clean_employer_val(ex._employer(raw), bool(d.get("official")))
@@ -1437,11 +1450,17 @@ def _enrich_from_raw(d: dict) -> None:
 
     cur_raw_sum = d.get("summary") or ""
     title_core = re.split(r"[—–\-|(]", title)[0].strip()
+    is_bare_edu_fallback = bool(
+        re.match(r"^فرصة عمل (?:لدى |في )", cur_raw_sum)
+        and ("المؤهل:" in cur_raw_sum or "الخبرة: غير مطلوبة" in cur_raw_sum)
+        and not any(k in cur_raw_sum for k in ("التخصص:", "الراتب:", "الدوام:", "آخر موعد:", "الفئة "))
+    )
     has_bad_cur = bool(
         "\ufffd" in cur_raw_sum
         or _UI_JUNK_RE.search(cur_raw_sum)
         or _BOILERPLATE_SUM_RE.search(cur_raw_sum)
         or _DANGLING_TAIL_RE.search(cur_raw_sum)
+        or is_bare_edu_fallback
         or "الجهة:" in cur_raw_sum
         or "أوقات الدوام" in cur_raw_sum and "من " not in cur_raw_sum
         or (title_core and cur_raw_sum.startswith(title_core) and len(cur_raw_sum) < len(title) + 38)
@@ -1460,6 +1479,8 @@ def _enrich_from_raw(d: dict) -> None:
     if not d.get("summary"):
         if d.get("tasks"):
             d["summary"] = _clip_clause(_clean_summary_text(" · ".join(d["tasks"][:2])))
+        elif d.get("skills"):
+            d["summary"] = _summarize_skills(d["skills"]) or _fallback_summary(d)
         elif d.get("_extra_scope"):
             scope = d.pop("_extra_scope")
             d["summary"] = _clip_clause(scope)

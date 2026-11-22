@@ -61,6 +61,10 @@ jobs:
       - name: Collect (restores DB from seed, then scrapes Telegram channels, INGO ATS, and web portals)
         env:
           FULL: ${{ github.event.schedule == '40 2 * * *' || inputs.full == true }}
+                    
+          TG_API_ID: ${{ secrets.TG_API_ID }}
+          TG_API_HASH: ${{ secrets.TG_API_HASH }}
+          TG_STRING_SESSION: ${{ secrets.TG_STRING_SESSION }}
         run: |
           if [ "$FULL" = "true" ]; then
             python -m app.collect

@@ -151,6 +151,11 @@ def store_post(
     # Strict direct-apply gate: unwrap wrapper portals/shorteners and keep ONLY jobs with a verified form, site, email, or phone
     resolver = resolve_client if resolve_client is not None else client
     jobs = [j for j in jobs if da.resolve_job_apply(j, client=resolver, cache=resolve_cache)]
+    for j in jobs:
+        u_low = (j.apply_url or "").lower()
+        if j.country == "sy" and (".gov.sy" in u_low or "moi-sy.com" in u_low):
+            j.official = True
+            j.sector = "gov"
     con.execute("INSERT OR REPLACE INTO posts (channel, id, date, text, links, jobs) VALUES (?,?,?,?,?,?)",
                 (post.channel, post.id, post.date, post.text, json.dumps(post.links), len(jobs)))
     new = 0

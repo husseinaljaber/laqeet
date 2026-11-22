@@ -633,4 +633,45 @@ def test_syria10102_channel_and_mtproto_fallback():
     assert existing_posts == []
     assert calls == []
 
+    # Verify syria10102 real post patterns (list with بمسميات + MOI link, footer promo protection, non-job disclaimers)
+    moi_multi = ex.extract(
+        "تعلن الإدارة العامة للشؤون المدنية توفر شواغر وظيفية بمسميات:\n"
+        "◼️رئيس دائرة الشؤون الهندسية\n"
+        "◼️مهندس دراسات\n"
+        "◼️مهندس موقع\n"
+        "التقديم عبر: https://ee.moi-sy.com/x/6o2YflqU",
+        "syria10102",
+        "https://t.me/syria10102/1007",
+        "2026-11-22T12:08:14+00:00",
+        links=["https://ee.moi-sy.com/x/6o2YflqU", "https://t.me/syria10102"],
+        country="sy",
+    )
+    assert [j.title for j in moi_multi] == ["رئيس دائرة الشؤون الهندسية", "مهندس دراسات", "مهندس موقع"]
+    assert all(j.official and j.employer == "الإدارة العامة للشؤون المدنية" for j in moi_multi)
+
+    moi_course = ex.extract(
+        "تعلن إدارة القوى البشرية في وزارة الداخلية عن فتح باب الانتساب للالتحاق ب دورة أفراد (ذكور)، وذلك وفق الشروط والمواصفات المطلوبة.\n"
+        "للتسجيل والتقديم يرجى التقديم عبر الرابط التالي:\n"
+        "https://ee.moi-sy.com/single/0f623bf7\n"
+        "📍 تابعونا على:\n"
+        "◼️وظائف عامة على #تلجرام\nhttps://t.me/syria10102\n#وظائف_عامة",
+        "syria10102",
+        "https://t.me/syria10102/1",
+        "2026-11-10T10:00:00+00:00",
+        links=["https://ee.moi-sy.com/single/0f623bf7", "https://t.me/syria10102"],
+        country="sy",
+    )
+    assert len(moi_course) == 1
+    assert moi_course[0].title == "دورة أفراد (ذكور)"
+    assert all("تلجرام" not in j.title for j in moi_course)
+
+    assert ex.extract(
+        "نقابة المهندسين تطلق موقعاً إلكترونياً لتوظيف المهندسين.\nhttps://docs.google.com/forms/d/e/1FAIpQLSdTest/viewform",
+        "syria10102",
+        "https://t.me/syria10102/1005",
+        "2026-11-21T13:13:13+00:00",
+        country="sy",
+    ) == []
+
+
 

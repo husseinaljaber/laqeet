@@ -194,7 +194,7 @@ def read_channel(channel: str, client: httpx.Client, stop_id: int, since: str, m
         before = oldest
 
 
-def collect(offline: bool = False, quick: bool = False) -> dict:
+def collect(offline: bool = False, quick: bool = False, verify_limit: int | None = None) -> dict:
     con = db.connect()
     since = (datetime.now(timezone.utc) - timedelta(days=config.HISTORY_DAYS)).date().isoformat()
     stats = {}
@@ -227,6 +227,8 @@ def collect(offline: bool = False, quick: bool = False) -> dict:
                 con.commit()
             stats[channel] = {"posts": posts, "new_jobs": new}
             log.info("%s: %d posts, %d new jobs", channel, posts, new)
+        db.set_meta(con, "updated_at", db.now())
+        con.commit()
         if not offline:
             today = date.today().isoformat()
             for key, fn in (
@@ -247,15 +249,18 @@ def collect(offline: bool = False, quick: bool = False) -> dict:
                     for j in ready:
                         _, is_new = db.upsert(con, j)
                         new_count += is_new
+                    db.set_meta(con, "updated_at", db.now())
                     con.commit()
                     stats[key] = {"posts": len(batch), "new_jobs": new_count}
                     log.info("%s: %d jobs, %d new jobs", key, len(batch), new_count)
                 except Exception as e:
                     log.warning("%s collect failed: %s", key, e)
-            try:
-                stats["live_audit"] = verify_live_jobs(con, cache=resolve_cache, max_checks=150 if quick else 350)
-            except Exception as e:
-                log.warning("live_audit failed: %s", e)
+            checks = verify_limit if verify_limit is not None else (150 if quick else 350)
+            if checks > 0:
+                try:
+                    stats["live_audit"] = verify_live_jobs(con, cache=resolve_cache, max_checks=checks)
+                except Exception as e:
+                    log.warning("live_audit failed: %s", e)
         pruned = db.prune_old(con, config.HISTORY_DAYS)
         if pruned:
             log.info("pruned %d jobs older than %d days", pruned, config.HISTORY_DAYS)

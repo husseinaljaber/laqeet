@@ -57,7 +57,7 @@ def _auto_collect_loop(stop: threading.Event) -> None:
                     wait = max(30, int(gap - age))
             if stale:
                 log.info("auto-collect starting...")
-                res = collect(quick=bool(last))
+                res = collect(quick=bool(last), verify_limit=20)
                 _stats_cache.clear()
                 gc.collect()
                 log.info("auto-collect done: %s", res)

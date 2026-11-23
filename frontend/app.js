@@ -80,6 +80,7 @@
     sort: 'relevance',
     terms: [],
     fresh: false,
+    instant: false,
     saved: false,
     trackerFilter: '',
     offset: 0,
@@ -893,6 +894,12 @@
     a.click();
   }
 
+  function portalRequiresAccount(j) {
+    if (!j || !j.apply_url) return false;
+    if (j.url_requires_account) return true;
+    return /(?:moad\.gov\.sy|ssf\.gov\.sy|powerholding-intl\.com|myworkdayjobs\.com|myworkdaysite\.com|oraclecloud\.com|successfactors\.|taleo\.net|csod\.com|inspira\.un\.org|careers\.un\.org|careers\.unops\.org|jobs\.unicef\.org|jobs\.undp\.org|jobs\.fao\.org|careers\.who\.int|jobs\.iom\.int|jobs\.oxfam\.org|careers\.icmpd\.org|jobs\.ebrd\.com|careers\.ifrc\.org|icims\.com|webcruiter\.no|hr-manager\.net|jobs\.jobvite\.com|recruiting2\.ultipro\.com)/i.test(j.apply_url);
+  }
+
   function links(j, big) {
     const out = el('div', { class: 'links' });
     const wa = waLink(j);
@@ -905,7 +912,16 @@
     }
     if (j.apply_url && !/^https?:\/\/(?:wa\.me\/|api\.whatsapp\.com\/)/i.test(j.apply_url) && !(j.deadline && daysLeft(j.deadline) < 0)) {
       const isForm = (j.apply_types || []).includes('form');
-      out.append(el('a', { class: 'apply', href: j.apply_url, target: '_blank', rel: 'noopener' }, ico(isForm ? 'file-text' : 'external-link', 'ico-sm'), isForm ? 'تعبئة استمارة التقديم' : 'التقديم عبر الموقع'));
+      const needsAcc = portalRequiresAccount(j);
+      const lbl = needsAcc ? 'بوابة رسمية (بحساب)' : (isForm ? 'تعبئة استمارة التقديم' : 'التقديم عبر الموقع');
+      const icName = needsAcc ? 'lock' : (isForm ? 'file-text' : 'external-link');
+      out.append(el('a', {
+        class: needsAcc ? 'apply portal-account' : 'apply',
+        href: j.apply_url,
+        target: '_blank',
+        rel: 'noopener',
+        ...(needsAcc ? { title: 'يتطلب إنشاء حساب مجاني أو تسجيل دخول على البوابة الرسمية للجهة المعلنة' } : {})
+      }, ico(icName, 'ico-sm'), lbl));
     }
     const isWrapperUrl = (u) => /(?:^|\.)(?:worklink\.sy|jobinsyria\.com|reliefweb\.int|unjobs\.org|unjobnet\.org|ngosquare\.com|jobsyria\.org|nsjobs\.net|ngossyria\.com|sqrjobs\.net|syria-jobs\.com|shamhr\.com|forsa-sy\.com|jobsintr\.net|salamjobs\.com|adwhit\.com|ab-ilan\.com|wazifturk\.com|mahereen\.com|spc\.sy)(?:\/|$)/i.test((() => { try { return new URL(u).hostname; } catch { return ''; } })());
     if (j.details_url && j.details_url !== j.apply_url && !isWrapperUrl(j.details_url)) {
@@ -1235,11 +1251,14 @@
     const phone = (j.phones || [])[0];
     if (hasDirectLink) {
       const isForm = (j.apply_types || []).includes('form');
+      const needsAcc = portalRequiresAccount(j);
       applyActions.push({
         cls: 'is-apply',
-        icon: isForm ? 'file-text' : 'external-link',
-        label: isForm ? 'تعبئة استمارة التقديم' : 'التقديم عبر الموقع',
-        title: isForm ? 'تعبئة استمارة التقديم المباشر' : 'التقديم المباشر عبر الموقع',
+        icon: needsAcc ? 'lock' : (isForm ? 'file-text' : 'external-link'),
+        label: needsAcc ? 'بوابة رسمية (بحساب)' : (isForm ? 'تعبئة استمارة التقديم' : 'التقديم عبر الموقع'),
+        title: needsAcc
+          ? 'رابط التقديم الرسمي على منصة الجهة المعلنة (يتطلب إنشاء حساب مجاني أو تسجيل دخول)'
+          : (isForm ? 'تعبئة استمارة التقديم المباشر' : 'التقديم المباشر عبر الموقع'),
         href: j.apply_url,
         external: true
       });
@@ -1579,6 +1598,19 @@
       trustPill(j)
     );
 
+    const hasInstantAlt = Boolean(j.email || j.whatsapp || (j.phones && j.phones.length));
+    const portalNote = portalRequiresAccount(j) && j.apply_url && !(j.deadline && daysLeft(j.deadline) < 0)
+      ? [el('div', { class: 'sheet-portal-note', role: 'note' },
+          ico('lock', 'ico-sm'),
+          el('div', null,
+            el('strong', null, 'تتطلب البوابة الرسمية تسجيل حساب مجاني'),
+            el('p', null, hasInstantAlt
+              ? 'الرابط يفتح منصة التوظيف الرسمية للجهة المعلنة وقد يطلب تسجيل دخول، كما تتوفر وسيلة تواصل فورية بالأسفل.'
+              : 'التقديم يتم حصراً عبر البوابة الرسمية للجهة المعلنة ويتطلب إنشاء حساب مجاني أو تسجيل دخول لإرسال الطلب.')
+          )
+        )]
+      : [];
+
     const contentEl = el('div', { class: 'sheet-content' }, ...[
       metaGrid,
       m ? el('div', { class: 'fit ' + m.level }, el('i'), m.text) : null,
@@ -1591,6 +1623,7 @@
       templatesSection,
       shareSection,
       ...sourcesSection,
+      ...portalNote,
       links(j, true),
       safetyStrip,
       el('div', { class: 'row', style: 'margin-top:4px' },
@@ -1640,6 +1673,7 @@
     if (state.q) p.set('q', state.q);
     if (state.sort && state.sort !== 'relevance' && state.sort !== 'fit') p.set('sort', state.sort);
     if (state.fresh) p.set('new', 'true');
+    if (state.instant) p.set('instant', 'true');
     p.set('limit', limitOverride != null ? limitOverride : PAGE);
     p.set('offset', offsetOverride != null ? offsetOverride : state.offset);
     return p;
@@ -1649,7 +1683,7 @@
     return JSON.stringify([
       state.country, state.sector, state.edu_group, state.edu, state.lower,
       state.source, state.apply, state.exp, state.field, state.sub,
-      state.city, state.q, state.fresh, profile.edu, profile.exp, profile.age, profile.gender
+      state.city, state.q, state.fresh, state.instant, profile.edu, profile.exp, profile.age, profile.gender
     ]);
   }
 
@@ -1659,7 +1693,7 @@
     if (!sec || !btn) return;
     const isFiltered = Boolean(
       state.q || state.city || state.sector || state.edu || state.edu_group ||
-      state.field || state.sub || state.apply || state.exp || state.fresh || state.saved
+      state.field || state.sub || state.apply || state.exp || state.fresh || state.instant || state.saved
     );
     const open = manualFieldsOpen != null ? manualFieldsOpen : !isFiltered;
     sec.classList.toggle('is-collapsed', !open);
@@ -1873,6 +1907,7 @@
       const pressed = code ? selExps.includes(code) : selExps.length === 0;
       c.setAttribute('aria-pressed', String(pressed));
     });
+    if ($('instantOnly')) $('instantOnly').setAttribute('aria-pressed', String(state.instant));
     if ($('newToday')) $('newToday').setAttribute('aria-pressed', String(state.fresh));
     if ($('savedOnly')) $('savedOnly').setAttribute('aria-pressed', String(state.saved && state.trackerFilter !== 'applied'));
     if ($('appliedOnly')) $('appliedOnly').setAttribute('aria-pressed', String(state.saved && state.trackerFilter === 'applied'));
@@ -1918,6 +1953,7 @@
       const exInfo = EXP_UI[exCode];
       addPill('clock', exInfo ? exInfo.label : exCode, () => { state.exp = removeCsvItem(state.exp, exCode); syncFilterUI(); refresh(); });
     }
+    if (state.instant) addPill('zap', 'تقديم فوري بدون حساب', () => { state.instant = false; syncFilterUI(); refresh(); });
     if (state.fresh) addPill('sparkles', 'جديد اليوم', () => { state.fresh = false; syncFilterUI(); refresh(); });
     if (state.saved) addPill('clipboard-check', 'متتبع تقديماتي', () => { state.saved = false; state.trackerFilter = ''; syncFilterUI(); refresh(); });
     box.replaceChildren(...pills);
@@ -2210,6 +2246,7 @@
     state.sort = 'relevance';
     state.terms = [];
     state.fresh = false;
+    state.instant = false;
     state.saved = false;
     state.trackerFilter = '';
     state.lower = false;
@@ -2423,6 +2460,14 @@
     });
 
     // Toggles
+    if ($('instantOnly')) {
+      $('instantOnly').addEventListener('click', (e) => {
+        state.instant = !state.instant;
+        e.currentTarget.setAttribute('aria-pressed', String(state.instant));
+        updateMarketFieldsCollapse();
+        refresh();
+      });
+    }
     $('newToday').addEventListener('click', (e) => {
       state.fresh = !state.fresh;
       e.currentTarget.setAttribute('aria-pressed', String(state.fresh));
@@ -2937,6 +2982,7 @@
     state.sort = 'relevance';
     state.terms = [];
     state.fresh = false;
+    state.instant = Boolean(opts.instant);
     state.saved = false;
     state.offset = 0;
 
@@ -2958,6 +3004,7 @@
       if (state.edu_group) sp.set('edu_group', state.edu_group);
       if (state.field) sp.set('field', state.field);
       if (state.exp) sp.set('exp', state.exp);
+      if (state.instant) sp.set('instant', 'true');
       if (state.sort && state.sort !== 'relevance') sp.set('sort', state.sort);
       if (state.q) sp.set('q', state.q);
       try { history.pushState({ view: 'jobs', country: state.country }, '', `${location.pathname}?${sp.toString()}`); } catch (e) {}
@@ -3112,7 +3159,7 @@
     // Determine initial view: Standalone Landing Page by default, or Jobs Board if deep-linked
     const sp = new URLSearchParams(location.search);
     const hashMatch = location.hash.match(/^#job-(\d+)$/);
-    if (sp.get('view') === 'jobs' || sp.get('country') || sp.get('city') || sp.get('sector') || sp.get('edu_group') || sp.get('exp') || sp.get('q') || hashMatch) {
+    if (sp.get('view') === 'jobs' || sp.get('country') || sp.get('city') || sp.get('sector') || sp.get('edu_group') || sp.get('exp') || sp.get('q') || sp.get('instant') === 'true' || hashMatch) {
       enterBoard({
         country: sp.get('country') || 'sy',
         city: sp.get('city') || '',
@@ -3121,6 +3168,7 @@
         edu_group: sp.get('edu_group') || '',
         field: sp.get('field') || '',
         exp: sp.get('exp') || '',
+        instant: sp.get('instant') === 'true',
         sort: sp.get('sort') || 'relevance',
         q: sp.get('q') || ''
       }, false);

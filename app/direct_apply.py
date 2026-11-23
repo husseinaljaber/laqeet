@@ -78,7 +78,7 @@ _DIRECT_FORM_OR_ATS_RE = re.compile(
     r"careers\.rescue\.org|careers\.mercycorps\.org|jobs\.savethechildren\.net|careers\.msf\.org|careers\.wvi\.org|"
     r"jobs\.undp\.org/cj_view_job\.cfm|careers\.ilo\.org|jobs\.fao\.org|careers\.who\.int|careers\.wfp\.org|careers\.unhcr\.org|jobs\.iom\.int|"
     r"inspira\.un\.org/psp/.+HRS_JOB_OPENING_ID|"
-    r"bamboohr\.com|hrpeak\.com|hr-manager\.net|baseilowcloud\.com|emply\.com|jobs\.tdh\.org|jobvite\.com|"
+    r"bamboohr\.com/careers/\d+|(?!www\.)[a-z0-9-]+\.hrpeak\.com/(?:[a-z0-9]{8,}|\S+\.job)|hr-manager\.net|baseilowcloud\.com|emply\.com|jobs\.tdh\.org|jobvite\.com|"
     r"greenhouse\.io|lever\.co|myworkdayjobs\.com|myworkdaysite\.com|smartrecruiters\.com|workable\.com|"
     r"recruitee\.com|taleo\.net|successfactors\.(?:com|eu)|oraclecloud\.com|ultipro\.com|csod\.com|"
     r"zohorecruit\.com|odoo\.com/jobs|webcruiter\.no|employ\.acf-e\.org|careers-page\.com|"
@@ -92,7 +92,7 @@ _DIRECT_FORM_OR_ATS_RE = re.compile(
     r"hpu\.edu\.sy/ar/(?:%d8%aa%d9%88%d8%b8%d9%8a%d9%81|%d8%a7%d8%b9%d9%84%d8%a7%d9%86-%d8%aa%d9%88%d8%b8%d9%8a%d9%81|توظيف|اعلان-توظيف)[^/?#]*|"
     r"onecash-latakia-production-2bb5\.up\.railway\.app/careers/apply/|"
     r"jobs\.oxfam\.org\.uk|careers\.powerholding-intl\.com/job/|cv\.inoportal\.com/[^/]+/(?:Basvuru|IlanDetay)/|"
-    r"inoportal\.com|careers\.ifrc\.org|lumesse|icims\.com|applytojob\.com|"
+    r"inoportal\.com|careers\.ifrc\.org|(?!www\.lumesse\.com/?$)[a-z0-9.-]*lumesse\.[a-z]{2,}/.+|icims\.com|applytojob\.com|"
     r"breezy\.hr|ashbyhq\.com|career\d*\.successfactors\.eu|fa\.em\d+\.oraclecloud\.com)",
     re.I,
 )
@@ -102,9 +102,50 @@ _NON_JOB_LANDING_RE = re.compile(
     r"inspira\.un\.org/psp/[^/]+/\?cmd=login|cibeg\.taleo\.net|jobs\.unicef\.org/jobs/search/?$|"
     r"mahereen\.com/login|salamjobs\.com/login|jobsintr\.net/(?:account|login|register)|"
     r"recruitment\.ssf\.gov\.sy/(?:Account|Applications/Apply)|"
+    r"^(?:https?://)?(?:www\.)?(?:hrpeak\.com|lumesse\.com)/?$|"
+    r"^(?:https?://)?hire\.trakstar\.com/?$|^(?:https?://)?careers\.rescue\.org/?$|"
+    r"ats\.in-recruiting\.com/prova-gratuita|intranet\.medair\.org/Recruitment/RecPublic/newSubscription|"
     r"forsa-sy\.com|shamhr\.com)",
     re.I,
 )
+
+# Official employer/government hiring portals that legitimately require candidate sign-up/login
+ACCOUNT_PORTAL_HOST_SUBSTRS = (
+    "moad.gov.sy",
+    "ssf.gov.sy",
+    "powerholding-intl.com",
+    "myworkdayjobs.com",
+    "myworkdaysite.com",
+    "oraclecloud.com",
+    "successfactors.",
+    "taleo.net",
+    "csod.com",
+    "inspira.un.org",
+    "careers.un.org",
+    "careers.unops.org",
+    "jobs.unicef.org",
+    "jobs.undp.org",
+    "jobs.fao.org",
+    "careers.who.int",
+    "jobs.iom.int",
+    "jobs.oxfam.org",
+    "careers.icmpd.org",
+    "jobs.ebrd.com",
+    "careers.ifrc.org",
+    "icims.com",
+    "webcruiter.no",
+    "hr-manager.net",
+    "jobs.jobvite.com",
+    "recruiting2.ultipro.com",
+)
+
+
+def requires_portal_account(url: str | None) -> bool:
+    """True when the apply URL leads to an official employer/government ATS portal requiring account login."""
+    if not url:
+        return False
+    h = _host(url)
+    return any(sub in h for sub in ACCOUNT_PORTAL_HOST_SUBSTRS)
 
 _IGNORE_EMAIL_SUBSTRS = (
     "ngosquare.com", "ida-org.com", "worklink.sy", "tawzeefportal", "hanwazafak",
@@ -322,11 +363,16 @@ def is_direct_form_or_ats(url: str) -> bool:
     h = _host(url)
     if h in ("accounts.google.com", "login.microsoftonline.com", "login.live.com"):
         return False
-    if is_social_or_channel(url) or is_aggregator_or_wall(url) or is_file_folder_or_viewer(url) or is_strict_portal_wrapper(url):
+    if is_social_or_channel(url) or is_aggregator_or_wall(url) or is_file_folder_or_viewer(url) or is_strict_portal_wrapper(url) or _NON_JOB_LANDING_RE.search(url or ""):
         return False
     if _DIRECT_FORM_OR_ATS_RE.search(url):
         return True
-    return h.startswith(("apply.", "career.", "careers.", "jobs.", "hire.", "hiring.", "recruitment."))
+    if h in ("career.alboraq-syr.com", "hr.mabcoonline.com", "recruitment.sams-hr.com"):
+        return True
+    if h.startswith(("apply.", "career.", "careers.", "jobs.", "hire.", "hiring.", "recruitment.", "hr.")):
+        p = urlparse(url)
+        return bool(p.path.strip("/") or p.query)
+    return False
 
 
 def is_disallowed_offline_url(url: str) -> bool:

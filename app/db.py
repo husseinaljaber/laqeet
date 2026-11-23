@@ -1601,9 +1601,14 @@ def trust_metrics(con: sqlite3.Connection) -> dict:
 
 
 def row_to_dict(con, row) -> dict:
+    from . import direct_apply as da, taxonomy as tx
+
     d = json.loads(row["data"])
     _enrich_from_raw(d)
     d.pop("raw", None)
+    if d.get("apply_url") and da.is_disallowed_offline_url(d["apply_url"]):
+        d["apply_url"] = None
+        d["apply_types"] = tx.infer_apply_types(None, d.get("phones") or [], bool(d.get("whatsapp")), d.get("email"))
     d["id"] = row["id"]
     d["status"] = row["status"]
     d["expires_on"] = row["expires_on"]
@@ -1611,6 +1616,11 @@ def row_to_dict(con, row) -> dict:
     d.setdefault("country", row["country"] if "country" in row.keys() else "sy")
     d.setdefault("sector", row["sector"] if "sector" in row.keys() else ("gov" if d.get("official") else "private"))
     d.setdefault("apply_types", [x for x in (row["apply_types"] or "").split("|") if x] if "apply_types" in row.keys() else [])
+    d["url_requires_account"] = da.requires_portal_account(d.get("apply_url"))
+    d["requires_account"] = bool(
+        d["url_requires_account"]
+        and not (set(d.get("apply_types") or []) & {"whatsapp", "email", "call"})
+    )
     sec = d["sector"]
     srcs = []
     seen_src = set()

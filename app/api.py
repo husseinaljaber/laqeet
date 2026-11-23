@@ -118,7 +118,7 @@ _LIGHT_COLS = (
 
 def _query(edu=None, lower=False, field=None, sub=None, city=None, kind=None, q=None, official=None,
            expired=False, status="live", since_days=None, gender=None, country=None, sector=None, apply=None,
-           edu_group=None, source=None, exp=None, sort: str = "relevance", light: bool = False):
+           edu_group=None, source=None, exp=None, instant: bool = False, sort: str = "relevance", light: bool = False):
     has_q = bool(q and q.strip())
     cols = "*" if (has_q or not light) else _LIGHT_COLS
     if expired and status == "live":
@@ -167,6 +167,13 @@ def _query(edu=None, lower=False, field=None, sub=None, city=None, kind=None, q=
             exp_clauses.append("experience >= 5")
     if exp_clauses:
         sql.append("AND (" + " OR ".join(exp_clauses) + ")")
+    if instant:
+        portal_checks = " AND ".join(["LOWER(COALESCE(json_extract(data, '$.apply_url'), '')) NOT LIKE ?"] * len(da.ACCOUNT_PORTAL_HOST_SUBSTRS))
+        sql.append(
+            "AND (apply_types LIKE '%|whatsapp|%' OR apply_types LIKE '%|email|%' OR apply_types LIKE '%|call|%' "
+            f"OR (COALESCE(json_extract(data, '$.apply_url'), '') != '' AND {portal_checks}))"
+        )
+        args.extend([f"%{sub}%" for sub in da.ACCOUNT_PORTAL_HOST_SUBSTRS])
     cs = [c.strip() for c in (city or "").split(",") if c.strip()]
     if cs:
         multi_city = "%|عدة ولايات في تركيا|%" if country == "tr" else "%|عدة محافظات|%"
@@ -253,12 +260,12 @@ def jobs(edu: str | None = None, lower: bool = False, field: str | None = None, 
          city: str | None = None, kind: str | None = None, q: str | None = None, official: bool | None = None,
          new: bool = False, expired: bool = False, gender: str | None = None, country: str | None = None,
          sector: str | None = None, apply: str | None = None, edu_group: str | None = None, source: str | None = None,
-         exp: str | None = None, sort: str = "relevance", limit: int = Query(40, le=200), offset: int = 0):
+         exp: str | None = None, instant: bool = False, sort: str = "relevance", limit: int = Query(40, le=200), offset: int = 0):
     q_clean = (q or "").strip() or None
     sort_mode = "recent" if sort == "recent" else "relevance"
     base = _query(edu, lower, None, None, city, kind, q_clean, official, expired, since_days=1 if new else None,
                   gender=gender, country=country, sector=None, apply=apply, edu_group=edu_group, source=source,
-                  exp=exp, sort=sort_mode, light=(q_clean is None))
+                  exp=exp, instant=instant, sort=sort_mode, light=(q_clean is None))
     hl_terms: list[str] = []
     if q_clean:
         for g in sq.expand_query_groups(q_clean):
@@ -786,8 +793,8 @@ def job_page(job_id: int, request: Request):
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Alexandria:wght@500;600;700;800&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="/app.css?v=40"><link rel="stylesheet" href="/page.css?v=40">
-<script src="/ui.js?v=40"></script>
+<link rel="stylesheet" href="/app.css?v=41"><link rel="stylesheet" href="/page.css?v=41">
+<script src="/ui.js?v=41"></script>
 </head><body>
 <nav class="site-nav" aria-label="التنقل الرئيسي">
   <div class="inner site-nav-inner">

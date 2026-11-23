@@ -632,6 +632,7 @@ def test_pitch_generator_and_tracker_ui():
     app_css = (root / "frontend" / "app.css").read_text(encoding="utf-8")
     api_py = (root / "app" / "api.py").read_text(encoding="utf-8")
 
+    assert 'id="instantOnly"' in index_html
     assert 'id="savedOnly"' in index_html
     assert 'id="appliedOnly"' in index_html
     assert 'id="expiringSavedBanner"' in index_html
@@ -642,9 +643,11 @@ def test_pitch_generator_and_tracker_ui():
     assert "🇸🇾" not in index_html and "🇹🇷" not in index_html
     assert "🇸🇾" not in app_js and "🇹🇷" not in app_js
     assert "lower: false" in app_js
-    assert "?v=40" in index_html
+    assert "?v=41" in index_html
 
     for fn in (
+        "function portalRequiresAccount(",
+        "بوابة رسمية (بحساب)",
         "function toggleApplied(",
         "function mailtoHref(",
         "function isExpiringWithin48h(",
@@ -658,6 +661,7 @@ def test_pitch_generator_and_tracker_ui():
         "tpl-subject-input",
         "card-det-btn",
         "sheet-external-specs",
+        "sheet-portal-note",
     ):
         assert fn in app_js
 
@@ -672,6 +676,7 @@ def test_pitch_generator_and_tracker_ui():
         ".trunc-txt",
         ".card-det-btn",
         ".sheet-external-specs",
+        ".sheet-portal-note",
     ):
         assert cls in app_css
 

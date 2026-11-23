@@ -12,8 +12,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Alexandria:wght@500;600;700;800&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="app.css?v=40">
-<script src="ui.js?v=40"></script>
+<link rel="stylesheet" href="app.css?v=41">
+<script src="ui.js?v=41"></script>
 </head>
 <body>
 <a class="skip" href="#board">انتقل للوظائف</a>
@@ -576,6 +576,7 @@
 
       <!-- Action Toggles -->
       <div class="row options-row">
+        <button type="button" class="chip" id="instantOnly" aria-pressed="false" title="عرض الفرص التي تقبل التقديم المباشر أو الفوري بدون تسجيل حساب خارجي"><i data-ico="zap" data-ico-cls="ico-sm"></i><span>تقديم فوري بدون حساب</span></button>
         <button class="chip" id="newToday" aria-pressed="false"><i data-ico="sparkles" data-ico-cls="ico-sm"></i><span>جديد اليوم</span></button>
         <button class="chip" id="savedOnly" aria-pressed="false"><i data-ico="bookmark-filled" data-ico-cls="ico-sm"></i><span>المحفوظة للتقديم (<span id="savedCount">0</span>)</span></button>
         <button class="chip" id="appliedOnly" aria-pressed="false"><i data-ico="check-circle" data-ico-cls="ico-sm"></i><span>قدّمت عليها (<span id="appliedCount">0</span>)</span></button>
@@ -699,6 +700,6 @@
 
 <div class="toast" id="toast" role="status" hidden></div>
 
-<script src="app.js?v=40" defer></script>
+<script src="app.js?v=41" defer></script>
 </body>
 </html>

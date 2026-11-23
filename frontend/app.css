@@ -569,6 +569,16 @@ mark.hl{background:rgba(45,184,138,.26);color:inherit;padding:0 3px;border-radiu
 }
 .sheet-external-specs-copy strong{display:inline-flex;align-items:center;gap:6px;font-size:.86rem;color:var(--ink);margin-bottom:4px}
 .sheet-external-specs-copy p{margin:0;font-size:.82rem;color:var(--muted);line-height:1.6}
+.sheet-portal-note{
+  margin:12px 0;padding:12px 14px;border-radius:var(--r-sm);
+  background:rgba(245,158,11,.10);border:1px solid rgba(245,158,11,.35);
+  color:var(--ink);font-size:.82rem;line-height:1.65;
+  display:flex;align-items:flex-start;gap:10px;
+}
+.sheet-portal-note svg,.sheet-portal-note .ico-sm{flex-shrink:0;margin-top:3px;color:#b45309}
+html[data-theme="dark"] .sheet-portal-note svg,html[data-theme="dark"] .sheet-portal-note .ico-sm{color:#fbbf24}
+.sheet-portal-note strong{display:block;font-size:.85rem;margin-bottom:2px}
+.sheet-portal-note p{margin:0;color:var(--muted)}
 .card-applied-btn{
   all:unset;cursor:pointer;height:34px;padding:0 10px;border-radius:10px;flex-shrink:0;
   display:inline-flex;align-items:center;justify-content:center;gap:5px;

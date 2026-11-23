@@ -674,4 +674,114 @@ def test_syria10102_channel_and_mtproto_fallback():
     ) == []
 
 
+def test_direct_apply_vendor_roots_portal_accounts_and_instant_filter():
+    from app import direct_apply as da
+
+    for bad_url in (
+        "https://www.hrpeak.com/",
+        "https://hire.trakstar.com/",
+        "http://www.lumesse.com/",
+        "https://ats.in-recruiting.com/prova-gratuita",
+        "https://careers.rescue.org",
+        "https://intranet.medair.org/Recruitment/RecPublic/newSubscription",
+    ):
+        assert da.is_disallowed_offline_url(bad_url), f"expected disallowed: {bad_url}"
+        assert not da.is_direct_form_or_ats(bad_url), f"expected rejected direct/ats: {bad_url}"
+
+    for good_url in (
+        "https://form.goldyol.com/",
+        "https://career.alboraq-syr.com",
+        "https://hr.mabcoonline.com/",
+        "https://ihh.hrpeak.com/abc12345.job",
+    ):
+        assert not da.is_disallowed_offline_url(good_url), f"expected allowed: {good_url}"
+        assert da.is_direct_form_or_ats(good_url), f"expected direct/ats: {good_url}"
+
+    for portal_url in (
+        "https://moad.gov.sy/jobs/1",
+        "https://ssf.gov.sy/careers",
+        "https://powerholding-intl.com/apply/1",
+        "https://wd3.myworkdaysite.com/recruiting/care/CARE/job/Damascus/Officer",
+        "https://ekyc.fa.em2.oraclecloud.com/hcmUI/CandidateExperience",
+        "https://jobs.unicef.org/en-us/job/123",
+    ):
+        assert da.requires_portal_account(portal_url), f"expected portal account: {portal_url}"
+
+    for open_url in (
+        "https://docs.google.com/forms/d/e/1FAIpQLSdTest/viewform",
+        "https://forms.gle/abc123",
+        "https://form.goldyol.com/",
+        "https://career.alboraq-syr.com",
+        "https://hr.mabcoonline.com/",
+        None,
+        "",
+    ):
+        assert not da.requires_portal_account(open_url), f"unexpected portal account: {open_url}"
+
+    j_vendor = _job(
+        "مسؤول لوجستيات ميداني",
+        employer="WeWorld Test",
+        cities=["حلب"],
+        apply_url="https://ats.in-recruiting.com/prova-gratuita",
+        email="info@weworld.it",
+        post_url="https://t.me/test/9900",
+    )
+    jid_vendor, _ = db.upsert(api.con, j_vendor)
+
+    j_portal_only = _job(
+        "منسق مشاريع ميداني",
+        employer="MOAD",
+        cities=["دمشق"],
+        apply_url="https://moad.gov.sy/vacancy/99",
+        post_url="https://t.me/test/9901",
+    )
+    jid_portal_only, _ = db.upsert(api.con, j_portal_only)
+
+    j_portal_alt = _job(
+        "محاسب مشاريع دولية",
+        employer="NRC Portal",
+        cities=["دمشق"],
+        apply_url="https://ekyc.fa.em2.oraclecloud.com/job/1",
+        email="jobs@nrc-alt.org",
+        post_url="https://t.me/test/9902",
+    )
+    db.upsert(api.con, j_portal_alt)
+
+    j_direct = _job(
+        "مهندس برمجيات مباشر",
+        employer="GoldYol",
+        cities=["حلب"],
+        apply_url="https://form.goldyol.com/",
+        post_url="https://t.me/test/9903",
+    )
+    db.upsert(api.con, j_direct)
+    db.rebuild_fts(api.con)
+    api.con.commit()
+
+    vendor_row = api.con.execute("SELECT * FROM jobs WHERE id = ?", (jid_vendor,)).fetchone()
+    vendor_d = db.row_to_dict(api.con, vendor_row)
+    assert vendor_d["apply_url"] is None
+    assert vendor_d["apply_types"] == ["email"]
+    assert vendor_d["url_requires_account"] is False
+    assert vendor_d["requires_account"] is False
+
+    portal_row = api.con.execute("SELECT * FROM jobs WHERE id = ?", (jid_portal_only,)).fetchone()
+    portal_d = db.row_to_dict(api.con, portal_row)
+    assert portal_d["url_requires_account"] is True
+    assert portal_d["requires_account"] is True
+
+    instant_jobs = client.get("/api/jobs", params={"instant": "true", "limit": 200}).json()["jobs"]
+    instant_titles = {j["title"] for j in instant_jobs}
+    assert "منسق مشاريع ميداني" not in instant_titles
+    assert "محاسب مشاريع دولية" in instant_titles
+    assert "مهندس برمجيات مباشر" in instant_titles
+    assert "مسؤول لوجستيات ميداني" in instant_titles
+
+    all_matching = client.get("/api/jobs", params={"q": "منسق مشاريع ميداني"}).json()["jobs"]
+    assert len(all_matching) == 1
+    assert all_matching[0]["url_requires_account"] is True
+    assert all_matching[0]["requires_account"] is True
+
+
+
 

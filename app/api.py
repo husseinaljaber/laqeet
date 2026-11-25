@@ -1014,17 +1014,17 @@ def job_page(job_id: int, request: Request):
       </div>
       <div class="tpl-subject-row">
         <span class="tpl-subject-lbl">عنوان الإيميل (Subject):</span>
-        <input id="pitchSubjectText" type="text" class="tpl-subject-input" dir="rtl" value="{e(email_subj_ar)}">
+        <input id="pitchSubjectText" type="text" class="tpl-subject-input" dir="rtl" aria-label="عنوان الإيميل" value="{e(email_subj_ar)}">
         <button type="button" class="btn ghost tpl-copy-subj-btn" onclick="navigator.clipboard.writeText(document.getElementById('pitchSubjectText').value).then(()=>this.textContent='تم نسخ العنوان')">نسخ العنوان</button>
       </div>
-      <textarea id="pitchBodyText" class="tpl-textarea" dir="rtl">{e(pitch_default)}</textarea>
+      <textarea id="pitchBodyText" class="tpl-textarea" dir="rtl" aria-label="نص رسالة التقديم">{e(pitch_default)}</textarea>
       <div class="tpl-actions">
         <button type="button" class="btn primary" onclick="navigator.clipboard.writeText(document.getElementById('pitchBodyText').value).then(()=>this.textContent='تم نسخ نص الرسالة')"><i data-ico="copy" data-ico-cls="ico-sm"></i><span>نسخ نص رسالة التقديم</span></button>
       </div>
     </div>
     <div class="share-box" style="margin-top:16px">
       <div class="share-box-title"><i data-ico="share" data-ico-cls="ico-sm"></i><span>مشاركة ونسخ الإعلان مع الوصف وطريقة التقديم:</span></div>
-      <textarea id="shareAdText" class="share-preview" dir="rtl">{e(share_text)}</textarea>
+      <textarea id="shareAdText" class="share-preview" dir="rtl" aria-label="نص الإعلان للمشاركة">{e(share_text)}</textarea>
       <div class="share-actions">
         <button type="button" class="btn primary" onclick="navigator.clipboard.writeText(document.getElementById('shareAdText').value).then(()=>this.textContent='تم نسخ الإعلان مع الوصف')"><i data-ico="copy" data-ico-cls="ico-sm"></i><span>نسخ الإعلان مع الوصف</span></button>
         <button type="button" class="btn ghost" data-copy="{e(primary_link)}" onclick="navigator.clipboard.writeText(this.dataset.copy).then(()=>this.textContent='تم نسخ الرابط')"><i data-ico="link" data-ico-cls="ico-sm"></i><span>نسخ الرابط فقط</span></button>

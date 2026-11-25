@@ -92,6 +92,7 @@
 
   // ---------------------------------------------------------------- helpers
   function $(id) { return document.getElementById(id); }
+  const track = (e, k, src) => { if (window.LaqeetUI && window.LaqeetUI.track) window.LaqeetUI.track(e, k, src); };
   function el(tag, attrs, ...kids) {
     const e = document.createElement(tag);
     for (const k in attrs || {}) {
@@ -786,6 +787,7 @@
   }
 
   function shareJob(j) {
+    track('share');
     const pageUrl = `${location.origin}/j/${j.id}`;
     const hasDirectLink = Boolean(j.apply_url && !/^https?:\/\/(?:wa\.me\/|api\.whatsapp\.com\/)/i.test(j.apply_url));
     const linkToCopy = hasDirectLink ? j.apply_url : pageUrl;
@@ -904,11 +906,11 @@
     const out = el('div', { class: 'links' });
     const wa = waLink(j);
     if (wa) {
-      out.append(el('a', { class: 'wa', href: wa, target: '_blank', rel: 'noopener' }, ico('whatsapp', 'ico-sm'), 'راسل واتساب'));
+      out.append(el('a', { class: 'wa', href: wa, target: '_blank', rel: 'noopener', 'data-trk': 'whatsapp', 'data-src': j.source }, ico('whatsapp', 'ico-sm'), 'راسل واتساب'));
     }
     const phone = (j.phones || [])[0];
     if (phone && !j.whatsapp) {
-      out.append(el('a', { class: 'call', href: 'tel:' + phone }, ico('phone', 'ico-sm'), 'اتصل ' + phone));
+      out.append(el('a', { class: 'call', href: 'tel:' + phone, 'data-trk': 'call', 'data-src': j.source }, ico('phone', 'ico-sm'), 'اتصل ' + phone));
     }
     if (j.apply_url && !/^https?:\/\/(?:wa\.me\/|api\.whatsapp\.com\/)/i.test(j.apply_url) && !(j.deadline && daysLeft(j.deadline) < 0)) {
       const isForm = (j.apply_types || []).includes('form');
@@ -920,6 +922,8 @@
         href: j.apply_url,
         target: '_blank',
         rel: 'noopener',
+        'data-trk': needsAcc ? 'portal' : (isForm ? 'form' : 'site'),
+        'data-src': j.source,
         ...(needsAcc ? { title: 'يتطلب إنشاء حساب مجاني أو تسجيل دخول على البوابة الرسمية للجهة المعلنة' } : {})
       }, ico(icName, 'ico-sm'), lbl));
     }
@@ -928,10 +932,10 @@
       out.append(el('a', { href: j.details_url, target: '_blank', rel: 'noopener' }, ico('external-link', 'ico-sm'), 'تفاصيل الإعلان'));
     }
     if (j.email) {
-      out.append(el('a', { href: mailtoHref(j) }, ico('mail', 'ico-sm'), 'إرسال CV بالإيميل (مع رسالة جاهزة)'));
+      out.append(el('a', { href: mailtoHref(j), 'data-trk': 'email', 'data-src': j.source }, ico('mail', 'ico-sm'), 'إرسال CV بالإيميل (مع رسالة جاهزة)'));
     }
     visibleSources(j).slice(0, big ? 6 : 1).forEach((s) => {
-      out.append(el('a', { href: s.post_url, target: '_blank', rel: 'noopener' }, 'المصدر: ' + s.label));
+      out.append(el('a', { href: s.post_url, target: '_blank', rel: 'noopener', 'data-trk-src': s.source }, 'المصدر: ' + s.label));
     });
 
     const curTrk = getTrack(j.id);
@@ -2270,6 +2274,13 @@
 
   // ---------------------------------------------------------------- event listeners
   function setupEvents() {
+    // one listener counts «قدّم» clicks and visits we send to each source channel
+    document.addEventListener('click', (e) => {
+      const a = e.target.closest('a[data-trk], a[data-trk-src]');
+      if (!a) return;
+      if (a.dataset.trk) track('apply', a.dataset.trk, a.dataset.src || '');
+      else track('source', a.dataset.trkSrc);
+    }, true);
     if ($('moreFiltersBtn')) {
       $('moreFiltersBtn').addEventListener('click', () => {
         const open = !$('moreFilters').classList.contains('open');
@@ -2439,6 +2450,7 @@
     // Select dropdowns & Green Search Button
     const runSearchAction = (scrollToResults = false) => {
       if ($('q')) state.q = $('q').value.trim();
+      if (state.q) track('search');
       closeSuggest();
       Object.values(mselRegistry).forEach((w) => { if (w) w.closeMenu(); });
       refresh().then(() => {
@@ -2970,6 +2982,7 @@
   }
 
   function showLanding(pushHistory = true) {
+    track('view', 'landing');
     state.view = 'landing';
     if ($('landingView')) $('landingView').hidden = false;
     if ($('boardView')) $('boardView').hidden = true;
@@ -2981,6 +2994,7 @@
   }
 
   function enterBoard(opts = {}, pushHistory = true) {
+    if (state.view !== 'board') track('view', 'board');
     const nextCountry = opts.country === 'tr' ? 'tr' : 'sy';
     state.view = 'board';
     state.country = nextCountry;
@@ -3066,6 +3080,7 @@
     profile.onboard = { edu: ob.edu, field: ob.field, city: city || '', country: ob.country, at: new Date().toISOString() };
     saveProfile();
     fitCache = null;
+    track('onboard', ob.edu || '');
     enterBoard({ country: ob.country, edu: ob.edu, field: ob.field, city: city || '' }, true);
   }
 

@@ -85,6 +85,13 @@ CREATE TABLE IF NOT EXISTS employer_tokens (  -- self-service token so employers
     closed_at TEXT
 );
 CREATE INDEX IF NOT EXISTS employer_tokens_job ON employer_tokens(job_id);
+CREATE TABLE IF NOT EXISTS events_daily (     -- anonymous daily counters: no cookie, no IP, no person, just totals
+    day TEXT NOT NULL,
+    event TEXT NOT NULL,          -- view | onboard | apply | source | apply_src | search | share
+    key TEXT NOT NULL DEFAULT '',
+    n INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (day, event, key)
+);
 CREATE TABLE IF NOT EXISTS source_health (    -- one row per source: did the last runs bring anything?
     source TEXT PRIMARY KEY,
     kind TEXT,                    -- telegram | reliefweb | ingo_ats | web_portals | turkey_portals
@@ -1182,6 +1189,31 @@ def health_report(con: sqlite3.Connection) -> list[dict]:
         })
     order = {"fail": 0, "stale": 1, "ok": 2}
     return sorted(out, key=lambda x: (order[x["status"]], x["source"]))
+
+
+def count_event(con: sqlite3.Connection, event: str, key: str = "") -> None:
+    """Add one to today's counter. Nothing about who did it is kept."""
+    con.execute(
+        "INSERT INTO events_daily (day, event, key, n) VALUES (?,?,?,1) "
+        "ON CONFLICT(day, event, key) DO UPDATE SET n = n + 1",
+        (date.today().isoformat(), event, key or ""),
+    )
+
+
+def event_stats(con: sqlite3.Connection, days: int = 30) -> dict:
+    """Totals per event and key over the last `days`, plus a per-day series of views and apply clicks."""
+    since = (date.today() - timedelta(days=days - 1)).isoformat()
+    rows = con.execute("SELECT day, event, key, n FROM events_daily WHERE day >= ? ORDER BY day", (since,)).fetchall()
+    totals: dict[str, dict[str, int]] = {}
+    daily: dict[str, dict[str, int]] = {}
+    for r in rows:
+        totals.setdefault(r["event"], {})
+        totals[r["event"]][r["key"]] = totals[r["event"]].get(r["key"], 0) + r["n"]
+        if r["event"] in ("view", "apply"):
+            d = daily.setdefault(r["day"], {"view": 0, "apply": 0})
+            d[r["event"]] += r["n"]
+    return {"since": since, "days": days, "totals": totals,
+            "daily": [{"day": k, **v} for k, v in sorted(daily.items())]}
 
 
 def get_meta(con, key: str, default=None):

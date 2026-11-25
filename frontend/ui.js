@@ -159,7 +159,20 @@
     }
   }
 
-  window.LaqeetUI = { icon, iconHtml, hydrateIcons, toggleTheme, syncThemeButtons };
+  // Anonymous usage counters: one number goes up on the server. No cookie, no id, nothing about the person.
+  function track(event, key, source) {
+    try {
+      if (navigator.doNotTrack === '1' || window.doNotTrack === '1') return;
+      const body = JSON.stringify({ e: event, k: key || '', s: source || '' });
+      if (navigator.sendBeacon) navigator.sendBeacon('/api/e', new Blob([body], { type: 'application/json' }));
+      else fetch('/api/e', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body, keepalive: true }).catch(() => {});
+    } catch (_) {}
+  }
+  const PAGE_VIEWS = { 'cv.html': 'cv', 'pulse.html': 'pulse', 'scam.html': 'scam', 'employer.html': 'employer' };
+  const pageName = PAGE_VIEWS[(location.pathname.split('/').pop() || '')];
+  if (pageName) track('view', pageName);
+
+  window.LaqeetUI = { icon, iconHtml, hydrateIcons, toggleTheme, syncThemeButtons, track };
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', initSharedChrome);

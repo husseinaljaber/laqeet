@@ -237,3 +237,22 @@ def test_new_source_is_not_stale_on_its_first_quiet_run():
     con = db.connect(":memory:")
     db.record_health(con, "HIAST_Syria", "telegram", 0)
     assert db.health_report(con)[0]["status"] == "ok"
+
+
+# ---------------------------------------------------------------- phase 2: anonymous counters
+def test_events_are_counted_without_storing_people():
+    client = TestClient(api.app)
+    ua = {"User-Agent": "Mozilla/5.0 (Linux; Android 14) Chrome/130", "X-Forwarded-For": "198.51.100.200"}
+    assert client.post("/api/e", json={"e": "view", "k": "board"}, headers=ua).status_code == 200
+    client.post("/api/e", json={"e": "apply", "k": "whatsapp", "s": "syrianjobs"}, headers=ua)
+    client.post("/api/e", json={"e": "apply", "k": "site", "s": "nope"}, headers=ua)        # unknown source: apply only
+    client.post("/api/e", json={"e": "view", "k": "<script>"}, headers=ua)                  # rejected key
+    client.post("/api/e", json={"e": "view", "k": "board"}, headers={"User-Agent": "Googlebot/2.1"})  # bots ignored
+    stats = client.get("/api/admin/stats", headers={"X-Admin-Token": "test-token"}).json()
+    t = stats["totals"]
+    assert t["view"]["board"] == 1 and "<script>" not in t["view"]
+    assert t["apply"] == {"whatsapp": 1, "site": 1} and t["apply_src"] == {"syrianjobs": 1}
+    assert stats["source_labels"]["syrianjobs"]
+    cols = {r[1] for r in api.con.execute("PRAGMA table_info(events_daily)")}
+    assert cols == {"day", "event", "key", "n"}  # no ip, no user agent, no id
+    assert client.get("/api/admin/stats").status_code == 403

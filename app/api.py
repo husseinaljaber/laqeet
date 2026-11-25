@@ -628,6 +628,52 @@ def admin_decide(job_id: int, body: dict = Body(...), x_admin_token: str | None 
     return {"ok": True}
 
 
+# ------------------------------------------------------------------ anonymous usage counters
+_EVENT_PAGES = {"landing", "board", "job", "cv", "pulse", "scam", "employer"}
+_EVENT_APPLY = {"whatsapp", "call", "site", "form", "email", "portal"}
+_event_limit = _RateLimit(300, 600)
+_BOT_UA = ("bot", "crawl", "spider", "slurp", "preview", "facebookexternalhit", "whatsapp", "telegram")
+
+
+def _event_key_ok(event: str, key: str) -> bool:
+    if event == "view":
+        return key in _EVENT_PAGES
+    if event == "onboard":
+        return key in tx.EDU_RANK or key == ""
+    if event == "apply":
+        return key in _EVENT_APPLY
+    if event in ("source", "apply_src"):
+        return key in config.SOURCE_LABEL
+    return event in ("search", "share") and key == ""
+
+
+def _is_bot(request: Request) -> bool:
+    ua = (request.headers.get("user-agent") or "").lower()
+    return not ua or any(b in ua for b in _BOT_UA)
+
+
+@app.post("/api/e")
+def track_event(request: Request, body: dict = Body(default={})):
+    """Count one anonymous event (page view, «قدّم» click…). No cookie, no IP stored, no per-person data."""
+    event, key = str(body.get("e") or "")[:20], str(body.get("k") or "")[:40]
+    if _is_bot(request) or not _event_key_ok(event, key) or not _event_limit.allow(_client_ip(request)):
+        return {"ok": True}  # silently ignored: counters are best-effort
+    db.count_event(con, event, key)
+    if event == "apply" and (src := str(body.get("s") or "")[:40]) in config.SOURCE_LABEL:
+        db.count_event(con, "apply_src", src)
+    con.commit()
+    return {"ok": True}
+
+
+@app.get("/api/admin/stats")
+def admin_stats(days: int = Query(30, ge=1, le=365), x_admin_token: str | None = Header(None)):
+    _admin(x_admin_token)
+    out = db.event_stats(con, days)
+    out["source_labels"] = {k: config.SOURCE_LABEL.get(k, k) for k in
+                            set(out["totals"].get("source", {})) | set(out["totals"].get("apply_src", {}))}
+    return out
+
+
 @app.get("/api/admin/health")
 def admin_health(x_admin_token: str | None = Header(None)):
     """Which sources stopped bringing jobs, so a broken scraper is noticed in days, not months."""
@@ -742,6 +788,9 @@ def job_page(job_id: int, request: Request):
     if not _is_public(row):
         raise HTTPException(404)
     j = db.row_to_dict(con, row)
+    if not _is_bot(request):
+        db.count_event(con, "view", "job")
+        con.commit()
     e = html.escape
     cities = "، ".join(j.get("cities") or []) or ("تركيا (عام)" if j.get("country") == "tr" else "سوريا (عام)")
     edu = tx.EDU_LABEL.get(j.get("education") or "", "غير مشترط / غير مذكور")

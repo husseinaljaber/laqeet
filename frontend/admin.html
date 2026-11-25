@@ -11,6 +11,13 @@
 :root[data-theme="dark"] .hl-stale{background:#3A2A10;color:#F5B556}
 :root[data-theme="dark"] .hl-ok{background:#13311F;color:#5BD49A}
 .tbl-wrap{overflow-x:auto}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(9rem,1fr));gap:10px;margin:8px 0 14px}
+.kpi{border:1px solid var(--line);border-radius:12px;padding:10px 12px}
+.kpi b{display:block;font-size:1.5rem;font-variant-numeric:tabular-nums}
+.kpi span{font-size:.82rem;color:var(--muted)}
+.dbar{display:grid;grid-template-columns:5.5rem 1fr 3rem;gap:8px;align-items:center;font-size:.85rem;font-variant-numeric:tabular-nums}
+.dbar .t{height:8px;border-radius:6px;background:var(--line);overflow:hidden}
+.dbar .t i{display:block;height:100%;background:var(--accent)}
 .tbl td small{color:var(--muted)}
 </style></head>
 <body>
@@ -21,6 +28,7 @@
     <div class="adm-tabs">
       <button class="btn primary" id="loadQueue">طابور المراجعة</button>
       <button class="btn ghost" id="loadHealth">صحة المصادر</button>
+      <button class="btn ghost" id="loadStats">الإحصائيات</button>
     </div>
     <div id="out"></div>
   </div>
@@ -70,6 +78,39 @@ async function loadHealth() {
       <td>${esc(ago(x.last_run))} · ${x.last_count}</td>
       <td><small>${esc(x.last_error || '')}</small></td></tr>`).join('')}</table></div>`;
 }
+const PAGE_AR = {landing: 'الرئيسية', board: 'الوظائف', job: 'صفحة وظيفة', cv: 'السيرة', pulse: 'نبض السوق', scam: 'رادار النصب', employer: 'انشر وظيفة'};
+const APPLY_AR = {whatsapp: 'واتساب', call: 'اتصال', site: 'موقع', form: 'فورم', email: 'إيميل', portal: 'بوابة بحساب'};
+const sum = (o) => Object.values(o || {}).reduce((a, b) => a + b, 0);
+function rows(obj, labels) {
+  const list = Object.entries(obj || {}).sort((a, b) => b[1] - a[1]);
+  if (!list.length) return '<p class="note">لسا ما في أرقام.</p>';
+  const max = list[0][1] || 1;
+  return list.map(([k, n]) => `<div class="dbar"><span>${esc((labels && labels[k]) || k || '—')}</span><span class="t"><i style="width:${n / max * 100}%"></i></span><span>${n}</span></div>`).join('');
+}
+async function loadStats() {
+  remember();
+  const r = await fetch('/api/admin/stats?days=30', {headers: H()});
+  if (!r.ok) { out.textContent = 'الرمز غلط أو الإدارة مو مفعّلة (ADMIN_TOKEN).'; return; }
+  const d = await r.json(), t = d.totals;
+  const dayMax = Math.max(1, ...d.daily.map((x) => x.view));
+  out.innerHTML = `<p class="note">آخر ${d.days} يوم. أرقام مجمّعة بس: ما منحفظ هوية ولا IP ولا cookie لحدا.</p>
+    <div class="kpis">
+      <div class="kpi"><b>${sum(t.view)}</b><span>زيارة صفحة</span></div>
+      <div class="kpi"><b>${sum(t.apply)}</b><span>ضغطة «قدّم»</span></div>
+      <div class="kpi"><b>${sum(t.onboard)}</b><span>كمّلوا «شو شهادتك؟»</span></div>
+      <div class="kpi"><b>${sum(t.source)}</b><span>زيارة بعتناها للمصادر</span></div>
+      <div class="kpi"><b>${sum(t.search)}</b><span>بحث</span></div>
+      <div class="kpi"><b>${sum(t.share)}</b><span>مشاركة</span></div>
+    </div>
+    <h3>كل يوم (زيارات · ضغطات قدّم)</h3>
+    ${d.daily.length ? d.daily.map((x) => `<div class="dbar"><span>${esc(x.day.slice(5))}</span><span class="t"><i style="width:${x.view / dayMax * 100}%"></i></span><span>${x.view} · ${x.apply}</span></div>`).join('') : '<p class="note">لسا ما في أرقام.</p>'}
+    <h3>طريقة التقديم</h3>${rows(t.apply, APPLY_AR)}
+    <h3>ضغطات «قدّم» حسب المصدر</h3>${rows(t.apply_src, d.source_labels)}
+    <h3>زيارات بعتناها لكل مصدر</h3>${rows(t.source, d.source_labels)}
+    <h3>الصفحات</h3>${rows(t.view, PAGE_AR)}
+    <h3>الشهادات (من «شو شهادتك؟»)</h3>${rows(t.onboard)}`;
+}
+document.getElementById('loadStats').addEventListener('click', loadStats);
 out.addEventListener('click', async (e) => {
   const b = e.target.closest('[data-a]'); if (!b) return;
   const r = await fetch('/api/admin/jobs/' + b.dataset.id, {method: 'POST', headers: {...H(), 'Content-Type': 'application/json'}, body: JSON.stringify({action: b.dataset.a})});

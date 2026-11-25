@@ -21,7 +21,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from . import config, db, direct_apply as da, search as sq, spam
+from . import config, db, direct_apply as da, search as sq, seo, spam
 from . import taxonomy as tx
 from .arabic import soft_fold
 from .classify import CATEGORIES
@@ -713,6 +713,19 @@ def scam_check(request: Request, body: dict = Body(...)):
     return res
 
 
+@app.get("/sitemap.xml")
+def sitemap(request: Request):
+    from fastapi.responses import Response
+    xml = seo.sitemap_xml(con, seo.public_base(str(request.base_url)))
+    return Response(xml, media_type="application/xml", headers={"Cache-Control": "public, max-age=3600"})
+
+
+@app.get("/robots.txt")
+def robots(request: Request):
+    from fastapi.responses import PlainTextResponse
+    return PlainTextResponse(seo.robots_txt(seo.public_base(str(request.base_url))))
+
+
 @app.get("/j/{job_id}", response_class=HTMLResponse)
 def job_page(job_id: int, request: Request):
     """Shareable single-job page with Open Graph tags so WhatsApp/Telegram previews show the real title and city."""
@@ -732,7 +745,9 @@ def job_page(job_id: int, request: Request):
                   f"الراتب: {j['salary']}" if j.get("salary") else None]
     desc = " · ".join(p for p in desc_parts if p)
     og_desc = (f"{desc} — {j['summary']}" if j.get("summary") else desc)[:260]
-    share_url = f"{str(request.base_url).rstrip('/')}/j/{job_id}"
+    share_url = f"{seo.public_base(str(request.base_url))}/j/{job_id}"
+    job_ld = seo.ld_script(seo.job_posting(j, share_url, emp, j.get("cities") or [], edu))
+    robots_meta = "" if seo.is_open(j) else '<meta name="robots" content="noindex">'
 
     ad_lines = [
         f"📢 فرصة عمل: {j['title']}",
@@ -829,7 +844,10 @@ def job_page(job_id: int, request: Request):
 <meta property="og:title" content="{e(j['title'])} — {e(cities)}">
 <meta property="og:description" content="{e(og_desc)}">
 <meta property="og:url" content="{e(share_url)}">
+<link rel="canonical" href="{e(share_url)}">
+{robots_meta}
 <meta name="twitter:card" content="summary">
+{job_ld}
 <link rel="icon" href="/icons/icon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>

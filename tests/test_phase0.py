@@ -88,3 +88,43 @@ def test_rate_limit_memory_stays_bounded():
     for i in range(1000):
         rl.allow(f"k{i}")
     assert len(rl.hits) <= 100
+
+
+# ---------------------------------------------------------------- phase 1: search engines
+def test_job_page_has_jobposting_markup_and_sitemap_lists_it():
+    import json as _json
+    import re as _re
+    client = TestClient(api.app)
+    now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    jid, _ = db.upsert(api.con, Job(title="محاسب مالي للسيو", source="wazafne", post_url="https://t.me/x/990003", posted_at=now,
+                                    employer="شركة النور للتجارة", cities=["حلب"], education="bachelor", experience=2,
+                                    shift="دوام كامل", phones=["0933111222"]))
+    api.con.commit()
+    try:
+        page = client.get(f"/j/{jid}").text
+        m = _re.search(r'<script type="application/ld\+json">(.*?)</script>', page, _re.S)
+        assert m, "JobPosting markup missing"
+        ld = _json.loads(m.group(1))
+        assert ld["@type"] == "JobPosting" and ld["hiringOrganization"]["name"] == "شركة النور للتجارة"
+        assert ld["jobLocation"][0]["address"] == {"@type": "PostalAddress", "addressLocality": "حلب", "addressCountry": "SY"}
+        assert ld["employmentType"] == "FULL_TIME" and ld["validThrough"] and ld["datePosted"] == now[:10]
+        assert 'rel="canonical"' in page and 'name="robots"' not in page
+        sm = client.get("/sitemap.xml")
+        assert sm.status_code == 200 and f"/j/{jid}</loc>" in sm.text
+        assert "Sitemap:" in client.get("/robots.txt").text
+        # A closed job keeps its page for people but drops the markup and asks not to be indexed.
+        api.con.execute("UPDATE jobs SET status='expired' WHERE id=?", (jid,))
+        api.con.commit()
+        closed = client.get(f"/j/{jid}").text
+        assert "application/ld+json" not in closed and 'content="noindex"' in closed
+        assert f"/j/{jid}</loc>" not in client.get("/sitemap.xml").text
+    finally:
+        db.delete_jobs(api.con, [jid])
+        api.con.commit()
+
+
+def test_no_markup_without_employer():
+    from app import seo
+    j = {"id": 1, "title": "عامل", "status": "live", "posted_at": "2026-11-20", "expires_on": "2099-01-01", "country": "sy"}
+    assert seo.job_posting(j, "https://x/j/1", "", ["دمشق"], "بدون شهادة") is None
+    assert seo.ld_script(None) == ""

@@ -54,6 +54,7 @@ _STRICT_PORTAL_HOSTS = {
     "syria-jobs.com", "jobsintr.net", "salamjobs.com", "adwhit.com", "ab-ilan.com",
     "sana.sy", "mohe.gov.sy", "spu.edu.sy", "jude.edu.sy", "spc.sy",
     "mikrotiksyria.com", "lgsprefabsy.com", "almaqala.blog", "arabicline.com",
+    "tawzeefportal.com",  # only its single-job pages (/jobs/<slug>); listings stay aggregator, see is_aggregator_or_wall
 }
 
 _WRAPPER_HOSTS = _STRICT_PORTAL_HOSTS | {
@@ -343,7 +344,14 @@ def is_file_folder_or_viewer(url: str) -> bool:
     return False
 
 
+# Aggregators whose single-job pages carry the employer's own apply link («قدّم عبر موقع الجهة»): those pages are
+# opened and unwrapped like any wrapper; their listing and company pages are still never used.
+_AGGREGATOR_JOB_PAGE_RE = re.compile(r"^https?://(?:www\.)?tawzeefportal\.com/jobs/[a-z0-9-]*\d+/?(?:[?#].*)?$", re.I)
+
+
 def is_aggregator_or_wall(url: str) -> bool:
+    if _AGGREGATOR_JOB_PAGE_RE.match(url or ""):
+        return False
     return _matches_domain_set(_host(url), _AGGREGATOR_HOSTS)
 
 

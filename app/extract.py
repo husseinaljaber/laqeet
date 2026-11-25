@@ -497,6 +497,63 @@ def _list_items(lines: list[str]) -> tuple[list[tuple[str, str | None]], str]:
     return items, header
 
 
+_NO_PLACE_SECTION = re.compile(F(r"^(?:بدون موقع|غير محدد|عن بعد|اونلاين|عده محافظات|جميع المحافظات|كافه المحافظات)$"))
+_SECTION_TAIL_STOP = re.compile(F(r"^(?:[-–]\s*)?(?:ينتهي|اخر موعد|للتقديم|للمزيد|تابعنا|يتم قبول|ملاحظه|#)"))
+
+
+def _city_section_items(lines: list[str], country: str = "sy") -> list[tuple[str, list[str], str | None]]:
+    """Lists grouped by city: «▪️حلب :» then «🔸 أمين صندوق» (and maybe its own link on the next line).
+    Each job gets its own section's city, not every city named in the post (بوابة التوظيف and similar)."""
+    out: list[tuple[str, list[str], str | None]] = []
+    section: list[str] | None = None
+    sections = 0
+    for line in lines:
+        plain = _strip_emoji(line).strip()
+        head = re.sub(r"^[\s▪▫◾◽■□•●◦‣⁃·\-–—*]+", "", plain).rstrip(" :：").strip()
+        if head and len(head) <= 25 and (plain.endswith((":", "：")) or line.lstrip().startswith(("▪", "◾", "■"))):
+            fh = F(head)
+            found = tx.tr_cities_from_text(head) if country == "tr" else tx.cities_from_text(head)
+            if _NO_PLACE_SECTION.match(fh):
+                section, sections = (["عدة ولايات في تركيا"] if country == "tr" else ["عدة محافظات"]), sections + 1
+                continue
+            rest = fh
+            for c in found:
+                rest = rest.replace(F(c), " ")
+            rest = re.sub(F(r"محافظه|مدينه|ولايه|\bفي\b|[-–:،,()]"), " ", rest).strip()
+            if found and not rest:  # the line is only a place name («▪️حلب :»), not «▪️ مروجة - طرطوس»
+                section, sections = found, sections + 1
+                continue
+        if section is None:
+            continue
+        if re.match(r"https?://", plain):
+            if out and out[-1][2] is None and out[-1][1] is section:
+                u = tx.urls(plain)
+                if u and _is_valid_apply_url(u[0]):
+                    out[-1] = (out[-1][0], out[-1][1], da.strip_tracking(u[0]) or None)
+            continue
+        if _SECTION_TAIL_STOP.match(F(plain)):
+            section = None
+            continue
+        body = _bullet_body(line, in_list=True)
+        if body is None:
+            continue
+        title = _clean_title(body)
+        if 2 <= len(title) <= 80 and _good_title(title) and not _REQ_ITEM_START.match(F(title)):
+            out.append((title, section, None))
+    # The same title in several city sections (one ministry, 14 governorates) is one job in all those cities,
+    # unless each section gives it its own link (then they really are separate ads).
+    merged: dict[str, tuple[str, list[str], str | None]] = {}
+    for title, cities, url in out:
+        key = F(title) + ("|" + url if url else "")
+        if key in merged:
+            t, cs, u = merged[key]
+            merged[key] = (t, cs + [c for c in cities if c not in cs], u)
+        else:
+            merged[key] = (title, list(cities), url)
+    out = list(merged.values())
+    return out if sections >= 1 and len(out) >= 2 else []
+
+
 _BROCHURE_LINK_LABEL_RE = re.compile(r"ملف\s+الوصف|بطاق[ةه]\s+الوصف|الشروط\s+المرجعي[ةه]|\btor\b|job\s+description|\bpdf\b", re.I)
 
 
@@ -636,7 +693,7 @@ def _split_item_city(item: str, country: str = "sy") -> tuple[str, list[str]]:
 
 
 # Lines that are greetings or duties («إعداد التقارير المالية…»), never job titles.
-_NOT_TITLE = re.compile(r"^(?:ال)?سلام عليكم|^مرحبا|^من (?:بيتك|البيت|المنزل)|"
+_NOT_TITLE = re.compile(r"^(?:ال)?سلام عليكم|^مرحبا|^من (?:بيتك|البيت|المنزل)|^[-–]?\s*ينته[يى] التقديم|"
                         r"^(?:تحديد|إعداد|اعداد|متابعة|تنفيذ|القيام|المساهمة|ضمان|تقديم|التواصل|التنسيق|المشاركة|مراجعة|"
                         r"كتابة|بناء)\s+\S+\s+\S+|^(?:دعم\s+(?!فني|تقني|نفسي|لوجستي)|(?:إدارة|ادارة)\s+(?!موارد|حسابات|مالية|مشاريع|عمليات|مبيعات|مكاتب|جودة|حالة|الموارد|المشاريع|الحسابات))\S+\s+\S+|"
                         r"^\(|^(?:مطلوب[ةه]?|بهار|نارة|فريق|صبية|شاب|فرصة|كوادر)$|^عرض خاص|^الزملاء|^للجنسي?ين|^اكيد|^أكيد|^كفاءات|^الهندسية$|^تلفزيون|^قناة|^إذاعة|"
@@ -1106,12 +1163,17 @@ def extract(text: str, source: str, post_url: str, posted_at: str | None = None,
                 email=emails[0] if emails else None, spam=spam, official=official, tasks=tasks, skills=skills, raw=text[:2500])
 
     items, header = _list_items(lines)
+    item_city_override: list[list[str]] = []
+    item_urls: list[str | None] = []
+    if len(sectioned := _city_section_items(lines, target_country)) >= 2:
+        items = [(t, None) for t, _, _ in sectioned]
+        item_city_override = [c for _, c, _ in sectioned]
+        item_urls = [u for _, _, u in sectioned]
     if len(items) < 2 and len(ords := _ordinal_items(lines)) >= 2:
         items = ords
     strong = bool(_STRONG.search(body))
     if len(items) < 2 and len(needs := _all_needs(body)) >= 2:
         items = [(t, None) for t in needs]
-    item_urls: list[str | None] = []
     for finder in (_link_items, _pin_items) + (() if strong else (_bullet_block,)):
         if len(items) >= 2:
             break
@@ -1134,6 +1196,8 @@ def extract(text: str, source: str, post_url: str, posted_at: str | None = None,
         doctors = bool(re.search(F(r"اطباء|الاطباء"), F(header)))
         for idx, (item, grade) in enumerate(items):
             title, item_cities = _split_item_city(item, target_country)
+            if idx < len(item_city_override):
+                item_cities = list(item_city_override[idx])
             if doctors and not re.search(F(r"طبيب|اطباء"), F(title)):
                 title = "طبيب " + title  # «أطباء من الاختصاصات التالية: الجراحة العامة»
             i_url = item_urls[idx] if idx < len(item_urls) else None

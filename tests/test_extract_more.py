@@ -35,3 +35,58 @@ def test_turkey_rejected_and_cleaning_regressions():
 
     sub_spam = extract("مطلوب موظف! اشتراك لمدة شهر بسعر 6.5$ باقة Gemini للتواصل 0933111222", "syrianjobs", "https://t.me/syrianjobs2/1", default_kind="quick")
     assert all(j.spam for j in sub_spam) or not sub_spam
+
+
+CITY_SECTIONS = """بوابة التوظيف تعلن عن الشواغر التالية:
+▪️حلب :
+🔸 أمين/ة صندوق
+https://tawzeefportal.com/jobs/cashier-7153
+🔸 حارس
+https://tawzeefportal.com/jobs/guard-6861
+
+▪️إدلب :
+🔸 ممرضة
+https://tawzeefportal.com/jobs/nurse-7150
+
+▪️بدون موقع :
+🔸 مصمم واجهات وتجربة مستخدم
+
+- ينتهي التقديم بتاريخ: 2026/11/29
+📄للمزيد من الوظائف: https://tawzeefportal.com/jobs"""
+
+MINISTRY_SECTIONS = """[وظائف وزارة المالية]
+بوابة التوظيف تعلن عن الشواغر التالية:
+▪️القنيطرة :
+🔸 مراقب دخل
+🔸 محاسب إدارة
+
+▪️درعا :
+🔸 مراقب دخل
+🔸 محاسب إدارة
+
+- ينتهي التقديم بتاريخ: 2026/12/07"""
+
+
+def test_city_sections_give_each_job_its_own_city_and_link():
+    from app.extract import extract
+    jobs = {j.title: j for j in extract(CITY_SECTIONS, "tawzeefportal", "https://t.me/tawzeefportal/1", "2026-11-20T10:00:00+00:00")}
+    assert set(jobs) == {"أمين/ة صندوق", "حارس", "ممرضة", "مصمم واجهات وتجربة مستخدم"}
+    assert jobs["أمين/ة صندوق"].cities == ["حلب"] and jobs["ممرضة"].cities == ["إدلب"]
+    assert jobs["مصمم واجهات وتجربة مستخدم"].cities == ["عدة محافظات"]
+    assert jobs["حارس"].apply_url == "https://tawzeefportal.com/jobs/guard-6861"
+    assert all(j.deadline == "2026-11-29" for j in jobs.values())
+
+
+def test_same_title_in_many_sections_is_one_job():
+    from app.extract import extract
+    jobs = extract(MINISTRY_SECTIONS, "tawzeefportal", "https://t.me/tawzeefportal/2", "2026-11-20T10:00:00+00:00")
+    assert sorted(j.title for j in jobs) == ["محاسب إدارة", "مراقب دخل"]
+    assert all(set(j.cities) == {"القنيطرة", "درعا"} for j in jobs)
+
+
+def test_tawzeefportal_job_pages_are_unwrapped_not_dropped():
+    from app import direct_apply as da
+    assert not da.is_aggregator_or_wall("https://tawzeefportal.com/jobs/cashier-7153")
+    assert da.is_strict_portal_wrapper("https://tawzeefportal.com/jobs/cashier-7153")
+    assert da.is_aggregator_or_wall("https://tawzeefportal.com/companies/166")
+    assert da.is_aggregator_or_wall("https://tawzeefportal.com/jobs")

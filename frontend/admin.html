@@ -30,6 +30,7 @@
       <button class="btn ghost" id="loadHealth">صحة المصادر</button>
       <button class="btn ghost" id="loadStats">الإحصائيات</button>
       <button class="btn ghost" id="loadPartners">الشركاء</button>
+      <button class="btn ghost" id="getBackup">نسخة احتياطية</button>
     </div>
     <div id="out"></div>
   </div>
@@ -145,6 +146,17 @@ async function loadPartners() {
       <td>${p.kind === 'telegram' ? `<button class="chip" data-copy-partner="${i}">انسخ الرسالة</button>` : ''}</td></tr>`).join('')}</table></div>`;
 }
 document.getElementById('loadPartners').addEventListener('click', loadPartners);
+document.getElementById('getBackup').addEventListener('click', async () => {
+  remember();
+  const r = await fetch('/api/admin/backup', {headers: H()});
+  if (!r.ok) { out.textContent = 'الرمز غلط أو الإدارة مو مفعّلة (ADMIN_TOKEN).'; return; }
+  const blob = await r.blob(), a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `laqeet-backup-${new Date().toISOString().slice(0, 10)}.json.gz`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  out.innerHTML = '<p class="note">نزلت النسخة. خليها عندك وما ترفعها على GitHub، لأنه فيها أرقام أصحاب العمل. للاسترجاع: <code>python -m app.backup import الملف</code></p>';
+});
 out.addEventListener('click', (e) => {
   const b = e.target.closest('[data-copy-partner]'); if (!b) return;
   const d = window._partners, text = partnerMsg(d.sources[+b.dataset.copyPartner], d);

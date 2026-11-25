@@ -699,6 +699,21 @@ def admin_partners(days: int = Query(30, ge=1, le=365), x_admin_token: str | Non
     return {"days": days, "site_name": config.SITE_NAME, "public_url": config.PUBLIC_URL, "sources": rows}
 
 
+@app.get("/api/admin/backup")
+def admin_backup(x_admin_token: str | None = Header(None)):
+    """Download everything people put into the site (employer posts, reports, bot users, counters) as one file.
+    Keep it private: it holds employers' phone numbers and bot chat ids."""
+    import gzip
+    from fastapi.responses import Response
+    from . import backup
+
+    _admin(x_admin_token)
+    body = gzip.compress(json.dumps(backup.export_data(con), ensure_ascii=False).encode("utf-8"))
+    name = f"laqeet-backup-{_today()}.json.gz"
+    return Response(body, media_type="application/gzip",
+                    headers={"Content-Disposition": f'attachment; filename="{name}"', "Cache-Control": "no-store"})
+
+
 @app.get("/api/admin/health")
 def admin_health(x_admin_token: str | None = Header(None)):
     """Which sources stopped bringing jobs, so a broken scraper is noticed in days, not months."""

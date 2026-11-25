@@ -22,3 +22,6 @@ data/*.old
 data/pdfs/
 data/raw/
 collect.log
+
+# private backups (phone numbers, bot chat ids)
+*backup*.json.gz

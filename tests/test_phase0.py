@@ -288,3 +288,54 @@ def test_partners_report_needs_token_and_counts_clicks(quick_job):
     rows = client.get("/api/admin/partners", headers={"X-Admin-Token": "test-token"}).json()["sources"]
     sj = next(r for r in rows if r["source"] == "syrianjobs")
     assert sj["visits_sent"] >= 1 and sj["apply_clicks"] >= 1
+
+
+# ---------------------------------------------------------------- phase 3: backup & restore
+def test_backup_restores_people_data_into_a_rebuilt_database(tmp_path):
+    from app import backup
+    now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    src = db.connect(":memory:")
+    # a collected ad that an admin rejected, and one that got a report
+    bad, _ = db.upsert(src, Job(title="ربح من البيت", source="syrianjobs", post_url="https://t.me/s/1", posted_at=now, cities=["دمشق"]))
+    ok, _ = db.upsert(src, Job(title="سائق توصيل", source="syrianjobs", post_url="https://t.me/s/2", posted_at=now, cities=["حمص"]))
+    src.execute("UPDATE jobs SET status='rejected' WHERE id=?", (bad,))
+    src.execute("UPDATE jobs SET reports=1 WHERE id=?", (ok,))
+    src.execute("INSERT INTO reports VALUES (?,?,?)", (ok, "scam", now))
+    # an employer post with its management code, a bot user who was sent the ok ad, and a counter
+    emp, _ = db.upsert(src, Job(title="خياطة درزة", source="employer", post_url="x", posted_at=now, employer="معمل النور",
+                                cities=["حلب"], phones=["0944111222"]), status="live")
+    src.execute("INSERT INTO employer_tokens (token, job_id, verified, created_at) VALUES ('tok-123456789012', ?, 1, ?)", (emp, now))
+    src.execute("INSERT INTO bot_users (chat_id, education, cities, active, created) VALUES (42, 'none', '|حمص|', 1, ?)", (now,))
+    src.execute("INSERT INTO bot_sent VALUES (42, ?, ?)", (ok, now))
+    db.count_event(src, "apply", "whatsapp")
+    src.commit()
+    path = tmp_path / "b.json.gz"
+    backup.write_file(backup.export_data(src), path)
+
+    # the server comes back from the seed: same collected ads, different ids, no people data
+    dst = db.connect(":memory:")
+    db.upsert(dst, Job(title="محاسب", source="wazafne", post_url="https://t.me/w/9", posted_at=now, cities=["دمشق"]))
+    db.upsert(dst, Job(title="سائق توصيل", source="syrianjobs", post_url="https://t.me/s/2", posted_at=now, cities=["حمص"]))
+    db.upsert(dst, Job(title="ربح من البيت", source="syrianjobs", post_url="https://t.me/s/1", posted_at=now, cities=["دمشق"]))
+    dst.commit()
+    stats = backup.import_data(dst, backup.read_file(path))
+    assert stats["employer_jobs"] == 1 and stats["tokens"] == 1 and stats["bot_users"] == 1
+    st = {r["title"]: r for r in dst.execute("SELECT title, status, reports, id FROM jobs")}
+    assert st["ربح من البيت"]["status"] == "rejected" and st["سائق توصيل"]["reports"] == 1
+    tok = dst.execute("SELECT job_id FROM employer_tokens WHERE token='tok-123456789012'").fetchone()
+    assert tok["job_id"] == st["خياطة درزة"]["id"]
+    assert dst.execute("SELECT job_id FROM bot_sent WHERE chat_id=42").fetchone()["job_id"] == st["سائق توصيل"]["id"]
+    assert db.event_stats(dst)["totals"]["apply"]["whatsapp"] == 1
+    # running it again changes nothing
+    again = backup.import_data(dst, backup.read_file(path))
+    assert dst.execute("SELECT COUNT(*) FROM jobs WHERE source='employer'").fetchone()[0] == 1 and again["reports"] == 0
+
+
+def test_admin_backup_download_needs_token():
+    import gzip as _gz
+    import json as _json
+    client = TestClient(api.app)
+    assert client.get("/api/admin/backup").status_code == 403
+    r = client.get("/api/admin/backup", headers={"X-Admin-Token": "test-token"})
+    assert r.status_code == 200 and "attachment" in r.headers["content-disposition"]
+    assert _json.loads(_gz.decompress(r.content))["version"] == 1

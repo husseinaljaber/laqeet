@@ -478,5 +478,19 @@
     "official": false,
     "country": "sy",
     "sector": "private"
+  },
+  "tawzeefportal": {
+    "source": "tawzeefportal",
+    "label": "بوابة التوظيف",
+    "kind": "formal",
+    "official": false,
+    "country": "sy"
+  },
+  "syrjob": {
+    "source": "syrjob",
+    "label": "وظائف سوريا (سيرجوب)",
+    "kind": "formal",
+    "official": false,
+    "country": "sy"
   }
 }

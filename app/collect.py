@@ -18,7 +18,7 @@ from datetime import date, datetime, timedelta, timezone
 
 import httpx
 
-from . import config, db, direct_apply as da
+from . import config, db, direct_apply as da, llm
 from . import taxonomy as tx
 from .classify import classify as computer_subfield
 from .download import download_pdf, resolve_drive_id
@@ -130,7 +130,11 @@ def post_jobs(post: Post, client, con) -> list[Job]:
     for j in jobs:
         if len(j.title.split()) > 14 or len(j.title) > 95:
             j.confidence = min(j.confidence, 0.4)  # reads like a sentence: a person checks it before it shows
-    return [j for j in jobs if not j.spam]
+    if any(j.spam for j in jobs):
+        return [j for j in jobs if not j.spam]
+    # Optional: when ANTHROPIC_API_KEY is set, posts the rules were unsure about get a second reading by the AI.
+    return llm.improve(con, post.text, jobs, source=ch["source"], post_url=post.url, posted_at=post.date,
+                       default_kind=ch["kind"], links=post.links, country=ch.get("country"), sector=ch.get("sector"))
 
 
 def store_post(

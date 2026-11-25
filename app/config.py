@@ -127,6 +127,7 @@ REVIEW_BELOW = float(os.getenv("REVIEW_BELOW", 0.5))    # confidence under this 
 ADMIN_TOKEN = os.getenv("ADMIN_TOKEN", "")              # protects /admin; empty = admin disabled
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")  # optional LLM extractor
 LLM_MODEL = os.getenv("LLM_MODEL", "claude-haiku-5-5")
+LLM_DAILY_LIMIT = int(os.getenv("LLM_DAILY_LIMIT", 300))  # most AI requests per day (only for posts the rules can't read)
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 ADMIN_CHAT_ID = os.getenv("ADMIN_CHAT_ID", "")         # your Telegram chat id: daily note when sources break (optional)
 TG_API_ID = int(os.getenv("TG_API_ID") or 0)

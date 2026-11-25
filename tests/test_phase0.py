@@ -171,3 +171,62 @@ def test_health_alert_sends_once_a_day(monkeypatch):
     assert run.health_alert(con, TG()) is True
     assert "وزارة التنمية الإدارية" in sent[0]
     assert run.health_alert(con, TG()) is False and len(sent) == 1
+
+
+# ---------------------------------------------------------------- phase 1: optional AI reader
+def test_llm_is_off_without_key_and_rules_stay(monkeypatch):
+    from app import config, llm
+    monkeypatch.setattr(config, "ANTHROPIC_API_KEY", "")
+    con = db.connect(":memory:")
+    rule = [Job(title="جملة طويلة جداً", source="wazafne", post_url="u", confidence=0.4)]
+    assert llm.improve(con, "مطلوب موظفين " * 10, rule, source="wazafne", post_url="u", posted_at=None,
+                       default_kind="formal", links=[], country="sy", sector=None) is rule
+
+
+def test_llm_reading_replaces_unsure_rules_and_keeps_contacts_from_text(monkeypatch):
+    from app import config, llm
+    monkeypatch.setattr(config, "ANTHROPIC_API_KEY", "test-key")
+    monkeypatch.setattr(config, "LLM_DAILY_LIMIT", 2)
+    calls = []
+
+    def fake_ask(text):
+        calls.append(text)
+        return llm.LlmPost(is_job_ad=True, jobs=[
+            llm.LlmJob(title="معلم شاورما", employer="مطعم الريم", cities=["حلب"], education="none", field="hospitality",
+                       experience_years=2, age_min=None, age_max=None, gender="male", salary=None,
+                       deadline=None, kind="quick"),
+            llm.LlmJob(title="كاشير", employer="مطعم الريم", cities=["حلب"], education=None, field="retail",
+                       experience_years=None, age_min=None, age_max=None, gender=None, salary=None,
+                       deadline="2099-01-01", kind="quick"),
+        ])
+
+    monkeypatch.setattr(llm, "ask", fake_ask)
+    con = db.connect(":memory:")
+    text = "مطعم الريم في حلب بحاجة إلى معلم شاورما بخبرة سنتين وكاشير، للتواصل واتس 0944123456"
+    jobs = llm.improve(con, text, [], source="syrianjobs", post_url="u", posted_at="2026-11-25",
+                       default_kind="quick", links=[], country="sy", sector=None)
+    assert [j.title for j in jobs] == ["معلم شاورما", "كاشير"]
+    assert jobs[0].phones == ["0944123456"] and jobs[0].whatsapp and jobs[0].education == "none"
+    assert jobs[1].education is None and jobs[1].education_from == "unknown"
+    # budget: 2 a day, the third unsure post keeps its rule result
+    llm.improve(con, text, [], source="syrianjobs", post_url="u", posted_at=None, default_kind="quick",
+                links=[], country="sy", sector=None)
+    assert llm.improve(con, text, [], source="syrianjobs", post_url="u", posted_at=None, default_kind="quick",
+                       links=[], country="sy", sector=None) == []
+    assert len(calls) == 2
+
+
+def test_llm_not_asked_about_confident_posts(monkeypatch):
+    from app import config, llm
+    monkeypatch.setattr(config, "ANTHROPIC_API_KEY", "test-key")
+    monkeypatch.setattr(llm, "ask", lambda t: (_ for _ in ()).throw(AssertionError("should not ask")))
+    con = db.connect(":memory:")
+    sure = [Job(title="محاسب", source="wazafne", post_url="u", confidence=1.0)]
+    assert llm.improve(con, "مطلوب محاسب " * 10, sure, source="wazafne", post_url="u", posted_at=None,
+                       default_kind="formal", links=[], country="sy", sector=None) is sure
+
+
+def test_llm_schema_builds_for_structured_output():
+    from app import llm
+    schema = llm.LlmPost.model_json_schema()
+    assert "jobs" in schema["properties"] and "is_job_ad" in schema["required"]

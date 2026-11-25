@@ -1264,6 +1264,7 @@
           ? 'رابط التقديم الرسمي على منصة الجهة المعلنة (يتطلب إنشاء حساب مجاني أو تسجيل دخول)'
           : (isForm ? 'تعبئة استمارة التقديم المباشر' : 'التقديم المباشر عبر الموقع'),
         href: j.apply_url,
+        trk: needsAcc ? 'portal' : (isForm ? 'form' : 'site'),
         external: true
       });
     }
@@ -1274,6 +1275,7 @@
         label: 'راسل واتساب',
         title: 'التقديم عبر واتساب (مع رسالة تقديم جاهزة)',
         href: wa,
+        trk: 'whatsapp',
         external: true
       });
     }
@@ -1284,6 +1286,7 @@
         label: 'إرسال CV بالإيميل',
         title: `إرسال CV بالإيميل مع رسالة جاهزة (${j.email})`,
         href: mailtoHref(j),
+        trk: 'email',
         external: false
       });
     }
@@ -1294,6 +1297,7 @@
         label: 'اتصل ' + phone,
         title: `اتصال هاتفي مباشر (${phone})`,
         href: 'tel:' + phone,
+        trk: 'call',
         external: false
       });
     }
@@ -1306,6 +1310,8 @@
           class: 'card-cta-main ' + primary.cls,
           href: primary.href,
           title: primary.title,
+          'data-trk': primary.trk,
+          'data-src': j.source,
           ...(primary.external ? { target: '_blank', rel: 'noopener' } : {})
         }, ico(primary.icon, 'ico-sm'), el('span', null, primary.label))
       );
@@ -1315,6 +1321,8 @@
             class: 'card-cta-icon ' + secAct.cls,
             href: secAct.href,
             title: secAct.title,
+            'data-trk': secAct.trk,
+            'data-src': j.source,
             'aria-label': secAct.title,
             ...(secAct.external ? { target: '_blank', rel: 'noopener' } : {})
           }, ico(secAct.icon, 'ico-sm'))

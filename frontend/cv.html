@@ -47,6 +47,12 @@ main.inner.cvwrap{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15
 .ats-title{display:inline-flex;align-items:center;gap:6px;font-weight:700;font-size:.88rem;color:var(--ink)}
 .ats-score{font-family:var(--font-display);font-weight:800;font-size:1rem;color:var(--accent);font-variant-numeric:tabular-nums}
 .ats-track{height:8px;border-radius:999px;background:var(--surface);border:1px solid var(--line);overflow:hidden}
+.gaps h4{margin:12px 0 6px;font-size:.95rem}
+.gaps ul{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.gaps li{padding:8px 10px;border-radius:10px;font-size:.88rem;line-height:1.6}
+.gaps li.ok{background:var(--exp-low-bg);color:var(--exp-low)}
+.gaps li.gap{background:var(--exp-mid-bg);color:var(--ink);border-inline-start:3px solid var(--exp-mid)}
+.gaps li small{display:block;color:var(--muted);margin-top:2px}
 .ats-fill{height:100%;width:0;border-radius:999px;background:linear-gradient(270deg,var(--accent),var(--mint));transition:width .4s var(--ease)}
 .ats-tips{display:flex;flex-wrap:wrap;gap:6px}
 .ats-tip{font-size:.75rem;padding:3px 9px;border-radius:999px;background:var(--surface);border:1px solid var(--line);color:var(--muted);font-weight:600}
@@ -231,6 +237,67 @@ main.inner.cvwrap{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15
   try { data = JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) {}
   try { prefs = Object.assign(prefs, JSON.parse(localStorage.getItem(PREF_KEY)) || {}); } catch (e) {}
   let wanted = [];
+  let job = null;
+  // «شو ناقصك»: compare the CV (and the profile from the jobs page, if any) with what the ad asks for.
+  const EDU_RANK = { none: 0, basic: 1, secondary: 2, institute: 3, bachelor: 4, master: 5, phd: 6 };
+  const EDU_AR = { none: 'بدون شهادة', basic: 'تعليم أساسي', secondary: 'بكالوريا', institute: 'معهد', bachelor: 'شهادة جامعية', master: 'ماجستير', phd: 'دكتوراه' };
+  function myProfile() { try { return JSON.parse(localStorage.getItem('laqeet.profile')) || {}; } catch (_) { return {}; } }
+  function myEducation() {
+    const t = fold(data.education || '');
+    if (/دكتوراه|phd|doctor/.test(t)) return 'phd';
+    if (/ماجستير|master|msc|mba/.test(t)) return 'master';
+    if (/اجازه|بكالوريوس|جامعه|كليه|bachelor|b\.?sc|university/.test(t)) return 'bachelor';
+    if (/معهد|دبلوم|diploma|institute/.test(t)) return 'institute';
+    if (/بكالوريا|ثانويه|high school/.test(t)) return 'secondary';
+    if (/اعداديه|تعليم اساسي/.test(t)) return 'basic';
+    return myProfile().edu || '';
+  }
+  function myYears() {
+    const p = myProfile();
+    if (p.exp != null && p.exp !== '') return Number(p.exp);
+    const t = String(data.experience || '');
+    let total = 0;
+    for (const m of t.matchAll(/(20\d\d|19\d\d)\s*[-–—]\s*(20\d\d|19\d\d|الآن|حتى الآن|now|present)/gi)) {
+      const end = /\d/.test(m[2]) ? +m[2] : new Date().getFullYear();
+      total += Math.max(0, end - +m[1]);
+    }
+    for (const m of t.matchAll(/(\d{1,2})\s*(?:سنوات|سنة|سنين|عام|years?)/gi)) total = Math.max(total, +m[1]);
+    return total || null;
+  }
+  function renderGaps() {
+    const box = document.getElementById('gaps');
+    if (!box || !job) return;
+    const items = [];
+    const ok = (t) => items.push(`<li class="ok">✓ ${t}</li>`);
+    const gap = (t, tip) => items.push(`<li class="gap">✗ ${t}${tip ? `<small>${tip}</small>` : ''}</li>`);
+    if (job.education && EDU_RANK[job.education] != null) {
+      const mine = myEducation();
+      if (!mine) gap(`الإعلان بيطلب ${EDU_AR[job.education]}، وسيرتك ما فيها شهادة واضحة`, 'اكتب شهادتك بقسم «التعليم»: الاختصاص، الجامعة أو المعهد، وسنة التخرج.');
+      else if (EDU_RANK[mine] >= EDU_RANK[job.education]) ok(`الشهادة: ${EDU_AR[mine]} (المطلوب ${EDU_AR[job.education]})`);
+      else gap(`الإعلان بيطلب ${EDU_AR[job.education]}، وشهادتك ${EDU_AR[mine]}`, 'فيك تقدّم إذا عندك خبرة قوية بنفس المجال، واذكرها بأول سطر بالملخص.');
+    }
+    if (job.experience) {
+      const yrs = myYears();
+      if (yrs == null) gap(`الإعلان بيطلب خبرة ${job.experience} سنوات، وما بيبيّن من سيرتك قديش خبرتك`, 'اكتب مدة كل شغل: مثلاً «محاسب — شركة الأمل — 2021–2024».');
+      else if (yrs >= job.experience) ok(`الخبرة: حوالي ${yrs} سنوات (المطلوب ${job.experience})`);
+      else gap(`الإعلان بيطلب ${job.experience} سنوات خبرة، وسيرتك فيها حوالي ${yrs}`, 'ضيف التدريب والتطوع والشغل الجزئي بنفس المجال، كلهم بيتحسبوا خبرة.');
+    }
+    if ((job.age_min || job.age_max) && /^\d{4}$/.test(String(data.born || '').trim())) {
+      const age = new Date().getFullYear() - +data.born;
+      if ((job.age_min && age < job.age_min) || (job.age_max && age > job.age_max)) gap(`العمر المطلوب ${job.age_min || ''}–${job.age_max || ''} وعمرك حوالي ${age}`, 'إذا الفرق صغير جرّب، كتير جهات بتتساهل بشرط العمر.');
+      else ok(`العمر ضمن المطلوب (${job.age_min || ''}–${job.age_max || ''})`);
+    }
+    const cities = (job.cities || []).filter((c) => !/عدة/.test(c));
+    if (cities.length && data.city) {
+      const here = cities.some((c) => fold(data.city).includes(fold(c)));
+      if (here) ok(`المدينة: ${esc(cities.join('، '))}`);
+      else gap(`الشغل بـ${esc(cities.join('، '))} وإنت كاتب «${esc(data.city)}»`, 'إذا مستعد تنتقل أو تتنقّل، اكتبها بالملخص: «مستعد للعمل في …».');
+    }
+    const missing = wanted.slice(0, 10).filter((w) => !hits(w));
+    if (missing.length) gap(`مهارات مطلوبة مو ظاهرة بسيرتك: ${missing.slice(0, 5).map(esc).join('، ')}`, 'إذا عندك منها شي، اكتبه بقسم «المهارات» بنفس كلمات الإعلان، لأنه أنظمة الفرز بتدوّر على نفس الكلمة.');
+    else if (wanted.length) ok('كل المهارات المطلوبة ظاهرة بسيرتك');
+    box.innerHTML = items.length ? `<h4>شو ناقصك لهالوظيفة؟</h4><ul>${items.join('')}</ul>` : '';
+  }
 
   const I18N = {
     ar: {
@@ -311,7 +378,7 @@ main.inner.cvwrap{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15
     const need = document.getElementById('need');
     if (wanted.length) {
       let hitCount = 0;
-      need.querySelectorAll('li').forEach((li) => {
+      need.querySelectorAll('li[data-req]').forEach((li) => {
         const isHit = hits(li.dataset.req);
         if (isHit) hitCount += 1;
         li.classList.toggle('hit', isHit);
@@ -319,6 +386,7 @@ main.inner.cvwrap{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15
       const hitBadge = need.querySelector('.need-hit-badge');
       if (hitBadge) hitBadge.textContent = `مطابقة ${hitCount} من ${Math.min(wanted.length, 10)} مهارة`;
     }
+    renderGaps();
     computeAts();
   }
 
@@ -385,11 +453,13 @@ main.inner.cvwrap{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15
   const id = new URLSearchParams(location.search).get('job');
   if (id) fetch('/api/jobs/' + encodeURIComponent(id)).then((r) => r.ok ? r.json() : null).then((j) => {
     if (!j) return;
+    job = j;
     wanted = [...(j.skills || []), ...(j.tasks || []), j.specialty].filter(Boolean);
     const need = document.getElementById('need');
     need.hidden = false;
     need.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><h3>عم تجهّز سيرتك لـ«${esc(j.title)}»</h3><span class="trust-pill ngo need-hit-badge"></span></div><p style="margin:4px 0 6px;color:var(--muted)">هي المهارات المطلوبة في الشاغر. يلي عليه ✓ موجود بسيرتك:</p>` +
-      (wanted.length ? `<ul style="margin:0;padding-inline-start:18px">${wanted.slice(0, 10).map((w) => `<li data-req="${esc(w)}">${esc(w)}</li>`).join('')}</ul>` : '<p>الإعلان ما فيه تفاصيل مهارات محددة.</p>');
+      (wanted.length ? `<ul style="margin:0;padding-inline-start:18px">${wanted.slice(0, 10).map((w) => `<li data-req="${esc(w)}">${esc(w)}</li>`).join('')}</ul>` : '<p>الإعلان ما فيه تفاصيل مهارات محددة.</p>') +
+      '<div class="gaps" id="gaps"></div>';
     if (!data.role) { data.role = j.title; form.querySelector('[name=role]').value = j.title; try { localStorage.setItem(KEY, JSON.stringify(data)); } catch (e) {} }
     if (/[A-Za-z]{4,}/.test(j.title || '') && j.sector === 'ngo') { prefs.lang = 'en'; savePrefs(); }
     render();

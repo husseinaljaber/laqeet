@@ -18,7 +18,7 @@ from datetime import date, datetime, timedelta, timezone
 
 import httpx
 
-from . import config, db, direct_apply as da, llm, trainings
+from . import config, db, direct_apply as da, llm
 from . import taxonomy as tx
 from .classify import classify as computer_subfield
 from .download import download_pdf, resolve_drive_id
@@ -162,8 +162,6 @@ def store_post(
             j.sector = "gov"
     con.execute("INSERT OR REPLACE INTO posts (channel, id, date, text, links, jobs) VALUES (?,?,?,?,?,?)",
                 (post.channel, post.id, post.date, post.text, json.dumps(post.links), len(jobs)))
-    if not jobs:  # courses, internships and grants live in their own table («تدريبات ومنح»)
-        trainings.maybe_store_post(con, post.channel, post.text, post.url, post.date)
     new = 0
     for job in jobs:
         _, is_new = db.upsert(con, job)
@@ -272,7 +270,6 @@ def collect(offline: bool = False, quick: bool = False, verify_limit: int | None
                     stats["live_audit"] = verify_live_jobs(con, cache=resolve_cache, max_checks=checks)
                 except Exception as e:
                     log.warning("live_audit failed: %s", e)
-        trainings.prune(con)
         pruned = db.prune_old(con, config.HISTORY_DAYS)
         if pruned:
             log.info("pruned %d jobs older than %d days", pruned, config.HISTORY_DAYS)

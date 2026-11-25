@@ -7,7 +7,7 @@ from __future__ import annotations
 import gzip
 import json
 
-from . import config, db, trainings
+from . import config, db
 
 SEED_PATH = config.ROOT / "data" / "seed_jobs.jsonl.gz"
 
@@ -31,10 +31,7 @@ def export_seed(con=None, path=SEED_PATH) -> int:
         )
         tmp = path.with_suffix(".gz.tmp")
         with gzip.open(tmp, "wt", encoding="utf-8") as gz:
-            t_rows = trainings.export_rows(con)
-            gz.write(json.dumps({"jobs_cols": cols, "fts": True, "trainings_cols": t_rows[0]}, ensure_ascii=False) + "\n")
-            for r in t_rows[1:]:
-                gz.write("t\t" + json.dumps(r, ensure_ascii=False) + "\n")
+            gz.write(json.dumps({"jobs_cols": cols, "fts": True}, ensure_ascii=False) + "\n")
             data_i = cols.index("data")
             for r in jobs:
                 row = list(r)

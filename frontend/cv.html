@@ -130,7 +130,6 @@ main.inner.cvwrap{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15
     <div class="site-nav-links">
       <a class="site-nav-link" href="./?view=jobs"><i data-ico="briefcase" data-ico-cls="ico-sm"></i><span>الوظائف</span></a>
       <a class="site-nav-link is-active" href="cv.html"><i data-ico="file-text" data-ico-cls="ico-sm"></i><span>سيرتي الذاتية</span></a>
-      <a class="site-nav-link" href="trainings.html"><i data-ico="award" data-ico-cls="ico-sm"></i><span>تدريبات ومنح</span></a>
       <a class="site-nav-link" href="pulse.html"><i data-ico="bar-chart" data-ico-cls="ico-sm"></i><span>نبض السوق</span></a>
       <a class="site-nav-link" href="scam.html"><i data-ico="shield-check" data-ico-cls="ico-sm"></i><span>رادار النصب</span></a>
       <a class="site-nav-link" href="employer.html"><i data-ico="megaphone" data-ico-cls="ico-sm"></i><span>انشر وظيفة</span></a>
@@ -295,12 +294,7 @@ main.inner.cvwrap{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15
       else gap(`الشغل بـ${esc(cities.join('، '))} وإنت كاتب «${esc(data.city)}»`, 'إذا مستعد تنتقل أو تتنقّل، اكتبها بالملخص: «مستعد للعمل في …».');
     }
     const missing = wanted.slice(0, 10).filter((w) => !hits(w));
-    if (missing.length) {
-      const first = String(missing[0]).split(/[\s،,(]/).filter((w) => w.length > 2).slice(0, 2).join(' ');
-      gap(`مهارات مطلوبة مو ظاهرة بسيرتك: ${missing.slice(0, 5).map(esc).join('، ')}`,
-        'إذا عندك منها شي، اكتبه بقسم «المهارات» بنفس كلمات الإعلان، لأنه أنظمة الفرز بتدوّر على نفس الكلمة.' +
-        (first ? ` وإذا ما عندك: <a href="trainings.html?q=${encodeURIComponent(first)}">دوّر على دورة «${esc(first)}»</a>.` : ''));
-    }
+    if (missing.length) gap(`مهارات مطلوبة مو ظاهرة بسيرتك: ${missing.slice(0, 5).map(esc).join('، ')}`, 'إذا عندك منها شي، اكتبه بقسم «المهارات» بنفس كلمات الإعلان، لأنه أنظمة الفرز بتدوّر على نفس الكلمة.');
     else if (wanted.length) ok('كل المهارات المطلوبة ظاهرة بسيرتك');
     box.innerHTML = items.length ? `<h4>شو ناقصك لهالوظيفة؟</h4><ul>${items.join('')}</ul>` : '';
   }

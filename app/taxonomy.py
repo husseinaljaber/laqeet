@@ -39,17 +39,22 @@ _EDU_RE = [(code, re.compile("|".join(fold(p) for p in pats))) for code, pats in
 
 _CRAFT_TAIL = r"(?:تلييس|لياسه|بلوك|مكابس|جبصين|دهان|بلاط|سيراميك|حداده|نجاره|المنيوم|بيتون|باطون|عمار|بناء|صحيه|تمديدات|كهرباء|ميكانيك|لحام|خراطه|خياطه|حبكه|درزه|كوي|فرن|مخبز|معجنات|فطائر|عجين|شاورما|فلافل|بيتزا|مشاوي|حلويات|سلطات|عصائر|بسطرما|قصاب|لحم|مشغل|ورشه)"
 
+# What a school teacher teaches. «معلم» followed by anything else is a craft master (معلم سناك، معلم كنافة، معلم صباغة).
+_TEACH_SUBJECT = (r"(?:صف|ماده|مواد|لغه|اللغه|رياضيات|فيزياء|كيمياء|علوم|احياء|انكليزي|انجليزي|فرنسي|عربي|حلقه|قران|تربيه|"
+                  r"موسيقا|موسيقي|رسم|حاسوب|معلوماتيه|اطفال|روضه|مدرسه|اجتماعيات|تاريخ|جغرافيا|ديانه|ابتدائي|تعليم|صفوف|"
+                  r"مرحله|اساسي|ثانوي|خصوصي|دعم|تقويه)")
+
 # When an ad does not say, the job title is a good hint. (pattern, minimum education)
 _TITLE_EDU = [
-    (rf"طبيب|اطباء|اخصائي|أخصائي|صيدلان|صيدلي|مهندس(?! مساعد)|محام|محاسب قانون|مدير|مستشار|مدرس|\bمعلم[هة]\b|معلمات|معلمين(?!\s*{_CRAFT_TAIL})|\bمعلم (صف|ماده|لغه|رياضيات|فيزياء|كيمياء|علوم|انكليزي|عربي|حلقه)|دكتور|\bانسات لمدرسه|"
+    (rf"طبيب|اطباء|اخصائي|أخصائي|صيدلان|صيدلي|مهندس(?! مساعد)|محام|محاسب قانون|مدير|مستشار|مدرس|\bمعلم[هة]\b|معلمات|\bمعلم(?:ين|ي|و)?\s+{_TEACH_SUBJECT}|\bمعلمين$|دكتور|\bانسات لمدرسه|"
      r"developer|engineer|مطور|محلل|مسؤول(?!\s*(?:تنظيف|نظافه|ضيافه|مطبخ|صاله|صالة|تغليف))|\bmeal\b|منسق|ضابط|باحث|مترجم|قابله|معالج|مشرف|رئيس (قسم|شعبه|دائره)|مختص|"
-     r"محرر|موارد بشريه|\bcto\b|officer|manager|ميسر|اداره حاله|عامل حاله|معد تقارير|خريج|مراسلات", "bachelor"),
+     r"محرر|موارد بشريه|\bcto\b|officer|manager|architect|accountant|analyst|ميسر|اداره حاله|عامل حاله|معد تقارير|خريج|مراسلات", "bachelor"),
     (r"ممرض|فني|تقني|مساعد[هة]? (مهندس|صيدل|سني|طبيب|جراح|فني|تمريض)|مخبري|قابله", "institute"),
     (r"محاسب|سكرتير|سكرتاريا|مدخل[هة]? بيانات|data\s*entry|امين (مستودع|صندوق|مكتبه)|مصمم|مونتير|مصور|كول سنتر|خدمه عملاء|"
      r"استقبال|كاشير|مساعد|موظف[هة]? (اداري|مكتب|تسجيل|توزيع|توعيه)|كاتب|مراقب ميداني", "secondary"),
     (rf"عامل|سائق|حارس|مستخدم|ناطور|عتال|توصيل|دليفري|ديلفري|طباخ|مساعد شيف|شيف|نادل|جرسون|كوفي|باريستا|خياط|"
      r"ورشه|معمل|مبيعات|بائع|موظف[هة]? (مبيعات|صاله|محل)|تنظيف|نظافه|مربي[هة]?|جليس|مندوب|مستخدم|مروج|"
-     rf"مسؤول[هة]? (تنظيف|نظافه|ضيافه)|ترويج|مقدم رعايه|مطعم|كافي|كوفي|محل|مول|ماركت|(?:معلم|معلمين|معلمي|معلمو)\s+{_CRAFT_TAIL}|تلييس|لياسه|مكابس|بلوك|باريستا|كومي|بيوت بلاستيك|مغسل|كابتن|كباتن|ماكينه|حبكه|مشغل|فرن|مخبز|حلويات|صانع|نجار|حداد|دهان|بلاط|لحام", "none"),
+     rf"مسؤول[هة]? (تنظيف|نظافه|ضيافه)|ترويج|مقدم رعايه|مطعم|كافي|كوفي|\bمحل\b|\bمول\b|ماركت|(?:معلم|معلمين|معلمي|معلمو)\s+{_CRAFT_TAIL}|\bمعلم(?:ين|ي|و)?\s+(?!{_TEACH_SUBJECT}\b|و?معلم|قر[اآ]ن)(?=\S)|سناك|صاج|بروستد|كريب|كنافه|بوظه|كواء|\bكوا\b|مكوجي|\bكوي\b|حلاق|كوافير|صباغ|تلييس|لياسه|مكابس|بلوك|باريستا|كومي|بيوت بلاستيك|مغسل|كابتن|كباتن|ماكينه|حبكه|مشغل|فرن|مخبز|حلويات|صانع|نجار|حداد|دهان|بلاط|لحام", "none"),
 ]
 _TITLE_EDU_RE = [(re.compile(fold(p), re.I), edu) for p, edu in _TITLE_EDU]
 
@@ -82,6 +87,23 @@ def _title_form(s: str) -> str:
 
 def education_from_title(title: str) -> str | None:
     return _first_match(_title_form(title), _TITLE_EDU_RE)
+
+
+def guess_education(title: str, text: str = "", default: str | None = None) -> tuple[str | None, str]:
+    """Education for one ad and how we know it: (code, "stated" | "title" | "source" | "unknown").
+
+    A craft or service title («عامل», «معلم شاورما», «كوّاء») wins over a degree word somewhere in the body, because
+    the body is often a company blurb. When nothing is said, return `default` (only pass one for sources where it
+    is really true, e.g. UN/NGO portals), otherwise None: the site shows «الشهادة مو مذكورة» instead of a guess.
+    """
+    title_edu = education_from_title(title)
+    if title_edu == "none":
+        return "none", "title"
+    if stated := education_from_text(f"{title} {text}" if text else title):
+        return stated, "stated"
+    if title_edu:
+        return title_edu, "title"
+    return (default, "source") if default else (None, "unknown")
 
 
 # ---------------------------------------------------------------- cities
@@ -360,7 +382,7 @@ _FIELD_WORDS = [
                  r"\b(?:accountant|finance|financial|audit|auditor|hr|human\s+resources|admin|administration|administrative|procurement|supply\s+chain|logistics|operations?(?:\s+(?:officer|assistant|manager))?|contracts|employee\s+relations|budget|loan\s+officer|credit\s+officer|fleet\s+(?:officer|assistant|manager|coordinator)|p&c|people\s+and\s+culture|recruitment|talent\s+acquisition|project\s+(?:assistant|officer|manager|coordinator)|programs?\s+manager|board\s+member)\b"),
     ("translation", r"مترجم|ترجمه|translator|interpreter"),
     ("sales", r"مبيعات|مندوب|تسويق|ترويج|مروج|خدمه (ال)?(عملاء|زبائن)|كول سنتر|call center|كاشير|استقبال|تذاكر|سياحه(?:\s+علاجيه)?|مستشار\s+(?:طبي|عقاري)|وسيط\s+عقاري|استشارات عقاريه|عقارات|سيلز|تواصل\s+هاتفي|رد\s+على\s+(?:الرسائل|الصفحات)|ادار[ةه]\s+صفحات|في\s+مجال\s+البيع|تطوير\s+اعمال|علاقات\s+(?:عملاء|عام[ةه])|مراسلات\s+تجاري[ةه]|استيراد\s+وتصدير|وكال[ةه]\s+سفر|\b(?:sales|marketing|customer\s+service|business\s+development|accounts?\s+manager|real\s+estate|media\s+buyer|seo|ihracat\s+sorumlusu)\b"),
-    ("education", rf"مدرس|\bمعلم[هة]\b|معلمات|معلمين(?!\s*{_CRAFT_TAIL})|\bمعلم (صف|ماده|لغه|رياضيات|علوم|حلقه)|مدرب|تعليم|روضه|حضانه|مربي|تدريس|شريعه|ميسر[ةه]?\s+(?:لغ[ةه]|تعليم|اطفال|صف)|\b(?:teacher|trainer|facilitator|educator|instructor|tutor|professor|tvet|education\s+consultant)\b"),
+    ("education", rf"مدرس|\bمعلم[هة]\b|معلمات|\bمعلم(?:ين|ي|و)?\s+{_TEACH_SUBJECT}|\bمعلمين$|مدرب|تعليم|روضه|حضانه|مربي|تدريس|شريعه|ميسر[ةه]?\s+(?:لغ[ةه]|تعليم|اطفال|صف)|\b(?:teacher|trainer|facilitator|educator|instructor|tutor|professor|tvet|education\s+consultant)\b"),
     ("media", r"انتاج (و ?مونتاج|فيديو|اعلامي|مرئي)|اعلام|مصمم|تصميم|مونتير|مونتاج|مصور|محتوي|محتوى|سوشال|سوشيال|غراف|graphic|محرر|منصات التواصل|اخبار|\b(?:graphic\s+designer|video\s+editor|photographer|copywriter|content\s+creator|social\s+media|communications?|journalist|ui/ux)\b"),
     ("law", r"محام|قانون|حقوق|\b(?:lawyer|legal|attorney|compliance)\b"),
     ("ngo", r"متابعه وتقييم|مراقبه وتقييم|رصد والتقييم|\bmeal\b|\bm&e\b|حمايه\s+(?:الطفل|اجتماعيه|من العنف|انسانيه)|(?:رصد|برنامج|فريق|مسؤول|مشرف|منسق|مختص)\s+(?:ال)?حماي[ةه]|حمايه\s+ميداني|"

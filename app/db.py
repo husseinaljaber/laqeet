@@ -343,6 +343,46 @@ def _bootstrap_seed_if_empty(con: sqlite3.Connection, path) -> None:
         logging.getLogger("db").exception("Seed bootstrap failed for %s", seed_path)
 
 
+# Private job sites whose adapters used to default to «جامعة» when the ad said nothing (fixed Nov 2026).
+_GUESSED_BACHELOR_SOURCES = frozenset({
+    "jobinsyria", "jobsyria", "nsjobs_web", "powerholding", "hcd_syria", "beeorder", "hknsyria", "worklink",
+})
+EDU_FIX_VERSION = "1"
+
+
+def repair_education(con: sqlite3.Connection) -> int:
+    """One-off fix for rows stored before the craft/teacher rules: a craft title means no degree, and a private-site
+    ad that never named a degree is «unknown», not «جامعة». Ministry grades are never touched. Runs once per DB."""
+    from . import taxonomy as tx
+
+    done = con.execute("SELECT value FROM meta WHERE key='edu_fix_version'").fetchone()
+    if done and done["value"] == EDU_FIX_VERSION:
+        return 0
+    changed = 0
+    rows = con.execute("SELECT id, title, source, education, education_from, data FROM jobs").fetchall()
+    for r in rows:
+        if r["education_from"] == "grade":
+            continue
+        d = json.loads(r["data"])
+        guess, how = tx.guess_education(r["title"] or "", (d.get("raw") or "")[:1500])
+        new = None
+        if how == "title" and guess == "none" and r["education"] != "none":
+            new = ("none", "title")
+        elif r["education"] == "bachelor" and r["source"] in _GUESSED_BACHELOR_SOURCES and guess is None:
+            new = (None, "unknown")
+        if new is None:
+            continue
+        d["education"], d["education_from"] = new
+        con.execute("UPDATE jobs SET education=?, education_from=?, data=? WHERE id=?",
+                    (new[0], new[1], json.dumps(d, ensure_ascii=False), r["id"]))
+        changed += 1
+    con.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('edu_fix_version', ?)", (EDU_FIX_VERSION,))
+    con.commit()
+    if changed:
+        logging.getLogger("db").info("repair_education: fixed %d rows", changed)
+    return changed
+
+
 def connect(path=None) -> sqlite3.Connection:
     path = path or config.DB_PATH
     if str(path) != ":memory:":
@@ -355,6 +395,7 @@ def connect(path=None) -> sqlite3.Connection:
     con.executescript(SCHEMA)
     _migrate(con)
     _bootstrap_seed_if_empty(con, path)
+    repair_education(con)
     return con
 
 
@@ -759,7 +800,13 @@ _PLACEHOLDER_EMP = {
 }
 _LOCATION_AS_EMP_RE = re.compile(
     r"^(?:منطقة|منطقه|حي|شارع|ساحة|ساحه|كراج|خلف|قرب|مقابل|بجانب|بجوار|طريق|أوتوستراد|اوتستراد|دوار|جسر|مفترق|طلعة|نزلة|مشروع\s+دمر)\b|"
-    r"^(?:السليمانية|الجميلية|المزة|المزرعة|الحميدية|القصاع|الزاهرة|الميدان|جرمانا|صحنايا|دوما|باب شرقي|برزة|ركن الدين|كفرسوسة|المالكي|أبو رمانة|الشعلان|البرامكة|المهاجرين|الأشرفية|الموكامبو|الفرقان|الحمدانية|سيف الدولة|صلاح الدين|الأعظمية|ميسلون|السريان|العزيزية|الإذاعة|الكلاسة|أشرفية صحنايا|جمعية الزهراء|الشيخ نجار|حلب الجديدة)$",
+    r"^(?:السليمانية|الجميلية|المزة|المزرعة|الحميدية|القصاع|الزاهرة|الميدان|جرمانا|صحنايا|دوما|باب شرقي|برزة|ركن الدين|كفرسوسة|المالكي|أبو رمانة|الشعلان|البرامكة|المهاجرين|الأشرفية|الموكامبو|الفرقان|الحمدانية|سيف الدولة|صلاح الدين|الأعظمية|ميسلون|السريان|العزيزية|الإذاعة|الكلاسة|أشرفية صحنايا|جمعية الزهراء|الشيخ نجار|حلب الجديدة"
+    r"|الشعار|الشهباء|الصاخور|الحيدرية|الشيخ مقصود|بستان القصر|المشارقة|السكري|باب النيرب|باب الفرج|الإسماعيلية|السبيل"
+    r"|الجابرية|الكسوة|قدسيا|ضاحية قدسيا|مساكن برزة|الدويلعة|باب توما|القيمرية|ساروجة|الصالحية|المرجة|الحريقة|البحصة"
+    r"|الشاغور|القدم|نهر عيشة|الزبلطاني|الطلياني|الحلبوني|الروضة|المالكي|الزاهرة الجديدة|التضامن|الدحاديل)$|"
+    # pay, shift and hiring words that the title splitter sometimes leaves where the company name should be
+    r"^(?:أجر|اجر|الأجر|الاجر|راتب|براتب|الراتب|بالقطعة|بالقطعه|دوام|الدوام|بخبرة|بخبره|خبرة|خبره|مطلوب|مطلوبة|فوري|فورا|فوراً|عاجل"
+    r"|يومي|يومية|أسبوعي|اسبوعي|شهري|ذكور|إناث|اناث|للجنسين|شباب|صبايا|سكن|مع سكن|تأمين|توصيل|مواصلات)\b",
     re.I,
 )
 _SUMMARY_SOURCE_TAIL_RE = re.compile(

@@ -149,10 +149,11 @@ def _query(edu=None, lower=False, field=None, sub=None, city=None, kind=None, q=
         elif edu_group == "nodegree":
             levels = [c for c in levels if c in ("basic", "none")]
         if levels:
-            sql.append(f"AND (education IN ({','.join('?' * len(levels))})" + (" OR education IS NULL)" if (lower or edu_group == "nodegree") else ")"))
+            # Ads that don't name a degree («الشهادة مو مذكورة») stay visible to everyone, same as in the bot.
+            sql.append(f"AND (education IN ({','.join('?' * len(levels))}) OR education IS NULL)")
             args += levels
     elif edu_group == "degree":
-        sql.append("AND (education IN ('phd', 'master', 'bachelor', 'institute', 'secondary')" + (" OR education IS NULL)" if lower else ")"))
+        sql.append("AND (education IN ('phd', 'master', 'bachelor', 'institute', 'secondary') OR education IS NULL)")
     elif edu_group == "nodegree":
         sql.append("AND (education IN ('basic', 'none') OR education IS NULL)")
     exp_clauses: list[str] = []

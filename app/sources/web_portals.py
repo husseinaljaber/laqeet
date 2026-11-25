@@ -164,8 +164,7 @@ def _make_wp_job(
     apply_u = info.get("apply_url") or (None if (content_html and (email or phones)) else link)
     if not phones and re.search(r"(?:\+?90|0090|wa\.me/90)[\s-]?5\d{2}", combined) and not (apply_u and da.is_direct_form_or_ats(apply_u)) and not email:
         return None
-    title_edu = tx.education_from_title(clean_t)
-    edu = ("none" if title_edu == "none" else (tx.education_from_text(combined) or title_edu)) or "bachelor"
+    edu, edu_from = tx.guess_education(clean_t, body_txt[:4000], default="bachelor" if sector == "ngo" else None)
     fld = tx.field_from_text(clean_t, body_txt[:300])
     if fld == "other":
         fld = default_field
@@ -177,7 +176,7 @@ def _make_wp_job(
         employer=employer,
         cities=cities,
         education=edu,
-        education_from="stated",
+        education_from=edu_from,
         field=fld,
         subfield=computer_subfield(clean_t) if fld == "computer" else None,
         kind="formal",
@@ -446,7 +445,7 @@ def _parse_worklink_detail(full_url: str, html_text: str, today_str: str) -> Job
     else:
         cities = tx.cities_from_text(city_text) or tx.cities_from_text(f"{title} {desc_txt[:300]}") or ["دمشق"]
 
-    edu = tx.education_from_text(f"{title} {desc_txt[:800]}") or tx.education_from_title(title) or "bachelor"
+    edu, edu_from = tx.guess_education(title, desc_txt[:800])
     fld = tx.field_from_text(title, desc_txt[:400])
     if "وزارة" in emp or "التنمية الإدارية" in emp or "حكوم" in emp:
         sector, official = "gov", True
@@ -458,6 +457,8 @@ def _parse_worklink_detail(full_url: str, html_text: str, today_str: str) -> Job
             fld = "ngo"
     else:
         sector, official = "private", False
+    if edu is None and sector == "ngo":
+        edu, edu_from = "bachelor", "source"
 
     sub = computer_subfield(title, desc_txt[:200]) if fld == "computer" else None
     app_types = tx.infer_apply_types(apply_u, phones, False, email)
@@ -469,7 +470,7 @@ def _parse_worklink_detail(full_url: str, html_text: str, today_str: str) -> Job
         employer=emp[:100],
         cities=cities,
         education=edu,
-        education_from="stated",
+        education_from=edu_from,
         field=fld,
         subfield=sub,
         kind="formal",
@@ -559,7 +560,8 @@ def scrape_worklink(client: httpx.Client) -> list[Job]:
                 emp = parts[1] if len(parts) > 1 else ""
                 loc = parts[3] if len(parts) > 3 else (parts[2] if len(parts) > 2 else "")
                 cities = tx.cities_from_text(loc or title) or ["عدة محافظات"]
-                edu = tx.education_from_text(title) or tx.education_from_title(title) or "bachelor"
+                is_ngo = any(w in emp for w in ["منظمة", "مؤسسة", "جمعية", "إغاثة", "شفق", "الشام"])
+                edu, edu_from = tx.guess_education(title, default="bachelor" if is_ngo else None)
                 fld = tx.field_from_text(title)
                 job = Job(
                     title=title[:120],
@@ -569,12 +571,12 @@ def scrape_worklink(client: httpx.Client) -> list[Job]:
                     employer=emp,
                     cities=cities,
                     education=edu,
-                    education_from="stated" if edu else "unknown",
+                    education_from=edu_from,
                     field=fld if fld != "other" else "ngo",
                     kind="formal",
                     official=False,
                     country="sy",
-                    sector="ngo" if any(w in emp for w in ["منظمة", "مؤسسة", "جمعية", "إغاثة", "شفق", "الشام"]) else "private",
+                    sector="ngo" if is_ngo else "private",
                     apply_url=full_url,
                     details_url=full_url,
                     apply_types=["site", "form"],
@@ -811,8 +813,8 @@ def _scrape_laravel_api_board(
                 sal_raw = str(it.get("monthly_salary") or "").strip()
                 salary = sal_raw if sal_raw and sal_raw not in ("0", "None", "null") else None
                 fld = tx.field_from_text(title, emp or "")
-                edu = tx.education_from_text(title) or tx.education_from_title(title) or "bachelor"
                 sec = tx.infer_sector(False, fld, emp, f"{title} {emp or ''}", hint=default_sector)
+                edu, edu_from = tx.guess_education(title, default="bachelor" if sec == "ngo" else None)
                 jobs.append(Job(
                     title=title[:120],
                     source=source,
@@ -821,7 +823,7 @@ def _scrape_laravel_api_board(
                     employer=emp,
                     cities=cities,
                     education=edu,
-                    education_from="stated" if edu else "unknown",
+                    education_from=edu_from,
                     field=fld,
                     subfield=computer_subfield(title) if fld == "computer" else None,
                     kind="formal",
@@ -2157,7 +2159,7 @@ def scrape_powerholding_sy(client: httpx.Client, max_pages: int = 10) -> list[Jo
                 sub = computer_subfield(clean_t, loc_txt)
                 if sub or fld == "computer":
                     fld, sub = "computer", sub or "DT"
-                edu = tx.education_from_title(clean_t) or "bachelor"
+                edu, edu_from = tx.guess_education(clean_t)
 
                 jobs.append(Job(
                     title=clean_t[:120],
@@ -2167,7 +2169,7 @@ def scrape_powerholding_sy(client: httpx.Client, max_pages: int = 10) -> list[Jo
                     employer="Power International Holding",
                     cities=cities,
                     education=edu,
-                    education_from="title",
+                    education_from=edu_from,
                     field=fld,
                     subfield=sub,
                     kind="formal",
@@ -2475,7 +2477,7 @@ def scrape_careers_page_hcd(client: httpx.Client, max_pages: int = 3) -> list[Jo
             sub = sub or "DT"
         elif fld == "other":
             fld = "business"
-        edu = tx.education_from_text(body_txt[:1500]) or tx.education_from_title(clean_t) or "bachelor"
+        edu, edu_from = tx.guess_education(clean_t, body_txt[:1500])
         tasks, skills = ex._extract_tasks_and_skills(body_txt[:2000])
         jobs.append(Job(
             title=clean_t[:120],
@@ -2485,7 +2487,7 @@ def scrape_careers_page_hcd(client: httpx.Client, max_pages: int = 3) -> list[Jo
             employer="منصة تنمية رأس المال البشري (HCD Syria)",
             cities=cities,
             education=edu,
-            education_from="stated" if tx.education_from_text(body_txt[:1500]) else "title",
+            education_from=edu_from,
             field=fld,
             subfield=sub,
             kind="formal",
@@ -2542,8 +2544,8 @@ def scrape_beeorder_sy(client: httpx.Client) -> list[Job]:
                 posted_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
                 employer="شركة بي أوردر (BeeOrder)",
                 cities=cities,
-                education=tx.education_from_title(title) or "bachelor",
-                education_from="title",
+                education=tx.guess_education(title)[0],
+                education_from=tx.guess_education(title)[1],
                 field=fld,
                 subfield=sub,
                 kind="formal",
@@ -2616,8 +2618,8 @@ def scrape_hknsyria(client: httpx.Client) -> list[Job]:
                 posted_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
                 employer="شركة HKN Syria للطاقة",
                 cities=cities,
-                education=tx.education_from_text(card_txt) or tx.education_from_title(title) or "bachelor",
-                education_from="title",
+                education=tx.guess_education(title, card_txt)[0],
+                education_from=tx.guess_education(title, card_txt)[1],
                 field=fld,
                 kind="formal",
                 official=False,

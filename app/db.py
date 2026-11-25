@@ -370,7 +370,7 @@ def _bootstrap_seed_if_empty(con: sqlite3.Connection, path) -> None:
 _GUESSED_BACHELOR_SOURCES = frozenset({
     "jobinsyria", "jobsyria", "nsjobs_web", "powerholding", "hcd_syria", "beeorder", "hknsyria", "worklink",
 })
-EDU_FIX_VERSION = "1"
+EDU_FIX_VERSION = "2"
 
 
 def repair_education(con: sqlite3.Connection) -> int:

@@ -6,7 +6,7 @@ import logging
 import threading
 import time
 
-from . import bot, config, db
+from . import bot, city_channels, config, db
 from .collect import collect
 
 log = logging.getLogger("run")
@@ -46,6 +46,8 @@ def main() -> None:
             log.info("collected: %s", collect())
             if tg:
                 log.info("alerts sent: %d", bot.notify(con, tg))
+                if posted := city_channels.publish(con, tg):
+                    log.info("city channels: %s", posted)
                 health_alert(con, tg)
         except Exception:
             log.exception("run failed; trying again next round")

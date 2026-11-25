@@ -629,7 +629,7 @@ def admin_decide(job_id: int, body: dict = Body(...), x_admin_token: str | None 
 
 
 # ------------------------------------------------------------------ anonymous usage counters
-_EVENT_PAGES = {"landing", "board", "job", "cv", "pulse", "scam", "employer"}
+_EVENT_PAGES = {"landing", "board", "job", "cv", "pulse", "scam", "employer", "sources"}
 _EVENT_APPLY = {"whatsapp", "call", "site", "form", "email", "portal"}
 _event_limit = _RateLimit(300, 600)
 _BOT_UA = ("bot", "crawl", "spider", "slurp", "preview", "facebookexternalhit", "whatsapp", "telegram")
@@ -672,6 +672,31 @@ def admin_stats(days: int = Query(30, ge=1, le=365), x_admin_token: str | None =
     out["source_labels"] = {k: config.SOURCE_LABEL.get(k, k) for k in
                             set(out["totals"].get("source", {})) | set(out["totals"].get("apply_src", {}))}
     return out
+
+
+@app.get("/api/sources")
+def sources():
+    """Public credit list: every channel and site we read, with how many open jobs came from it."""
+    key = f"sources:{_today()}"
+    updated = db.get_meta(con, "updated_at")
+    if (hit := _stats_cache.get(key)) and time.time() - hit[0] < 600 and hit[1].get("updated_at") == updated:
+        return hit[1]
+    rows = [{k: r[k] for k in ("source", "label", "kind", "url", "open", "recent")} for r in db.source_overview(con)]
+    out = {"sources": rows, "updated_at": updated}
+    _stats_cache[key] = (time.time(), out)
+    return out
+
+
+@app.get("/api/admin/partners")
+def admin_partners(days: int = Query(30, ge=1, le=365), x_admin_token: str | None = Header(None)):
+    """Per source: jobs we showed, visits and «قدّم» clicks we sent, for talking to channel admins."""
+    _admin(x_admin_token)
+    ev = db.event_stats(con, days)["totals"]
+    rows = db.source_overview(con, days)
+    for r in rows:
+        r["apply_clicks"] = ev.get("apply_src", {}).get(r["source"], 0)
+        r["visits_sent"] = ev.get("source", {}).get(r["source"], 0)
+    return {"days": days, "site_name": config.SITE_NAME, "public_url": config.PUBLIC_URL, "sources": rows}
 
 
 @app.get("/api/admin/health")

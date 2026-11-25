@@ -256,3 +256,35 @@ def test_events_are_counted_without_storing_people():
     cols = {r[1] for r in api.con.execute("PRAGMA table_info(events_daily)")}
     assert cols == {"day", "event", "key", "n"}  # no ip, no user agent, no id
     assert client.get("/api/admin/stats").status_code == 403
+
+
+# ---------------------------------------------------------------- phase 2: sources & partners
+@pytest.fixture
+def quick_job():
+    now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    jid, _ = db.upsert(api.con, Job(title="عامل مستودع للمصادر", source="syrianjobs", post_url="https://t.me/syrianjobs2/990010",
+                                    posted_at=now, cities=["طرطوس"], education="none", kind="quick", phones=["0933555111"]))
+    api.con.commit()
+    api._stats_cache.clear()
+    yield jid
+    db.delete_jobs(api.con, [jid])
+    api.con.commit()
+
+
+def test_sources_page_api_credits_each_source(quick_job):
+    client = TestClient(api.app)
+    by = {s["source"]: s for s in client.get("/api/sources").json()["sources"]}
+    assert by["syrianjobs"]["kind"] == "telegram" and by["syrianjobs"]["url"] == "https://t.me/syrianjobs2"
+    assert by["syrianjobs"]["open"] >= 1 and by["syrianjobs"]["recent"] >= 1
+    assert "employer" not in by
+
+
+def test_partners_report_needs_token_and_counts_clicks(quick_job):
+    client = TestClient(api.app)
+    assert client.get("/api/admin/partners").status_code == 403
+    ua = {"User-Agent": "Mozilla/5.0 Chrome/130", "X-Forwarded-For": "198.51.100.201"}
+    client.post("/api/e", json={"e": "source", "k": "syrianjobs"}, headers=ua)
+    client.post("/api/e", json={"e": "apply", "k": "whatsapp", "s": "syrianjobs"}, headers=ua)
+    rows = client.get("/api/admin/partners", headers={"X-Admin-Token": "test-token"}).json()["sources"]
+    sj = next(r for r in rows if r["source"] == "syrianjobs")
+    assert sj["visits_sent"] >= 1 and sj["apply_clicks"] >= 1

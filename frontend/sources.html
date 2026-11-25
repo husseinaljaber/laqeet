@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>مصادرنا · منين منجيب الإعلانات · لقيت</title>
+<meta name="description" content="كل القنوات والمواقع يلي منجمع منها إعلانات الشغل، مع عدد الإعلانات المفتوحة من كل مصدر. منذكر المصدر دايماً ومنبعت الناس للإعلان الأصلي.">
+<meta name="theme-color" content="#0B1C16">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Alexandria:wght@700;800&family=IBM+Plex+Sans+Arabic:wght@400;700&display=swap">
+<link rel="stylesheet" href="app.css?v=42">
+<link rel="stylesheet" href="page.css?v=42">
+<script src="ui.js?v=42"></script>
+<style>
+.src-tools{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.src-tools input{flex:1 1 14rem;min-width:0;font:inherit;padding:9px 12px;border-radius:10px;border:1px solid var(--line-strong);background:var(--surface-subtle);color:var(--ink)}
+.src-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,17rem),1fr));gap:10px}
+.src-card{border:1px solid var(--line);border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;gap:6px;background:var(--surface)}
+.src-card h3{margin:0;font-size:.98rem;line-height:1.45}
+.src-meta{display:flex;flex-wrap:wrap;gap:6px 12px;font-size:.82rem;color:var(--muted);font-variant-numeric:tabular-nums}
+.src-meta b{color:var(--accent)}
+.src-kind{font-size:.75rem;font-weight:700;border-radius:999px;padding:1px 9px;background:var(--surface-subtle);border:1px solid var(--line);align-self:flex-start}
+.src-card a{font-size:.85rem;word-break:break-all}
+.src-sum{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,10rem),1fr));gap:10px}
+.src-sum div{background:var(--surface-subtle);border:1px solid var(--line);border-radius:12px;padding:10px 14px}
+.src-sum b{display:block;font-family:var(--font-display);font-size:1.3rem;color:var(--accent);font-variant-numeric:tabular-nums}
+.src-sum span{font-size:.8rem;color:var(--muted)}
+</style>
+</head>
+<body>
+<nav class="site-nav" aria-label="التنقل الرئيسي">
+  <div class="inner site-nav-inner">
+    <a class="site-brand" href="./">
+      <img class="site-brand-mark" src="icons/icon.svg" alt="" width="36" height="36">
+      <span class="site-brand-text">
+        <span class="site-brand-name">لقيت</span>
+        <span class="site-brand-sub">سوريا وتركيا</span>
+      </span>
+    </a>
+    <div class="site-nav-links">
+      <a class="site-nav-link" href="./?view=jobs"><i data-ico="briefcase" data-ico-cls="ico-sm"></i><span>الوظائف</span></a>
+      <a class="site-nav-link" href="cv.html"><i data-ico="file-text" data-ico-cls="ico-sm"></i><span>سيرتي الذاتية</span></a>
+      <a class="site-nav-link" href="pulse.html"><i data-ico="bar-chart" data-ico-cls="ico-sm"></i><span>نبض السوق</span></a>
+      <a class="site-nav-link" href="scam.html"><i data-ico="shield-check" data-ico-cls="ico-sm"></i><span>رادار النصب</span></a>
+      <a class="site-nav-link" href="employer.html"><i data-ico="megaphone" data-ico-cls="ico-sm"></i><span>انشر وظيفة</span></a>
+    </div>
+    <div class="site-nav-actions">
+      <button type="button" class="nav-icon-btn" data-theme-toggle aria-label="تبديل وضع الألوان">
+        <span class="theme-ico"></span><span class="theme-lbl">الليلي</span>
+      </button>
+      <button type="button" class="nav-icon-btn nav-menu-btn" data-nav-menu-toggle aria-label="القائمة" aria-expanded="false">
+        <i data-ico="menu"></i>
+      </button>
+    </div>
+  </div>
+</nav>
+
+<section class="hero slim"><div class="inner">
+  <div class="eyebrow"><a class="link" href="./?view=jobs"><i data-ico="arrow-left" data-ico-cls="ico-sm"></i><span>رجوع للوظائف</span></a></div>
+  <h1><span class="brand">مصادرنا</span> منين منجيب الإعلانات</h1>
+  <p class="sub">كل إعلان على لقيت جاي من قناة أو موقع نشره أول مرة. منذكر المصدر دايماً، والتقديم بيصير من الرابط الأصلي. شكراً لكل هالقنوات والمواقع.</p>
+</div></section>
+
+<main class="inner page">
+  <div class="box">
+    <div class="src-sum" id="sum"></div>
+    <div class="src-tools">
+      <input id="filter" type="search" placeholder="دوّر على قناة أو موقع" aria-label="دوّر على مصدر" autocomplete="off">
+    </div>
+    <div class="src-grid" id="grid"><p class="note">عم نحمّل المصادر…</p></div>
+    <p class="note">إنت أدمن قناة أو صاحب موقع وبدك تعدّل شي، أو ما بدك نجمع من عندك؟ راسلنا من صفحة <a href="employer.html">انشر وظيفة</a> ومنرد عليك.</p>
+  </div>
+</main>
+<script>
+(function () {
+  const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const grid = document.getElementById('grid'), filter = document.getElementById('filter');
+  let all = [];
+  function render() {
+    const q = filter.value.trim().toLowerCase();
+    const list = all.filter((s) => !q || (s.label + ' ' + (s.url || '')).toLowerCase().includes(q));
+    grid.innerHTML = list.length ? list.map((s) => `<div class="src-card">
+        <span class="src-kind">${s.kind === 'telegram' ? 'قناة تلغرام' : 'موقع'}</span>
+        <h3>${esc(s.label)}</h3>
+        <div class="src-meta"><span><b>${s.open}</b> إعلان مفتوح هلأ</span><span>${s.recent} بآخر 30 يوم</span></div>
+        ${s.url ? `<a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.url.replace(/^https:\/\//, ''))}</a>` : ''}
+      </div>`).join('') : '<p class="note">ما في مصدر بهالاسم.</p>';
+  }
+  fetch('/api/sources').then((r) => r.json()).then((d) => {
+    all = d.sources || [];
+    const tg = all.filter((s) => s.kind === 'telegram').length;
+    document.getElementById('sum').innerHTML =
+      `<div><b>${all.length}</b><span>مصدر</span></div><div><b>${tg}</b><span>قناة تلغرام</span></div><div><b>${all.length - tg}</b><span>موقع ومنظمة</span></div>`;
+    render();
+  }).catch(() => { grid.innerHTML = '<p class="note">ما قدرنا نحمّل المصادر، جرّب بعد شوي.</p>'; });
+  filter.addEventListener('input', render);
+})();
+</script>
+</body>
+</html>

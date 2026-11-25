@@ -168,7 +168,7 @@
       else fetch('/api/e', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body, keepalive: true }).catch(() => {});
     } catch (_) {}
   }
-  const PAGE_VIEWS = { 'cv.html': 'cv', 'pulse.html': 'pulse', 'scam.html': 'scam', 'employer.html': 'employer' };
+  const PAGE_VIEWS = { 'cv.html': 'cv', 'pulse.html': 'pulse', 'scam.html': 'scam', 'employer.html': 'employer', 'sources.html': 'sources' };
   const pageName = PAGE_VIEWS[(location.pathname.split('/').pop() || '')];
   if (pageName) track('view', pageName);
 

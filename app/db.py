@@ -1216,6 +1216,39 @@ def event_stats(con: sqlite3.Connection, days: int = 30) -> dict:
             "daily": [{"day": k, **v} for k, v in sorted(daily.items())]}
 
 
+def source_overview(con: sqlite3.Connection, days: int = 30) -> list[dict]:
+    """Every source with what it brought: open jobs now, jobs in the last `days`, and where it lives (link)."""
+    from urllib.parse import urlparse
+
+    today = date.today().isoformat()
+    since = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+    open_n = {r[0]: r[1] for r in con.execute(
+        "SELECT js.source, COUNT(DISTINCT j.id) FROM job_sources js JOIN jobs j ON j.id = js.job_id "
+        "WHERE j.status='live' AND j.expires_on >= ? AND (j.deadline IS NULL OR j.deadline='' OR j.deadline >= ?) "
+        "GROUP BY js.source", (today, today))}
+    recent_n = {r[0]: r[1] for r in con.execute(
+        "SELECT js.source, COUNT(DISTINCT j.id) FROM job_sources js JOIN jobs j ON j.id = js.job_id "
+        "WHERE j.status != 'rejected' AND COALESCE(js.posted_at, j.posted_at) >= ? GROUP BY js.source", (since,))}
+    sample = {r[0]: r[1] for r in con.execute("SELECT source, MIN(post_url) FROM job_sources GROUP BY source")}
+    channel_of: dict[str, str] = {}
+    for ch, meta in config.CHANNELS.items():
+        channel_of.setdefault(meta.get("source", ch), ch)
+    out = []
+    for src in set(open_n) | set(recent_n):
+        if src == "employer":
+            continue
+        ch = channel_of.get(src)
+        if ch:
+            kind, url = "telegram", f"https://t.me/{ch}"
+        else:
+            host = urlparse(sample.get(src) or "").netloc
+            kind, url = "site", (f"https://{host}" if host else None)
+        label = (config.CHANNELS.get(ch) or {}).get("label") if ch else None
+        out.append({"source": src, "label": label or config.SOURCE_LABEL.get(src, src), "kind": kind, "url": url,
+                    "channel": ch, "open": open_n.get(src, 0), "recent": recent_n.get(src, 0)})
+    return sorted(out, key=lambda x: (-x["open"], -x["recent"], x["label"]))
+
+
 def get_meta(con, key: str, default=None):
     row = con.execute("SELECT value FROM meta WHERE key=?", (key,)).fetchone()
     return row["value"] if row else default

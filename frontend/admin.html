@@ -29,6 +29,7 @@
       <button class="btn primary" id="loadQueue">طابور المراجعة</button>
       <button class="btn ghost" id="loadHealth">صحة المصادر</button>
       <button class="btn ghost" id="loadStats">الإحصائيات</button>
+      <button class="btn ghost" id="loadPartners">الشركاء</button>
     </div>
     <div id="out"></div>
   </div>
@@ -111,6 +112,44 @@ async function loadStats() {
     <h3>الشهادات (من «شو شهادتك؟»)</h3>${rows(t.onboard)}`;
 }
 document.getElementById('loadStats').addEventListener('click', loadStats);
+
+// Partners: what we sent each channel, and a message ready to copy for its admin.
+function partnerMsg(p, d) {
+  const site = d.public_url && !/localhost|127\.0\.0\.1|example/.test(d.public_url) ? d.public_url : '';
+  return `السلام عليكم،
+أنا من منصة «${d.site_name}»، منصة مجانية بتجمع إعلانات الشغل بسوريا وتركيا لتسهّل على الناس يلاقوا شغل.
+
+منعرض إعلانات «${p.label}» مع ذكر اسم قناتكم ورابط الإعلان الأصلي دايماً، والتقديم بيصير من عندكم.
+خلال آخر ${d.days} يوم:
+• عرضنا ${p.recent} إعلان من عندكم (${p.open} منهم مفتوحين هلأ)
+• بعتنالكم ${p.visits_sent} زيارة لقناتكم
+• ${p.apply_clicks} شخص ضغط «قدّم» على إعلاناتكم
+${site ? '\nالموقع: ' + site + '\n' : ''}
+إذا بتحبّوا، فينا:
+1) نحط اسمكم كـ«شريك» على صفحة المصادر.
+2) نستقبل إعلاناتكم مرتبة مباشرة لتوصل أسرع وأدق.
+وإذا ما بدكم نعرض إعلاناتكم، قولولنا ومنوقف فوراً.
+
+شكراً إلكم على شغلكم 🙏`;
+}
+async function loadPartners() {
+  remember();
+  const r = await fetch('/api/admin/partners?days=30', {headers: H()});
+  if (!r.ok) { out.textContent = 'الرمز غلط أو الإدارة مو مفعّلة (ADMIN_TOKEN).'; return; }
+  const d = await r.json();
+  window._partners = d;
+  out.innerHTML = `<p class="note">آخر ${d.days} يوم. انسخ الرسالة وابعتها لأدمن القناة، ورقامها جاهزة جواتها.</p>
+    <div class="tbl-wrap"><table class="tbl"><tr><th>المصدر</th><th>إعلانات (30 يوم)</th><th>مفتوحة</th><th>زيارات بعتناها</th><th>ضغطات قدّم</th><th></th></tr>
+    ${d.sources.map((p, i) => `<tr><td><b>${esc(p.label)}</b><br><small>${p.url ? `<a href="${esc(p.url)}" target="_blank" rel="noopener">${esc(p.url.replace(/^https:\/\//, ''))}</a>` : esc(p.source)}</small></td>
+      <td>${p.recent}</td><td>${p.open}</td><td>${p.visits_sent}</td><td>${p.apply_clicks}</td>
+      <td>${p.kind === 'telegram' ? `<button class="chip" data-copy-partner="${i}">انسخ الرسالة</button>` : ''}</td></tr>`).join('')}</table></div>`;
+}
+document.getElementById('loadPartners').addEventListener('click', loadPartners);
+out.addEventListener('click', (e) => {
+  const b = e.target.closest('[data-copy-partner]'); if (!b) return;
+  const d = window._partners, text = partnerMsg(d.sources[+b.dataset.copyPartner], d);
+  navigator.clipboard.writeText(text).then(() => { b.textContent = 'انسخت ✓'; }).catch(() => { window.prompt('انسخ الرسالة:', text); });
+});
 out.addEventListener('click', async (e) => {
   const b = e.target.closest('[data-a]'); if (!b) return;
   const r = await fetch('/api/admin/jobs/' + b.dataset.id, {method: 'POST', headers: {...H(), 'Content-Type': 'application/json'}, body: JSON.stringify({action: b.dataset.a})});

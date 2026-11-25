@@ -1,0 +1,33 @@
+name: Tests
+
+# Runs the test suite on every push and pull request, so a parser or API change that breaks something is caught
+# before it reaches the site. No secrets and no network scraping: the tests use saved fixtures.
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Check frontend scripts parse
+        run: |
+          node --check frontend/app.js
+          node --check frontend/ui.js
+          node --check frontend/sw.js
+      - name: Run tests
+        env:
+          AUTO_COLLECT: "0"
+        run: pytest -q

@@ -643,7 +643,7 @@ def test_pitch_generator_and_tracker_ui():
     assert "🇸🇾" not in index_html and "🇹🇷" not in index_html
     assert "🇸🇾" not in app_js and "🇹🇷" not in app_js
     assert "lower: false" in app_js
-    assert "?v=41" in index_html
+    assert "?v=42" in index_html
 
     for fn in (
         "function portalRequiresAccount(",

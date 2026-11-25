@@ -1,13 +1,16 @@
-# docker compose -f deploy/docker-compose.yml up -d
+# docker compose -f deploy/docker-compose.yml up -d --build
+# The database lives in the «laqeet-data» volume, so employer posts, reports and bot users survive restarts and updates.
 services:
   api:
     build: { context: .., dockerfile: deploy/Dockerfile }
-    command: uvicorn app.api:app --host 0.0.0.0 --port 8000 --proxy-headers
-    ports: ["8000:8000"]
+    command: uvicorn app.api:app --host 0.0.0.0 --port 8000 --proxy-headers --forwarded-allow-ips="*"
+    ports: ["127.0.0.1:8000:8000"]   # reach it through Caddy/nginx on 443, not directly
     env_file: ../.env
+    environment:
+      AUTO_COLLECT: "0"              # the worker below does the collecting; one collector only
     volumes: ["laqeet-data:/data"]
     restart: unless-stopped
-  worker:   # collector every 20 minutes + Telegram bot
+  worker:   # collector every UPDATE_MINUTES + Telegram bot
     build: { context: .., dockerfile: deploy/Dockerfile }
     command: python -m app.run
     env_file: ../.env

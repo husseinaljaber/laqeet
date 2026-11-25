@@ -339,3 +339,24 @@ def test_admin_backup_download_needs_token():
     r = client.get("/api/admin/backup", headers={"X-Admin-Token": "test-token"})
     assert r.status_code == 200 and "attachment" in r.headers["content-disposition"]
     assert _json.loads(_gz.decompress(r.content))["version"] == 1
+
+
+# ---------------------------------------------------------------- phase 3: app readiness
+def test_assetlinks_only_when_configured(monkeypatch):
+    from app import config
+    client = TestClient(api.app)
+    assert client.get("/.well-known/assetlinks.json").status_code == 404
+    monkeypatch.setattr(config, "TWA_PACKAGE", "com.laqeet.app")
+    monkeypatch.setattr(config, "TWA_SHA256", ["AA:BB"])
+    d = client.get("/.well-known/assetlinks.json").json()
+    assert d[0]["target"]["package_name"] == "com.laqeet.app" and d[0]["target"]["sha256_cert_fingerprints"] == ["AA:BB"]
+
+
+def test_manifest_is_installable():
+    import json as _json
+    from pathlib import Path
+    m = _json.loads(Path("frontend/manifest.webmanifest").read_text(encoding="utf-8"))
+    assert m["display"] == "standalone" and m["start_url"] and m["id"]
+    assert any(i["sizes"] == "512x512" and i.get("purpose") == "maskable" for i in m["icons"])
+    assert len(m["shortcuts"]) >= 2 and "موثق" not in m["description"]
+    assert Path("frontend/offline.html").exists()

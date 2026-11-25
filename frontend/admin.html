@@ -103,6 +103,7 @@ async function loadStats() {
       <div class="kpi"><b>${sum(t.source)}</b><span>زيارة بعتناها للمصادر</span></div>
       <div class="kpi"><b>${sum(t.search)}</b><span>بحث</span></div>
       <div class="kpi"><b>${sum(t.share)}</b><span>مشاركة</span></div>
+      <div class="kpi"><b>${(t.install || {}).accepted || 0}</b><span>ثبّتوا التطبيق</span></div>
     </div>
     <h3>كل يوم (زيارات · ضغطات قدّم)</h3>
     ${d.daily.length ? d.daily.map((x) => `<div class="dbar"><span>${esc(x.day.slice(5))}</span><span class="t"><i style="width:${x.view / dayMax * 100}%"></i></span><span>${x.view} · ${x.apply}</span></div>`).join('') : '<p class="note">لسا ما في أرقام.</p>'}

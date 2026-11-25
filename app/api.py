@@ -644,6 +644,8 @@ def _event_key_ok(event: str, key: str) -> bool:
         return key in _EVENT_APPLY
     if event in ("source", "apply_src"):
         return key in config.SOURCE_LABEL
+    if event == "install":
+        return key in ("accepted", "dismissed")
     return event in ("search", "share") and key == ""
 
 
@@ -813,6 +815,16 @@ def sitemap(request: Request):
     from fastapi.responses import Response
     xml = seo.sitemap_xml(con, seo.public_base(str(request.base_url)))
     return Response(xml, media_type="application/xml", headers={"Cache-Control": "public, max-age=3600"})
+
+
+@app.get("/.well-known/assetlinks.json")
+def assetlinks():
+    """Digital Asset Links for the Play Store app (TWA). 404 until TWA_PACKAGE and TWA_SHA256 are set."""
+    if not (config.TWA_PACKAGE and config.TWA_SHA256):
+        raise HTTPException(404)
+    return [{"relation": ["delegate_permission/common.handle_all_urls"],
+             "target": {"namespace": "android_app", "package_name": config.TWA_PACKAGE,
+                        "sha256_cert_fingerprints": config.TWA_SHA256}}]
 
 
 @app.get("/robots.txt")

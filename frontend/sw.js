@@ -1,7 +1,13 @@
 /* Offline support: the app shell is cached; job lists come from the network, with the last copy as a fallback
    (useful on slow or cut connections). */
-const SHELL = 'laqeet-shell-v42', DATA = 'laqeet-data-v42';
-const FILES = ['./', 'index.html', 'app.css', 'ui.js', 'app.js', 'cv.html', 'page.css', 'pulse.html', 'employer.html', 'scam.html', 'sources.html', 'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-192.png'];
+const SHELL = 'laqeet-shell-v43', DATA = 'laqeet-data-v43';
+const FILES = ['./', 'index.html', 'app.css', 'ui.js', 'app.js', 'cv.html', 'page.css', 'pulse.html', 'employer.html', 'scam.html', 'sources.html', 'offline.html', 'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-192.png'];
+
+// Keep only the newest API answers so the phone's storage doesn't fill up with every filter ever tried.
+const DATA_MAX = 40;
+function trimCache(cache, max) {
+  return cache.keys().then((keys) => Promise.all(keys.slice(0, Math.max(0, keys.length - max)).map((k) => cache.delete(k))));
+}
 
 self.addEventListener('install', (e) => {
   e.waitUntil(
@@ -22,7 +28,7 @@ self.addEventListener('fetch', (e) => {
         .then((r) => {
           if (r.ok) {
             const copy = r.clone();
-            caches.open(DATA).then((c) => c.put(e.request, copy));
+            caches.open(DATA).then((c) => c.put(e.request, copy).then(() => trimCache(c, DATA_MAX)));
           }
           return r;
         })
@@ -40,7 +46,10 @@ self.addEventListener('fetch', (e) => {
           }
           return r;
         })
-        .catch(() => caches.match(e.request).then((hit) => hit || (e.request.mode === 'navigate' ? caches.match('index.html') : undefined)))
+        .catch(() => caches.match(e.request, { ignoreSearch: url.pathname === '/' || url.pathname.endsWith('index.html') })
+          .then((hit) => hit || (e.request.mode === 'navigate'
+            ? (url.pathname === '/' || url.pathname.endsWith('index.html') ? caches.match('index.html') : caches.match('offline.html'))
+            : undefined)))
     );
   }
 });

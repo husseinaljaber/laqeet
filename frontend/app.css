@@ -1342,3 +1342,17 @@ dialog::backdrop{
   .search-row .search-btn{min-width:0}
   #marketFieldsSection{display:none}
 }
+
+/* «ثبّت لقيت» install bar */
+.install-bar{
+  position:fixed;z-index:60;inset-inline:12px;bottom:calc(12px + env(safe-area-inset-bottom, 0px));
+  max-width:560px;margin-inline:auto;display:flex;align-items:center;gap:10px;
+  padding:10px 12px;border-radius:14px;background:var(--surface);color:var(--ink);
+  border:1px solid var(--line-strong);box-shadow:var(--shadow-lg);
+}
+.install-bar img{border-radius:9px;flex:0 0 auto}
+.install-txt{flex:1;min-width:0;font-size:.88rem;line-height:1.5}
+.install-go{padding:7px 14px;font-size:.88rem;flex:0 0 auto}
+.install-close{all:unset;cursor:pointer;font-size:1.4rem;line-height:1;color:var(--muted);padding:4px 6px}
+.install-close:focus-visible{outline:2px solid var(--accent);border-radius:6px}
+@media print{.install-bar{display:none}}

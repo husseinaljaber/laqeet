@@ -134,3 +134,7 @@ TG_API_ID = int(os.getenv("TG_API_ID") or 0)
 TG_API_HASH = os.getenv("TG_API_HASH", "")
 TG_STRING_SESSION = os.getenv("TG_STRING_SESSION", "")
 PUBLIC_URL = os.getenv("PUBLIC_URL", "http://localhost:8000")
+# Play Store app (Trusted Web Activity): the Android package name and its signing-key SHA-256 fingerprint(s),
+# comma-separated. Both set = /.well-known/assetlinks.json is served so the app opens the site full screen.
+TWA_PACKAGE = os.getenv("TWA_PACKAGE", "")
+TWA_SHA256 = [x.strip() for x in os.getenv("TWA_SHA256", "").split(",") if x.strip()]

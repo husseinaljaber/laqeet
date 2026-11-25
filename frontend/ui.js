@@ -172,6 +172,52 @@
   const pageName = PAGE_VIEWS[(location.pathname.split('/').pop() || '')];
   if (pageName) track('view', pageName);
 
+  // «ثبّت لقيت»: a small bar offering to install the app. Android/desktop use the browser's own prompt;
+  // iPhone gets a one-line hint (Safari has no prompt). Dismissed once = not shown again for 30 days.
+  const INSTALL_KEY = 'laqeet.install.dismissed';
+  const standalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+  function installDismissed() {
+    try { return Date.now() - Number(localStorage.getItem(INSTALL_KEY) || 0) < 30 * 864e5; } catch (_) { return false; }
+  }
+  function showInstallBar(text, actionLabel, onAction) {
+    if (document.getElementById('installBar') || standalone || installDismissed()) return;
+    const bar = document.createElement('div');
+    bar.id = 'installBar';
+    bar.className = 'install-bar';
+    bar.setAttribute('role', 'dialog');
+    bar.setAttribute('aria-label', 'تثبيت التطبيق');
+    bar.innerHTML = `<img src="icons/icon-192.png" alt="" width="36" height="36"><span class="install-txt"></span>` +
+      (actionLabel ? '<button type="button" class="btn primary install-go"></button>' : '') +
+      '<button type="button" class="install-close" aria-label="لا شكراً">×</button>';
+    bar.querySelector('.install-txt').textContent = text;
+    if (actionLabel) {
+      const go = bar.querySelector('.install-go');
+      go.textContent = actionLabel;
+      go.addEventListener('click', () => { bar.remove(); onAction(); });
+    }
+    bar.querySelector('.install-close').addEventListener('click', () => {
+      try { localStorage.setItem(INSTALL_KEY, String(Date.now())); } catch (_) {}
+      bar.remove();
+    });
+    document.body.appendChild(bar);
+  }
+  let deferredInstall = null;
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredInstall = e;
+    setTimeout(() => showInstallBar('ثبّت «لقيت» على تلفونك: بيفتح أسرع وبيشتغل مع نت ضعيف.', 'ثبّت', async () => {
+      deferredInstall.prompt();
+      const choice = await deferredInstall.userChoice.catch(() => null);
+      track('install', choice && choice.outcome === 'accepted' ? 'accepted' : 'dismissed');
+      deferredInstall = null;
+    }), 8000);
+  });
+  window.addEventListener('appinstalled', () => { const b = document.getElementById('installBar'); if (b) b.remove(); });
+  const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) && !/crios|fxios/i.test(navigator.userAgent);
+  if (isIOS && !standalone) {
+    setTimeout(() => showInstallBar('لتثبيت «لقيت» على الآيفون: اضغط زر المشاركة ⬆️ وبعدين «إضافة إلى الشاشة الرئيسية».', '', null), 12000);
+  }
+
   window.LaqeetUI = { icon, iconHtml, hydrateIcons, toggleTheme, syncThemeButtons, track };
 
   if (document.readyState === 'loading') {

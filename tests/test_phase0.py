@@ -360,3 +360,18 @@ def test_manifest_is_installable():
     assert any(i["sizes"] == "512x512" and i.get("purpose") == "maskable" for i in m["icons"])
     assert len(m["shortcuts"]) >= 2 and "موثق" not in m["description"]
     assert Path("frontend/offline.html").exists()
+
+
+@pytest.mark.parametrize("text,want", [
+    ("الرقم الأول: 00963993754300", ["0993754300"]),
+    ("​الرقم الثاني: 00963995290604", ["0995290604"]),
+    ("+963-993-754-300", ["0993754300"]),          # used to come out as a wrong number
+    ("(0993) 754300", ["0993754300"]),
+    ("+963 0993 754 300", ["0993754300"]),
+    ("00 963 993 754 300", ["0993754300"]),
+    ("الرمز الوظيفي: 231538 آخر موعد 22/11/2026", []),
+    ("رقم الإعلان 2026112599", []),
+    ("هاتف 011-2234567", []),
+])
+def test_syrian_phone_formats(text, want):
+    assert tx.phones(text) == want

@@ -417,7 +417,10 @@ def field_from_text(title: str, context: str = "") -> str:
 
 
 # ---------------------------------------------------------------- other details
-_PHONE = re.compile(r"(?<!\d)(?:\+?963\s?|0)?(9\d{2})[\s-]?(\d{3})[\s-]?(\d{3})(?!\d)")
+# Syrian mobiles: 09XX XXX XXX in any common spelling: 0993754300, 0933 123 456, (0993) 754300, 963993754300,
+# +963 993 754 300, +963-993-754-300, 00963993754300, 00 963 993 754 300. The country code may keep its 0 (+963 0993…).
+_PHONE = re.compile(r"(?<![\d+])(?:(?:\+|00)\s?963[\s\-.]?\(?0?|963[\s\-.]?|\(?0)?(9\d{2})\)?[\s\-.]?(\d{3})[\s\-.]?(\d{3})(?!\d)")
+_INVISIBLE = re.compile(r"[\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]")
 _TR_PHONE = re.compile(
     r"(?<!\d)(?:(?:\+|00?)?90|0)\s*[-./(]*?(5\d{2})[\s.\-)/]*?(\d{3})[\s.\-]*?(\d{2})[\s.\-]*?(\d{2})(?!\d)"
     r"|(?:wa\.me/|phone=(?:%2B|\+)?)(?:90|0090)(5\d{2})(\d{3})(\d{2})(\d{2})(?!\d)",
@@ -464,7 +467,7 @@ _ARABIC_DIGITS = str.maketrans("٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹", "0123
 
 
 def phones(text: str) -> list[str]:
-    norm = (text or "").translate(_ARABIC_DIGITS)
+    norm = _INVISIBLE.sub("", (text or "").translate(_ARABIC_DIGITS))
     return sorted({"0" + "".join(m.groups()) for m in _PHONE.finditer(norm)})
 
 

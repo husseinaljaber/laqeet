@@ -56,6 +56,34 @@ docker compose -f deploy/docker-compose.yml up -d --build
 3. من Cloudflare، بقسم SSL/TLS، اختار **Full**. بعدها حط Caddy أو nginx على السيرفر ليحوّل الطلبات من البورت 443 للبورت 8000.
 4. حط `PUBLIC_URL=https://دومينك` بملف `.env`.
 
+## قبل الإطلاق (قائمة)
+**قرارات بإيدك:**
+- [ ] **الاستضافة الدائمة** (أهم شي): VPS مع `docker compose`، أو Render مدفوع مع disk. بدونها إعلانات أصحاب العمل والبلاغات ومشتركين البوت والإحصائيات بتضيع.
+- [ ] **الاسم والدومين:** تأكد إنه «لقيت» مو علامة تجارية مسجّلة، واشتري الدومين.
+- [ ] **WhatsApp Business API** (اختياري): للتنبيهات وتوثيق أصحاب العمل. فيه كلفة.
+- [ ] **مفتاح AI** (اختياري): `ANTHROPIC_API_KEY`. جرّبه على كم إعلان قبل ما تعتمد عليه.
+
+**إعدادات (`.env`):**
+- [ ] `ADMIN_TOKEN` طويل وعشوائي (مثلاً `python -c "import secrets;print(secrets.token_urlsafe(32))"`).
+- [ ] `PUBLIC_URL=https://دومينك`، لأنه روابط المشاركة والـ sitemap وGoogle بيعتمدوا عليه.
+- [ ] `TELEGRAM_BOT_TOKEN` و`ADMIN_CHAT_ID` لتنبيهات البوت وتنبيه المصادر الخربانة.
+
+**بعد ما يشتغل:**
+- [ ] افتح `/api/health` و`/admin.html` (كل التبويبات).
+- [ ] Google Search Console: ضيف الدومين وابعت `/sitemap.xml`.
+- [ ] نسخة احتياطية: زر «نسخة احتياطية» بالإدارة، أو `python -m app.backup export backup.json.gz`. خليها برا GitHub لأنه فيها أرقام أصحاب العمل. للاسترجاع: `python -m app.backup import backup.json.gz`.
+- [ ] راسل أدمنية القنوات من تبويب «الشركاء» (الرسالة جاهزة بالأرقام).
+- [ ] تأكد إنه تبويب «صحة المصادر» ما فيه «أخطاء».
+- [ ] إذا الـ repo عام: إيميلك لسا بتاريخ الـ commits القديمة. فكّر تعمل repo جديد نظيف أو تخليه خاص.
+
+**تطبيق Play Store (لما تكون جاهز):**
+1. نزّل [Bubblewrap](https://github.com/GoogleChromeLabs/bubblewrap): `npx @bubblewrap/cli init --manifest https://دومينك/manifest.webmanifest`.
+2. `npx @bubblewrap/cli build`. بيعطيك ملف `.aab` وبصمة المفتاح (SHA-256).
+3. حط بـ `.env`: `TWA_PACKAGE=اسم الحزمة` و`TWA_SHA256=البصمة`، فبيصير الموقع يقدّم `/.well-known/assetlinks.json` لحاله.
+4. ارفع الـ `.aab` على Google Play Console (حساب المطوّر 25$ مرة وحدة).
+
+**الاختبارات:** بتشتغل لحالها على GitHub مع كل push (`.github/workflows/tests.yml`). محلياً: `pytest`.
+
 ## الملفات
 - `app/sources/telegram.py`: بيقرا القنوات من `t.me/s/<channel>`، بفاصل ثانية على الأقل بين كل طلب.
 - `app/extract.py` و`app/taxonomy.py` و`app/spam.py`: بيستخرجوا الوظائف من المنشورات بقواعد مكتوبة.

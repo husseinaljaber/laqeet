@@ -81,6 +81,10 @@ def test_real_formats():
 def test_real_posts_accuracy():
     """Floors measured on 178 hand-checked real posts (see tools/evaluate.py). Fails if a change makes extraction worse."""
     import io, contextlib, re
+    from pathlib import Path
+    import pytest
+    if not Path("data/raw/syrianjobs2.json").exists():
+        pytest.skip("data/raw/ (saved real posts) is not in this checkout")
     from tools import evaluate
     buf = io.StringIO()
     with contextlib.redirect_stdout(buf):

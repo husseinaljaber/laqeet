@@ -75,9 +75,24 @@ def test_employer_post_waits_for_review():
                                                 "kind": "quick", "education": "none"})
     assert r.status_code == 200
     assert client.get("/api/jobs", params={"q": "حبكة"}).json()["total"] == 0
+    # Not reachable by id either, so nobody can share it before review.
+    jid = r.json()["id"]
+    assert client.get(f"/api/jobs/{jid}").status_code == 404
+    assert client.get(f"/j/{jid}").status_code == 404
     assert client.get("/api/admin/queue").status_code == 403
     client.post(f"/api/admin/jobs/{r.json()['id']}", json={"action": "approve"}, headers={"X-Admin-Token": "test-token"})
     assert client.get("/api/jobs", params={"q": "حبكة"}).json()["total"] == 1
+    assert client.get(f"/api/jobs/{jid}").status_code == 200
+    assert client.get(f"/j/{jid}").status_code == 200
+
+
+def test_reported_ad_is_hidden_by_id_too():
+    jid, _ = db.upsert(api.con, _job("مندوب مبيعات مشبوه", cities=["دمشق"], education="none"))
+    api.con.commit()
+    for i in range(1, 4):
+        client.post(f"/api/jobs/{jid}/report", json={"reason": "scam"}, headers={"X-Forwarded-For": f"203.0.113.{i}"})
+    assert client.get(f"/api/jobs/{jid}").status_code == 404
+    assert client.get(f"/j/{jid}").status_code == 404
 
 
 def test_syria_only_excludes_turkey():

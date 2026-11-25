@@ -304,10 +304,19 @@ def jobs(edu: str | None = None, lower: bool = False, field: str | None = None, 
                        "sources": [{"code": s, "label": config.SOURCE_LABEL.get(s, s), "count": n} for s, n in sources_cnt.most_common()]}}
 
 
+# Only ads that passed review (or came straight from a trusted source) are public. «review» covers both employer
+# posts waiting for approval and ads hidden after reports; «rejected» never comes back.
+PUBLIC_STATUSES = ("live", "expired")
+
+
+def _is_public(row) -> bool:
+    return bool(row) and row["status"] in PUBLIC_STATUSES
+
+
 @app.get("/api/jobs/{job_id}")
 def job(job_id: int):
     row = con.execute("SELECT * FROM jobs WHERE id=?", (job_id,)).fetchone()
-    if not row or row["status"] == "rejected":
+    if not _is_public(row):
         raise HTTPException(404)
     return db.row_to_dict(con, row)
 
@@ -676,7 +685,7 @@ def scam_check(body: dict = Body(...)):
 def job_page(job_id: int, request: Request):
     """Shareable single-job page with Open Graph tags so WhatsApp/Telegram previews show the real title and city."""
     row = con.execute("SELECT * FROM jobs WHERE id=?", (job_id,)).fetchone()
-    if not row or row["status"] == "rejected":
+    if not _is_public(row):
         raise HTTPException(404)
     j = db.row_to_dict(con, row)
     e = html.escape

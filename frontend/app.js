@@ -1695,7 +1695,8 @@
       state.q || state.city || state.sector || state.edu || state.edu_group ||
       state.field || state.sub || state.apply || state.exp || state.fresh || state.instant || state.saved
     );
-    const open = manualFieldsOpen != null ? manualFieldsOpen : !isFiltered;
+    const phone = window.matchMedia('(max-width: 720px)').matches;
+    const open = manualFieldsOpen != null ? manualFieldsOpen : (!isFiltered && !phone);
     sec.classList.toggle('is-collapsed', !open);
     btn.setAttribute('aria-expanded', String(open));
     btn.replaceChildren(
@@ -1912,6 +1913,12 @@
     if ($('savedOnly')) $('savedOnly').setAttribute('aria-pressed', String(state.saved && state.trackerFilter !== 'applied'));
     if ($('appliedOnly')) $('appliedOnly').setAttribute('aria-pressed', String(state.saved && state.trackerFilter === 'applied'));
     updateMarketFieldsCollapse();
+    updateMoreFiltersLabel();
+  }
+
+  function updateMoreFiltersLabel() {
+    const n = splitCsv(state.apply).length + splitCsv(state.exp).length + (state.instant ? 1 : 0) + (state.fresh ? 1 : 0) + (state.saved ? 1 : 0);
+    if ($('moreFiltersLabel')) $('moreFiltersLabel').textContent = n ? `فلاتر إضافية (${n})` : 'فلاتر إضافية';
   }
 
   function renderActivePills() {
@@ -2263,6 +2270,13 @@
 
   // ---------------------------------------------------------------- event listeners
   function setupEvents() {
+    if ($('moreFiltersBtn')) {
+      $('moreFiltersBtn').addEventListener('click', () => {
+        const open = !$('moreFilters').classList.contains('open');
+        $('moreFilters').classList.toggle('open', open);
+        $('moreFiltersBtn').setAttribute('aria-expanded', String(open));
+      });
+    }
     // Sector selection cards
     document.querySelectorAll('#sectorTabs .sector-card').forEach((btn) => {
       btn.addEventListener('click', () => {
@@ -2961,7 +2975,7 @@
     if ($('boardView')) $('boardView').hidden = true;
     syncNavViewState();
     if (pushHistory) {
-      try { history.pushState({ view: 'landing' }, '', location.pathname); } catch (e) {}
+      try { history.pushState({ view: 'landing' }, '', `${location.pathname}?view=home`); } catch (e) {}
     }
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
@@ -3012,6 +3026,83 @@
 
     window.scrollTo({ top: 0, behavior: 'smooth' });
     refresh();
+  }
+
+  // ---------------------------------------------------------------- first-visit onboarding
+  // «شو شهادتك؟» → (for degree holders) «شو مجالك؟» → «وين بدك تشتغل؟», then straight to the matching jobs.
+  // Choices are kept in the profile (on this device only) so the next visit opens the jobs directly.
+  const DEGREE_LEVELS = ['institute', 'bachelor', 'master', 'phd'];
+  const ob = { step: 'edu', edu: '', field: '', country: 'sy' };
+
+  function obChip(label, onClick, extraCls) {
+    return el('button', { type: 'button', class: 'ob-chip' + (extraCls ? ' ' + extraCls : ''), onclick: onClick }, label);
+  }
+
+  function obSteps() {
+    return (!ob.edu || DEGREE_LEVELS.includes(ob.edu)) ? ['edu', 'field', 'city'] : ['edu', 'city'];
+  }
+
+  function obShow(step) {
+    ob.step = step;
+    const steps = obSteps();
+    document.querySelectorAll('#onboard .ob-step').forEach((n) => { n.hidden = n.dataset.step !== step; });
+    const idx = steps.indexOf(step);
+    document.querySelectorAll('#obProgress i').forEach((dot, i) => {
+      dot.hidden = i >= steps.length;
+      dot.classList.toggle('on', i <= idx);
+    });
+    const copy = {
+      edu: ['شو شهادتك؟', 'منوريك الشغل يلي بيناسبك. اختياراتك بتنحفظ على جهازك بس.'],
+      field: ['شو مجالك؟', 'اختار مجالك، أو «كل المجالات» إذا بدك تشوف كل شي.'],
+      city: ['وين بدك تشتغل؟', 'اختار المدينة، أو «كل المدن».']
+    }[step];
+    $('obQ').textContent = copy[0];
+    $('obHint').textContent = copy[1];
+    $('obBack').hidden = idx <= 0;
+  }
+
+  function obFinish(city) {
+    profile.edu = ob.edu || profile.edu || '';
+    profile.onboard = { edu: ob.edu, field: ob.field, city: city || '', country: ob.country, at: new Date().toISOString() };
+    saveProfile();
+    fitCache = null;
+    enterBoard({ country: ob.country, edu: ob.edu, field: ob.field, city: city || '' }, true);
+  }
+
+  function obRenderCities() {
+    const isTr = ob.country === 'tr';
+    const cs = getCountryStats(ob.country);
+    const counts = cs.city_counts || {};
+    const list = isTr ? TURKISH_PROVINCES : ((META && META.cities && META.cities.length) ? META.cities : SYRIAN_GOVERNORATES);
+    $('obCity').replaceChildren(
+      obChip(isTr ? 'كل الولايات' : 'كل المدن', () => obFinish(''), 'ob-all'),
+      ...list.map((c) => obChip(counts[c] ? `${c} · ${counts[c]}` : c, () => obFinish(c)))
+    );
+  }
+
+  function setupOnboarding() {
+    if (!$('onboard')) return;
+    $('obEdu').replaceChildren(...LEVELS.map(([code, label]) => obChip(label, () => {
+      ob.edu = code;
+      ob.field = '';
+      obShow(DEGREE_LEVELS.includes(code) ? 'field' : 'city');
+    })));
+    const fields = ((META && META.fields) || []).filter((f) => f.code !== 'other');
+    $('obField').replaceChildren(
+      obChip('كل المجالات', () => { ob.field = ''; obShow('city'); }, 'ob-all'),
+      ...fields.map((f) => obChip(f.label, () => { ob.field = f.code; obShow('city'); }))
+    );
+    obRenderCities();
+    document.querySelectorAll('#onboard [data-wiz-country]').forEach((tab) => {
+      tab.addEventListener('click', () => { ob.country = tab.dataset.wizCountry === 'tr' ? 'tr' : 'sy'; obRenderCities(); });
+    });
+    $('obBack').addEventListener('click', () => {
+      const steps = obSteps();
+      const idx = steps.indexOf(ob.step);
+      if (idx > 0) obShow(steps[idx - 1]);
+    });
+    $('obSkip').addEventListener('click', () => enterBoard({ country: ob.country }, true));
+    obShow('edu');
   }
 
   // ---------------------------------------------------------------- initialization
@@ -3104,6 +3195,7 @@
     syncTrustMetrics(true);
 
     populateLandingPortals();
+    setupOnboarding();
 
     // Populate dropdowns & initialize interactive Multi-Select widgets
     const eduSel = $('eduFilter');
@@ -3175,6 +3267,10 @@
       if (hashMatch) {
         get('/jobs/' + hashMatch[1]).then(openDetail).catch(() => {});
       }
+    } else if (profile.onboard && sp.get('view') !== 'home') {
+      // Returning visitor: open their jobs directly; the home button still shows the landing page.
+      const o = profile.onboard;
+      enterBoard({ country: o.country || 'sy', edu: o.edu || '', field: o.field || '', city: o.city || '' }, false);
     } else {
       showLanding(false);
     }

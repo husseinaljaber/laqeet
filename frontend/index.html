@@ -12,8 +12,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Alexandria:wght@500;600;700;800&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="app.css?v=41">
-<script src="ui.js?v=41"></script>
+<link rel="stylesheet" href="app.css?v=42">
+<script src="ui.js?v=42"></script>
 </head>
 <body>
 <a class="skip" href="#board">انتقل للوظائف</a>
@@ -63,7 +63,7 @@
         <div class="lp-hero-copy">
           <div class="lp-badge rise" style="--d:1">
             <span class="lp-badge-dot"></span>
-            <span>تغطية إقليمية حية · بدون إعلانات وهمية أو مكررة · تقديم مباشر</span>
+            <span>ببلاش · بيتحدّث كل 20 دقيقة · منفلتر الإعلانات المشبوهة</span>
           </div>
 
           <h1 class="lp-title rise" style="--d:2">
@@ -84,23 +84,33 @@
           </h1>
 
           <p class="lp-lead rise" style="--d:3">
-            أول محرك توظيف ذكي يمسح البوابات الحكومية، المنظمات الدولية والأممية، والشركات الخاصة في <b>جميع المحافظات السورية الـ 14</b> و<b>الولايات التركية الكبرى</b>.
+            منجمع إعلانات الشغل من الجهات الحكومية والمنظمات والشركات بـ<b>سوريا</b> و<b>تركيا</b>، ومنوريك يلي بيناسب <b>شهادتك ومدينتك</b>.
           </p>
 
-          <!-- Compact Country Switcher & Direct CTA -->
-          <div class="lp-wizard lp-wizard-compact rise" style="--d:4" role="region" aria-label="اختيار سوق العمل">
-            <div class="lp-wiz-tabs" role="tablist">
-              <button type="button" role="tab" class="lp-wiz-tab active" data-wiz-country="sy" aria-selected="true">
-                <span>البحث في سوريا (14 محافظة)</span>
-              </button>
-              <button type="button" role="tab" class="lp-wiz-tab" data-wiz-country="tr" aria-selected="false">
-                <span>البحث في تركيا (الولايات التركية)</span>
-              </button>
+          <!-- First visit: three quick questions, then straight to the jobs that fit -->
+          <div class="lp-onboard rise" style="--d:4" id="onboard" role="region" aria-labelledby="obQ">
+            <div class="ob-head">
+              <span class="ob-progress" id="obProgress" aria-hidden="true"><i class="on"></i><i></i><i></i></span>
+              <h2 class="ob-q" id="obQ">شو شهادتك؟</h2>
+              <p class="ob-hint" id="obHint">منوريك الشغل يلي بيناسبك. اختياراتك بتنحفظ على جهازك بس.</p>
             </div>
-            <button type="button" id="lpWizSubmit" class="btn primary lp-wiz-submit">
-              <i data-ico="search" data-ico-cls="ico-sm"></i>
-              <span>استعرض الفرص الآن</span>
-            </button>
+            <div class="ob-step" data-step="edu">
+              <div class="ob-chips" id="obEdu"></div>
+            </div>
+            <div class="ob-step" data-step="field" hidden>
+              <div class="ob-chips" id="obField"></div>
+            </div>
+            <div class="ob-step" data-step="city" hidden>
+              <div class="lp-wiz-tabs ob-country" role="tablist" aria-label="البلد">
+                <button type="button" role="tab" class="lp-wiz-tab active" data-wiz-country="sy" aria-selected="true"><span>سوريا</span></button>
+                <button type="button" role="tab" class="lp-wiz-tab" data-wiz-country="tr" aria-selected="false"><span>تركيا</span></button>
+              </div>
+              <div class="ob-chips" id="obCity"></div>
+            </div>
+            <div class="ob-foot">
+              <button type="button" class="link ob-back" id="obBack" hidden><i data-ico="arrow-right" data-ico-cls="ico-sm"></i><span>رجوع</span></button>
+              <button type="button" class="link ob-skip" id="obSkip"><span>شوف كل الشغل بدون اختيار</span><i data-ico="arrow-left" data-ico-cls="ico-sm"></i></button>
+            </div>
           </div>
 
           <!-- Live Counters Strip -->
@@ -558,6 +568,12 @@
         <button type="button" id="searchBtn" class="btn primary search-btn"><i data-ico="search" data-ico-cls="ico-sm"></i><span>بحث</span></button>
       </div>
 
+      <!-- On phones the extra filters fold away behind one button so the jobs come first -->
+      <button type="button" class="chip more-filters-btn" id="moreFiltersBtn" aria-expanded="false" aria-controls="moreFilters">
+        <i data-ico="sliders" data-ico-cls="ico-sm"></i><span id="moreFiltersLabel">فلاتر إضافية</span>
+      </button>
+      <div class="more-filters" id="moreFilters">
+
       <!-- Application Method Pills -->
       <div class="row filter-row">
         <span class="filter-label">طريقة التقديم:</span>
@@ -598,6 +614,7 @@
           <button type="button" class="chip" data-exp="mid" aria-pressed="false"><span class="exp-dot" style="--c:var(--exp-mid)"></span><span>3–4 سنين</span></button>
           <button type="button" class="chip" data-exp="high" aria-pressed="false"><span class="exp-dot" style="--c:var(--exp-high)"></span><span>5+ سنين</span></button>
         </div>
+      </div>
       </div>
     </section>
 
@@ -700,6 +717,6 @@
 
 <div class="toast" id="toast" role="status" hidden></div>
 
-<script src="app.js?v=41" defer></script>
+<script src="app.js?v=42" defer></script>
 </body>
 </html>

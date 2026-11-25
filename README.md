@@ -36,12 +36,11 @@ uvicorn app.api:app --port 8000                    # افتح http://localhost:8
 - **Google for Jobs:** كل صفحة وظيفة مفتوحة `/j/<id>` فيها بيانات `JobPosting`، وفي `/sitemap.xml` و`/robots.txt`. بعد ما تربط الدومين، حط `PUBLIC_URL` وضيف الموقع على Google Search Console وابعتله الـ sitemap.
 - **AI اختياري:** إذا حطيت `ANTHROPIC_API_KEY`، الإعلانات يلي القواعد ما قدرت تقراها منيح بتنبعت للـ AI (موديل صغير ورخيص، `LLM_MODEL`)، بحد أقصى `LLM_DAILY_LIMIT` طلب باليوم. أرقام التلفون والروابط دايماً بتنسحب من النص نفسه، مو من الـ AI. بدون مفتاح كل شي بيشتغل متل قبل.
 
-- **تدريبات ومنح** (`/trainings.html`): الدورات والتدريب العملي والمنح والتطوع، من نفس القنوات. بتنقرا لحالها مع الجمع. ولتطلّعهن من المنشورات القديمة: `python -m app.trainings --backfill`.
-- **قنوات تلغرام لكل مدينة:** البوت بينشر كل وظيفة جديدة بقناة مدينتها، وكل تدريب بقناة التدريبات:
-  1. اعمل القنوات (عامة) من تلغرام، مثلاً `@laqeet_damascus`، `@laqeet_aleppo`، `@laqeet_syria`، `@laqeet_turkey`، `@laqeet_training`.
+- **قنوات تلغرام لكل مدينة:** البوت بينشر كل وظيفة جديدة بقناة مدينتها:
+  1. اعمل القنوات (عامة) من تلغرام، مثلاً `@laqeet_damascus`، `@laqeet_aleppo`، `@laqeet_syria`، `@laqeet_turkey`.
   2. ضيف البوت تبعك **أدمن** بكل قناة، مع صلاحية النشر.
   3. حط بـ`.env`:
-     `CITY_CHANNELS={"دمشق": "@laqeet_damascus", "حلب": "@laqeet_aleppo", "*sy": "@laqeet_syria", "*tr": "@laqeet_turkey", "trainings": "@laqeet_training"}`
+     `CITY_CHANNELS={"دمشق": "@laqeet_damascus", "حلب": "@laqeet_aleppo", "*sy": "@laqeet_syria", "*tr": "@laqeet_turkey"}`
      (`*sy` = كل سوريا، `*tr` = كل تركيا، وفيك تحط بس يلي بدك ياه).
   4. افحص: `python -m app.city_channels --check`، لازم يطلع «تمام» جنب كل قناة.
   5. أول تشغيلة بتسجّل الوقت بس. بعدها كل شي جديد بينزل، كل إعلان مرة وحدة، وبحد أقصى 15 بكل قناة بكل جولة.

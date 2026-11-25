@@ -1,12 +1,12 @@
-"""Posting new jobs and trainings to per-city Telegram channels."""
+"""Posting new jobs to per-city Telegram channels."""
 from datetime import datetime, timezone
 
 from app import city_channels as cc
-from app import db, trainings
+from app import db
 from app.models import Job
 
 NOW = datetime.now(timezone.utc).isoformat(timespec="seconds")
-CMAP = {"دمشق": "@d", "حلب": "@a", "*sy": "@sy", "*tr": "@tr", "trainings": "@tr_courses"}
+CMAP = {"دمشق": "@d", "حلب": "@a", "*sy": "@sy", "*tr": "@tr"}
 
 
 class FakeTG:
@@ -21,9 +21,7 @@ class FakeTG:
 
 
 def _db():
-    con = db.connect(":memory:")
-    trainings.ensure_schema(con)
-    return con
+    return db.connect(":memory:")
 
 
 def _job(con, title, cities, country="sy", **kw):
@@ -37,7 +35,6 @@ def test_routing():
     assert cc.targets_for(["دمشق", "حلب"], "sy", CMAP) == ["@d", "@a", "@sy"]
     assert cc.targets_for(["عدة محافظات"], "sy", CMAP) == ["@sy"]
     assert cc.targets_for(["إسطنبول"], "tr", CMAP) == ["@tr"]
-    assert cc.targets_for(["دمشق"], "sy", CMAP, kind="training") == ["@tr_courses"]
     assert cc.targets_for(["حمص"], "sy", {"دمشق": "@d"}) == []
     assert cc.load_map("not json") == {} and cc.load_map('{"دمشق": "@d"}') == {"دمشق": "@d"}
 
@@ -50,15 +47,12 @@ def test_first_run_starts_now_then_posts_each_item_once():
     con.execute("UPDATE meta SET value='2000-01-01' WHERE key='city_pub_since'")  # pretend it started long ago…
     con.execute("UPDATE jobs SET first_seen='1999-01-01'")                        # …but the old job is older still
     _job(con, "معلم شاورما", ["دمشق"])
-    trainings.maybe_store_post(con, "wazafne175", "#تدريب_مجاني\nكورس قراءة التحاليل المخبرية\nالتدريب مجاني أونلاين",
-                               "https://t.me/wazafne175/7", NOW)
     con.commit()
     sent = cc.publish(con, tg, CMAP, sleep=lambda s: None)
-    assert sent == {"@d": 1, "@sy": 1, "@tr_courses": 1}
+    assert sent == {"@d": 1, "@sy": 1}
     texts = dict((ch, t) for ch, t in tg.sent)
     assert "معلم شاورما" in texts["@d"] and "/j/" in texts["@d"] and "#دمشق" in texts["@d"]
     assert "كاشير قديم" not in " ".join(texts.values())
-    assert "قراءة التحاليل" in texts["@tr_courses"] and "مجاني" in texts["@tr_courses"]
     assert cc.publish(con, tg, CMAP, sleep=lambda s: None) == {}  # nothing twice
 
 

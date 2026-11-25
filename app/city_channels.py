@@ -1,12 +1,11 @@
-"""Post new jobs (and trainings) to public «لقيت» Telegram channels, one per city.
+"""Post new jobs to public «لقيت» Telegram channels, one per city.
 
 Set CITY_CHANNELS to a JSON map from city to channel, plus optional catch-all keys:
 
     CITY_CHANNELS={"دمشق": "@laqeet_damascus", "حلب": "@laqeet_aleppo", "*sy": "@laqeet_syria",
-                   "*tr": "@laqeet_turkey", "trainings": "@laqeet_training"}
+                   "*tr": "@laqeet_turkey"}
 
 - a job goes to the channel of each of its cities, and to "*sy" / "*tr" (its country's channel) if set
-- trainings go to "trainings" if set, otherwise to their city / country channels
 - only what arrives after the feature is switched on is posted (no flood of old ads), each item once per channel
 - the bot must be an admin of every channel:  python -m app.city_channels --check
 The scheduler (app/run.py) calls publish() after each collection run.
@@ -19,7 +18,7 @@ import sys
 import time
 from datetime import date
 
-from . import config, db, trainings
+from . import config, db
 from . import taxonomy as tx
 from .bot import Telegram, _h, message
 
@@ -30,7 +29,7 @@ GAP_SECONDS = 3.1           # Telegram allows about 20 posts a minute in one cha
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS channel_posts (
     channel TEXT NOT NULL,
-    kind TEXT NOT NULL,          -- job | training
+    kind TEXT NOT NULL,          -- job
     item_id INTEGER NOT NULL,
     at TEXT NOT NULL,
     PRIMARY KEY (channel, kind, item_id)
@@ -50,11 +49,9 @@ def load_map(raw: str | None = None) -> dict[str, str]:
     return {str(k).strip(): str(v).strip() for k, v in data.items() if str(v).strip()}
 
 
-def targets_for(cities: list[str], country: str, cmap: dict[str, str], kind: str = "job") -> list[str]:
-    """Channels an item goes to, without repeats."""
+def targets_for(cities: list[str], country: str, cmap: dict[str, str]) -> list[str]:
+    """Channels a job goes to, without repeats."""
     out: list[str] = []
-    if kind == "training" and cmap.get("trainings"):
-        return [cmap["trainings"]]
     for c in cities or []:
         if c in cmap and cmap[c] not in out:
             out.append(cmap[c])
@@ -79,24 +76,6 @@ def job_post(job: dict) -> str:
     return body + ("\n" + " ".join(_h(t) for t in tags if len(t) > 1) if tags else "")
 
 
-def training_post(t: dict) -> str:
-    cost = {"free": "مجاني", "paid": "مدفوع"}.get(t["cost"], "")
-    head = f"🎓 {_h(t['kind_label'])}" + (f" · {cost}" if cost else "") + (" · أونلاين" if t["online"] else "")
-    lines = [head, f"<b>{_h(t['title'])}</b>"]
-    where = " · ".join(x for x in [t.get("provider"), "، ".join(t.get("cities") or [])] if x)
-    if where:
-        lines.append(_h(where))
-    if t.get("deadline"):
-        lines.append(f"آخر موعد {t['deadline']}")
-    links = []
-    if t.get("apply_url"):
-        links.append(f'<a href="{_h(t["apply_url"])}">التسجيل</a>')
-    links.append(f'<a href="{_h(t["post_url"])}">الإعلان الأصلي</a>')
-    links.append(f'<a href="{config.PUBLIC_URL}/trainings.html">كل التدريبات</a>')
-    lines.append(" · ".join(links))
-    return "\n".join(lines)
-
-
 def _posted(con, channel: str, kind: str, item_id: int) -> bool:
     return con.execute("SELECT 1 FROM channel_posts WHERE channel=? AND kind=? AND item_id=?",
                        (channel, kind, item_id)).fetchone() is not None
@@ -108,7 +87,6 @@ def publish(con, tg: Telegram, cmap: dict[str, str] | None = None, sleep=time.sl
     if not cmap:
         return {}
     con.executescript(SCHEMA)
-    trainings.ensure_schema(con)
     since = db.get_meta(con, "city_pub_since")
     if not since:  # first run: start from now, so the channels don't get thousands of old ads at once
         db.set_meta(con, "city_pub_since", db.now())
@@ -124,12 +102,6 @@ def publish(con, tg: Telegram, cmap: dict[str, str] | None = None, sleep=time.sl
         for ch in targets_for(job.get("cities") or [], job.get("country") or "sy", cmap):
             if not _posted(con, ch, "job", row["id"]):
                 queue.append((ch, "job", row["id"], job_post(job)))
-    for row in con.execute("SELECT * FROM trainings WHERE first_seen >= ? AND expires_on >= ? ORDER BY first_seen",
-                           (since, today)).fetchall():
-        t = trainings._row(row)
-        for ch in targets_for(t["cities"], t.get("country") or "sy", cmap, kind="training"):
-            if not _posted(con, ch, "training", row["id"]):
-                queue.append((ch, "training", row["id"], training_post(t)))
     sent: dict[str, int] = {}
     broken: set[str] = set()
     for ch, kind, item_id, text in queue:

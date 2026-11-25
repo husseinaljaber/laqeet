@@ -4,7 +4,7 @@ You are taking over this project from an earlier chat with Claude. Everything yo
 
 ## The owner
 
-- **Hussein Aljaber** (GitHub: `husseinaljaber`, email: husinaljber98@gmail.com). Syrian, lives in Istanbul. Computer Engineering graduate (FSMVU), MSc student in AI and Data Engineering. Knows Python, SQL/PostgreSQL, Flutter/Dart, Power BI.
+- Syrian developer (Python, SQL/PostgreSQL, Flutter/Dart, Power BI). Personal contact details are kept out of the repository on purpose.
 - **Talk to him in Levantine (Syrian) Arabic.** Keep replies short and practical. He writes quickly and sometimes uses voice dictation, so read past typos.
 - He is not competing with anyone. The goal is to help Syrians find work faster.
 
@@ -83,8 +83,8 @@ Other Syrian job channels and sites to consider later: https://t.me/s/Jobsvacanc
 - **Database:** SQLite now, with a clear path to Postgres.
 - **Frontend:** vanilla JS + CSS (no build step), PWA.
 - **Deploy:** Docker Compose (api + scheduler/bot) on a small VPS (~5–10 USD a month) with Cloudflare in front. A static fallback also exists: GitHub Actions runs the scraper and publishes `jobs.json` to GitHub Pages (see `tech-jobs-sy/.github/workflows/update.yml`).
-- **Custom domain:** GitHub Pages takes a CNAME to `husseinaljaber.github.io` (or A records 185.199.108–111.153). With a VPS, point the domain at Cloudflare.
-- **GitHub:** account `husseinaljaber`. Ask him to create the repo, or create it yourself with his permission. **Never make anything public, push, or deploy without asking him first.**
+- **Custom domain:** GitHub Pages takes a CNAME to `<account>.github.io` (or A records 185.199.108–111.153). With a VPS, point the domain at Cloudflare.
+- **GitHub:** ask him which account and repo to use. **Never make anything public, push, or deploy without asking him first.**
 
 ## Design direction (he liked this)
 - **Look:** Arabic RTL. Display font *Reem Kufi*, body font *IBM Plex Sans Arabic* (Google Fonts). Deep green hero (#0D1F18) with a mint accent (#3CC596). Light and dark themes.
@@ -106,11 +106,11 @@ Other Syrian job channels and sites to consider later: https://t.me/s/Jobsvacanc
   6. The employer regex is too loose: in «معمل الدوام من 8 الى 4», "the factory" was read as the employer.
   7. Prefix grades in titles («الفئة الرابعة: عامل نظافة») should set education from the grade and be removed from the title.
 - **Research done earlier** (useful for «نبض السوق» and as a sanity check): across the ministry's Mar–Nov 2026 announcements, university-level tech roles were mostly data / analysis, networks, software, digital transformation, then cyber (heavily from one May announcement by the National Authority for IT Services), then AI. Most first-category roles ask for **2 years** of experience (age 25–45). Leadership roles ask for 3–7 years. Damascus has most of the roles.
-- **Earlier private previews** (claude.ai, only Hussein can open them): the ministry tech-jobs dashboard https://claude.ai/artifact/AjGYX34EfmwG7bsg9qxQmn and the site preview https://claude.ai/artifact/C4tUNtm9n7mF7akCzu6und.
+- **Earlier private previews** exist on claude.ai; ask him for the links (they are private and not stored here).
 
 ## How to work
 1. Fix the extractor bugs above. Then collect **real posts** from the four channels (`python -m ...` scraping `t.me/s/...`), save a sample as test fixtures, and measure extraction quality on ~50 real posts per channel before building on it.
 2. Test the ministry PDF parser on 5–10 real PDFs and fix `cards.py`.
 3. Build Phase 1 end to end (adapters → DB → API → site → PWA), then Phase 2, then Phase 3. Keep tests green (`pytest`) and add tests for every parser fix.
-4. After each phase, show Hussein the result: run it locally, take screenshots, and give a short summary in Levantine Arabic. Ask him before anything goes public.
+4. After each phase, show the owner the result: run it locally, take screenshots, and give a short summary in Levantine Arabic. Ask him before anything goes public.
 5. Keep a `README.md` (in Arabic) with how to run, deploy, and connect a domain.

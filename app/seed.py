@@ -32,8 +32,15 @@ def export_seed(con=None, path=SEED_PATH) -> int:
         tmp = path.with_suffix(".gz.tmp")
         with gzip.open(tmp, "wt", encoding="utf-8") as gz:
             gz.write(json.dumps({"jobs_cols": cols, "fts": True}, ensure_ascii=False) + "\n")
+            data_i = cols.index("data")
             for r in jobs:
-                gz.write("j\t" + json.dumps(list(r), ensure_ascii=False) + "\n")
+                row = list(r)
+                if r["status"] == "rejected":
+                    # keep the row so a rejected ad is not re-added on the next collect, but drop its text and contacts
+                    d = json.loads(row[data_i])
+                    d.update(raw="", phones=[], email=None, apply_url=None, tasks=[], skills=[])
+                    row[data_i] = json.dumps(d, ensure_ascii=False)
+                gz.write("j\t" + json.dumps(row, ensure_ascii=False) + "\n")
             for tag, sql in tables:
                 for r in con.execute(sql):
                     gz.write(f"{tag}\t" + json.dumps(list(r), ensure_ascii=False) + "\n")

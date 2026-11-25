@@ -57,3 +57,34 @@ def test_ads_without_a_degree_show_for_every_level():
     finally:  # the API tests share one database
         db.delete_jobs(api.con, [jid])
         api.con.commit()
+
+
+def test_copy_link_url_is_not_inside_javascript():
+    client = TestClient(api.app)
+    now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    jid, _ = db.upsert(api.con, Job(title="محاسب اختبار رابط", source="wazafne", post_url="https://t.me/x/990002", posted_at=now,
+                                    cities=["حمص"], education="bachelor",
+                                    apply_url="https://docs.google.com/forms/d/e/abc'+alert(1)+'/viewform"))
+    api.con.commit()
+    try:
+        page = client.get(f"/j/{jid}").text
+        assert "writeText('http" not in page and "writeText(this.dataset.copy)" in page
+    finally:
+        db.delete_jobs(api.con, [jid])
+        api.con.commit()
+
+
+def test_scam_check_is_rate_limited_and_headers_are_set():
+    client = TestClient(api.app)
+    h = {"X-Forwarded-For": "192.0.2.77"}
+    codes = [client.post("/api/scam-check", json={"text": "مطلوب موظفين براتب ممتاز"}, headers=h).status_code for _ in range(32)]
+    assert codes[0] == 200 and codes[-1] == 429
+    r = client.get("/api/health")
+    assert r.headers["x-content-type-options"] == "nosniff"
+
+
+def test_rate_limit_memory_stays_bounded():
+    rl = api._RateLimit(5, 60, max_keys=100)
+    for i in range(1000):
+        rl.allow(f"k{i}")
+    assert len(rl.hits) <= 100

@@ -11,13 +11,14 @@ import os
 import secrets
 import threading
 import time
-from collections import Counter, defaultdict
+from collections import Counter
 from contextlib import asynccontextmanager
 from datetime import date, datetime, timedelta, timezone
 from urllib.parse import quote
 
 from fastapi import Body, FastAPI, Header, HTTPException, Query, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from . import config, db, direct_apply as da, search as sq, spam
@@ -79,6 +80,7 @@ async def _lifespan(app: FastAPI):
 
 
 app = FastAPI(title=config.SITE_NAME_EN, docs_url="/api/docs", lifespan=_lifespan)
+app.add_middleware(GZipMiddleware, minimum_size=1000)  # slow connections: ~600KB first load shrinks to a fraction
 
 # what each education level sees by default (a master's holder still applies to «إجازة جامعية» jobs)
 _DEFAULT_LEVELS = {"phd": ["phd", "master", "bachelor"], "master": ["master", "bachelor"]}
@@ -322,8 +324,35 @@ def job(job_id: int):
     return db.row_to_dict(con, row)
 
 
-_report_times: dict[str, list[float]] = defaultdict(list)
-_reported: set[tuple[str, int]] = set()
+class _RateLimit:
+    """At most `limit` hits per `window` seconds per key, in memory. Old keys are dropped so memory stays bounded."""
+
+    def __init__(self, limit: int, window: float, max_keys: int = 50_000):
+        self.limit, self.window, self.max_keys = limit, window, max_keys
+        self.hits: dict[str, list[float]] = {}
+        self._lock = threading.Lock()
+
+    def allow(self, key: str) -> bool:
+        now = time.time()
+        with self._lock:
+            recent = [t for t in self.hits.get(key, ()) if t > now - self.window]
+            if len(recent) >= self.limit:
+                self.hits[key] = recent
+                return False
+            recent.append(now)
+            self.hits[key] = recent
+            if len(self.hits) > self.max_keys:
+                cutoff = now - self.window
+                self.hits = {k: v for k, v in self.hits.items() if v and v[-1] > cutoff}
+                while len(self.hits) > self.max_keys:  # still too many: drop the oldest half
+                    for k in list(self.hits)[: len(self.hits) // 2]:
+                        del self.hits[k]
+            return True
+
+
+_report_limit = _RateLimit(20, 3600)
+_reported: dict[tuple[str, int], float] = {}  # (ip, job) → when; one person counts once per ad for a day
+_REPORTED_MAX = 200_000
 
 
 def _is_trusted_proxy(host: str) -> bool:
@@ -351,15 +380,17 @@ def report(job_id: int, request: Request, body: dict = Body(default={})):
     """«بلّغ عن إعلان». Nothing about the reporter is stored; the address is only used in memory to slow down floods
     and so that one person counts once per ad (otherwise anyone could hide any ad by pressing three times)."""
     ip = _client_ip(request)
-    recent = [t for t in _report_times[ip] if t > time.time() - 3600]
-    if len(recent) >= 20:
-        raise HTTPException(429, "كتير بلاغات، جرّب بعد شوي")
     if not con.execute("SELECT 1 FROM jobs WHERE id=?", (job_id,)).fetchone():
         raise HTTPException(404)
-    _report_times[ip] = recent + [time.time()]
-    if (ip, job_id) in _reported:
+    if not _report_limit.allow(ip):
+        raise HTTPException(429, "كتير بلاغات، جرّب بعد شوي")
+    now = time.time()
+    if now - _reported.get((ip, job_id), 0) < 86400:
         return {"ok": True}
-    _reported.add((ip, job_id))
+    if len(_reported) > _REPORTED_MAX:
+        for k in [k for k, t in _reported.items() if now - t >= 86400] or list(_reported)[: _REPORTED_MAX // 2]:
+            _reported.pop(k, None)
+    _reported[(ip, job_id)] = now
     reason = str(body.get("reason", ""))[:40]
     con.execute("INSERT INTO reports VALUES (?,?,?)", (job_id, reason, db.now()))
     con.execute("UPDATE jobs SET reports=reports+1 WHERE id=?", (job_id,))
@@ -443,7 +474,8 @@ def stats(country: str | None = None):
 
 
 # ------------------------------------------------------------------ Phase 3: employers, review queue, market pulse
-_post_times: dict[str, list[float]] = defaultdict(list)
+_post_limit = _RateLimit(10, 86400)
+_scam_limit = _RateLimit(30, 600)
 
 
 @app.post("/api/employer/jobs")
@@ -453,11 +485,8 @@ def employer_post(request: Request, body: dict = Body(...)):
 
     if body.get("website"):  # honeypot field, hidden from people
         return {"ok": True}
-    ip = _client_ip(request)
-    recent = [t for t in _post_times[ip] if t > time.time() - 86400]
-    if len(recent) >= 10:
+    if not _post_limit.allow(_client_ip(request)):
         raise HTTPException(429, "وصلت للحد اليومي")
-    _post_times[ip] = recent + [time.time()]
     clip = lambda k, n=200: (str(body.get(k) or "").strip()[:n] or None)
     country = "tr" if clip("country", 4) == "tr" else "sy"
     title, employer, phone = clip("title", 120), clip("employer", 120), clip("phone", 24)
@@ -662,8 +691,10 @@ def pulse(city: str | None = None, edu: str | None = None, country: str | None =
 
 
 @app.post("/api/scam-check")
-def scam_check(body: dict = Body(...)):
+def scam_check(request: Request, body: dict = Body(...)):
     """Paste any job ad from WhatsApp/Facebook/Telegram and check for scam signals and repeated phone numbers."""
+    if not _scam_limit.allow(_client_ip(request)):
+        raise HTTPException(429, "كتير طلبات، جرّب بعد شوي")
     text = str(body.get("text") or "").strip()[:6000]
     if len(text) < 10:
         raise HTTPException(400, "الصق نص الإعلان كامل لنفحصه")
@@ -868,7 +899,7 @@ def job_page(job_id: int, request: Request):
       <textarea id="shareAdText" class="share-preview" dir="rtl">{e(share_text)}</textarea>
       <div class="share-actions">
         <button type="button" class="btn primary" onclick="navigator.clipboard.writeText(document.getElementById('shareAdText').value).then(()=>this.textContent='تم نسخ الإعلان مع الوصف')"><i data-ico="copy" data-ico-cls="ico-sm"></i><span>نسخ الإعلان مع الوصف</span></button>
-        <button type="button" class="btn ghost" onclick="navigator.clipboard.writeText('{e(primary_link)}').then(()=>this.textContent='تم نسخ الرابط')"><i data-ico="link" data-ico-cls="ico-sm"></i><span>نسخ الرابط فقط</span></button>
+        <button type="button" class="btn ghost" data-copy="{e(primary_link)}" onclick="navigator.clipboard.writeText(this.dataset.copy).then(()=>this.textContent='تم نسخ الرابط')"><i data-ico="link" data-ico-cls="ico-sm"></i><span>نسخ الرابط فقط</span></button>
         <a class="btn ghost" target="_blank" rel="noopener" href="{wa_share}"><i data-ico="whatsapp" data-ico-cls="ico-sm"></i><span>مشاركة عبر واتساب</span></a>
         <a class="btn ghost" target="_blank" rel="noopener" href="{tg_share}"><i data-ico="send" data-ico-cls="ico-sm"></i><span>مشاركة عبر تيليجرام</span></a>
       </div>
@@ -878,10 +909,20 @@ def job_page(job_id: int, request: Request):
 </main></body></html>""")
 
 
+_SECURITY_HEADERS = {
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "SAMEORIGIN",
+    "Referrer-Policy": "strict-origin-when-cross-origin",
+    "Permissions-Policy": "camera=(), microphone=(), geolocation=(), payment=()",
+}
+
+
 @app.middleware("http")
 async def _cache_headers(request, call_next):
     """Ensure shell assets always revalidate and API responses are never HTTP-cached."""
     resp = await call_next(request)
+    for k, v in _SECURITY_HEADERS.items():
+        resp.headers.setdefault(k, v)
     p = request.url.path
     if p.startswith("/api/"):
         resp.headers.setdefault("Cache-Control", "no-store")

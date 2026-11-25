@@ -1,10 +1,11 @@
 name: Collect jobs
 
-# Runs the collector 24/7 on GitHub Actions (hourly incremental + daily full deep pass),
-# then commits the refreshed seed snapshot whenever jobs change so Render redeploys automatically.
+# Once a day: full collect, then commit the refreshed seed snapshot (the file a fresh server boots from).
+# The live site keeps itself fresh between snapshots (AUTO_COLLECT every UPDATE_MINUTES), so an hourly commit only
+# restarted the free Render service (losing employer posts, reports and bot users) and added ~8MB to git each time.
+# Run it by hand from the Actions tab when you need a snapshot sooner.
 on:
   schedule:
-    - cron: "17 * * * *"      # every hour (quick, incremental across all channels, INGO ATS & portals)
     - cron: "40 2 * * *"      # once a day: full deep pass
   workflow_dispatch:
     inputs:
@@ -61,7 +62,6 @@ jobs:
       - name: Collect (restores DB from seed, then scrapes Telegram channels, INGO ATS, and web portals)
         env:
           FULL: ${{ github.event.schedule == '40 2 * * *' || inputs.full == true }}
-                    
           TG_API_ID: ${{ secrets.TG_API_ID }}
           TG_API_HASH: ${{ secrets.TG_API_HASH }}
           TG_STRING_SESSION: ${{ secrets.TG_STRING_SESSION }}

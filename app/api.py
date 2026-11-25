@@ -628,6 +628,15 @@ def admin_decide(job_id: int, body: dict = Body(...), x_admin_token: str | None 
     return {"ok": True}
 
 
+@app.get("/api/admin/health")
+def admin_health(x_admin_token: str | None = Header(None)):
+    """Which sources stopped bringing jobs, so a broken scraper is noticed in days, not months."""
+    _admin(x_admin_token)
+    rows = db.health_report(con)
+    return {"summary": dict(Counter(r["status"] for r in rows)), "sources": rows,
+            "updated_at": db.get_meta(con, "updated_at")}
+
+
 @app.get("/api/pulse")
 def pulse(city: str | None = None, edu: str | None = None, country: str | None = None):
     """«نبض السوق»: what is asked for most, by month, field, city and education, over the last 6 months."""

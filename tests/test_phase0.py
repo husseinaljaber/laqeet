@@ -128,3 +128,46 @@ def test_no_markup_without_employer():
     j = {"id": 1, "title": "عامل", "status": "live", "posted_at": "2026-11-20", "expires_on": "2099-01-01", "country": "sy"}
     assert seo.job_posting(j, "https://x/j/1", "", ["دمشق"], "بدون شهادة") is None
     assert seo.ld_script(None) == ""
+
+
+# ---------------------------------------------------------------- phase 1: source health
+def test_source_health_flags_quiet_and_failing_sources():
+    con = db.connect(":memory:")
+    j = lambda src: Job(title="x", source=src, post_url="u")
+    db.record_batch_health(con, "web_portals", [j("jobinsyria"), j("jobinsyria"), j("worklink")])
+    # next run: worklink brings nothing (site changed) and jobinsyria still works
+    db.record_batch_health(con, "web_portals", [j("jobinsyria")])
+    con.execute("UPDATE source_health SET last_items_at='2026-01-01T00:00:00+00:00' WHERE source='worklink'")
+    for _ in range(3):
+        db.record_health(con, "SyMOAD", "telegram", 0, "ConnectTimeout: timed out")
+    db.record_health(con, "wazafne175", "telegram", 4)
+    rep = {r["source"]: r for r in db.health_report(con)}
+    assert rep["jobinsyria"]["status"] == "ok" and rep["jobinsyria"]["last_count"] == 1
+    assert rep["worklink"]["status"] == "stale" and rep["worklink"]["last_count"] == 0
+    assert rep["SyMOAD"]["status"] == "fail" and rep["SyMOAD"]["fail_streak"] == 3
+    assert rep["wazafne175"]["status"] == "ok"
+    db.record_health(con, "SyMOAD", "telegram", 2)  # recovers
+    assert {r["source"]: r for r in db.health_report(con)}["SyMOAD"]["status"] == "ok"
+
+
+def test_admin_health_endpoint_needs_token():
+    client = TestClient(api.app)
+    assert client.get("/api/admin/health").status_code == 403
+    r = client.get("/api/admin/health", headers={"X-Admin-Token": "test-token"})
+    assert r.status_code == 200 and "sources" in r.json()
+
+
+def test_health_alert_sends_once_a_day(monkeypatch):
+    from app import config, run
+    con = db.connect(":memory:")
+    db.record_health(con, "SyMOAD", "telegram", 0, "boom")
+    sent = []
+
+    class TG:
+        def call(self, method, **kw):
+            sent.append(kw["text"])
+
+    monkeypatch.setattr(config, "ADMIN_CHAT_ID", "123")
+    assert run.health_alert(con, TG()) is True
+    assert "وزارة التنمية الإدارية" in sent[0]
+    assert run.health_alert(con, TG()) is False and len(sent) == 1

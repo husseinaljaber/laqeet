@@ -85,6 +85,15 @@ CREATE TABLE IF NOT EXISTS employer_tokens (  -- self-service token so employers
     closed_at TEXT
 );
 CREATE INDEX IF NOT EXISTS employer_tokens_job ON employer_tokens(job_id);
+CREATE TABLE IF NOT EXISTS source_health (    -- one row per source: did the last runs bring anything?
+    source TEXT PRIMARY KEY,
+    kind TEXT,                    -- telegram | reliefweb | ingo_ats | web_portals | turkey_portals
+    last_run TEXT,
+    last_count INTEGER DEFAULT 0,
+    last_items_at TEXT,           -- last run that brought at least one post/job
+    last_error TEXT,
+    fail_streak INTEGER DEFAULT 0
+);
 CREATE VIRTUAL TABLE IF NOT EXISTS jobs_fts USING fts5(
     job_id UNINDEXED,
     title_text,
@@ -1111,6 +1120,61 @@ def prune_old(con: sqlite3.Connection, days: int = config.HISTORY_DAYS) -> int:
     delete_jobs(con, old_ids)
     con.execute("DELETE FROM posts WHERE date < ?", (cutoff,))
     return len(old_ids)
+
+
+# A Telegram channel only returns posts newer than the last one we read, so a quiet week is normal there.
+# Web portals and ATS boards return every open job on each run, so one empty day is already suspicious.
+STALE_DAYS = {"telegram": 7}
+STALE_DAYS_DEFAULT = 2
+
+
+def record_health(con: sqlite3.Connection, source: str, kind: str, count: int, error: str | None = None) -> None:
+    ts = now()
+    con.execute(
+        "INSERT INTO source_health (source, kind, last_run, last_count, last_items_at, last_error, fail_streak) "
+        "VALUES (?,?,?,?,?,?,?) ON CONFLICT(source) DO UPDATE SET kind=excluded.kind, last_run=excluded.last_run, "
+        "last_count=excluded.last_count, last_items_at=COALESCE(excluded.last_items_at, source_health.last_items_at), "
+        "last_error=excluded.last_error, fail_streak=CASE WHEN excluded.last_error IS NULL THEN 0 ELSE source_health.fail_streak + 1 END",
+        (source, kind, ts, count, ts if count > 0 else None, (error or None) and str(error)[:300], 1 if error else 0),
+    )
+
+
+def record_batch_health(con: sqlite3.Connection, kind: str, jobs: list, error: str | None = None) -> None:
+    """Per-source counts for one group of scrapers. A source seen before in this group that brought nothing now is
+    recorded with 0, so a scraper that broke quietly (site redesign, block) shows up as stale."""
+    counts: dict[str, int] = {}
+    for j in jobs:
+        counts[j.source] = counts.get(j.source, 0) + 1
+    known = {r["source"] for r in con.execute("SELECT source FROM source_health WHERE kind=?", (kind,))}
+    for src in known | set(counts):
+        record_health(con, src, kind, counts.get(src, 0), error)
+
+
+def health_report(con: sqlite3.Connection) -> list[dict]:
+    """Every source with a status: fail (errors 3 runs in a row), stale (nothing for too long), ok."""
+    now_dt = datetime.now(timezone.utc)
+    out = []
+    for r in con.execute("SELECT * FROM source_health ORDER BY source"):
+        days = STALE_DAYS.get(r["kind"], STALE_DAYS_DEFAULT)
+        last = r["last_items_at"]
+        quiet_days = None
+        if last:
+            quiet_days = (now_dt - datetime.fromisoformat(last.replace("Z", "+00:00"))).total_seconds() / 86400
+        if r["fail_streak"] >= 3:
+            status = "fail"
+        elif quiet_days is None or quiet_days >= days:
+            status = "stale"
+        else:
+            status = "ok"
+        out.append({
+            "source": r["source"], "kind": r["kind"],
+            "label": (config.CHANNELS.get(r["source"]) or {}).get("label") or config.SOURCE_LABEL.get(r["source"], r["source"]),
+            "status": status, "last_run": r["last_run"], "last_count": r["last_count"],
+            "last_items_at": last, "quiet_days": round(quiet_days, 1) if quiet_days is not None else None,
+            "last_error": r["last_error"], "fail_streak": r["fail_streak"],
+        })
+    order = {"fail": 0, "stale": 1, "ok": 2}
+    return sorted(out, key=lambda x: (order[x["status"]], x["source"]))
 
 
 def get_meta(con, key: str, default=None):

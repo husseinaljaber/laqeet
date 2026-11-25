@@ -12,6 +12,27 @@ from .collect import collect
 log = logging.getLogger("run")
 
 
+def health_alert(con, tg) -> bool:
+    """At most once a day, tell the admin on Telegram which sources failed or went quiet."""
+    if not config.ADMIN_CHAT_ID:
+        return False
+    today = time.strftime("%Y-%m-%d")
+    if db.get_meta(con, "health_alert_day") == today:
+        return False
+    bad = [r for r in db.health_report(con) if r["status"] != "ok"]
+    if not bad:
+        return False
+    lines = [f"⚠️ {len(bad)} مصدر بحاجة لنظرة:"]
+    for r in bad[:25]:
+        why = "أخطاء متتالية" if r["status"] == "fail" else (f"ما جاب شي من {r['quiet_days']:.0f} يوم" if r["quiet_days"] is not None else "ما جاب شي أبداً")
+        lines.append(f"• {r['label']}: {why}")
+    lines.append("التفاصيل: /admin.html")
+    tg.call("sendMessage", chat_id=config.ADMIN_CHAT_ID, text="\n".join(lines))
+    db.set_meta(con, "health_alert_day", today)
+    con.commit()
+    return True
+
+
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
     logging.getLogger("httpx").setLevel(logging.WARNING)
@@ -25,6 +46,7 @@ def main() -> None:
             log.info("collected: %s", collect())
             if tg:
                 log.info("alerts sent: %d", bot.notify(con, tg))
+                health_alert(con, tg)
         except Exception:
             log.exception("run failed; trying again next round")
         time.sleep(max(60, config.UPDATE_MINUTES * 60 - (time.time() - t0)))

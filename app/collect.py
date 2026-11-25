@@ -215,11 +215,13 @@ def collect(offline: bool = False, quick: bool = False, verify_limit: int | None
                 feed = [Post(**p) for p in json.loads(path.read_text())] if path.exists() else []
             else:
                 stop = int(db.get_meta(con, f"last:{channel}", 0))
+                err = None
                 try:
                     feed = list(read_channel(channel, client, stop, since, max_pages=max_pages, mtproto_reader=mtproto_reader))
                 except httpx.HTTPError as e:
                     log.warning("%s: %s", channel, e)
-                    feed = []
+                    feed, err = [], f"{type(e).__name__}: {e}"
+                db.record_health(con, channel, "telegram", len(feed), err)
             for post in sorted(feed, key=lambda p: p.id):  # oldest first, so first_seen follows posting order
                 posts += 1
                 new += store_post(con, post, client, resolve_client=resolve_client, resolve_cache=resolve_cache)
@@ -239,6 +241,7 @@ def collect(offline: bool = False, quick: bool = False, verify_limit: int | None
             ):
                 try:
                     batch = fn(resolve_client, cache=resolve_cache)
+                    db.record_batch_health(con, key, batch)
                     # Resolve external links BEFORE opening the SQLite write transaction so concurrent web requests never block.
                     ready = [
                         j
@@ -255,6 +258,8 @@ def collect(offline: bool = False, quick: bool = False, verify_limit: int | None
                     log.info("%s: %d jobs, %d new jobs", key, len(batch), new_count)
                 except Exception as e:
                     log.warning("%s collect failed: %s", key, e)
+                    db.record_health(con, key, "group", 0, f"{type(e).__name__}: {e}")
+                    con.commit()
             checks = verify_limit if verify_limit is not None else (150 if quick else 350)
             if checks > 0:
                 try:

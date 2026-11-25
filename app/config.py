@@ -128,6 +128,7 @@ ADMIN_TOKEN = os.getenv("ADMIN_TOKEN", "")              # protects /admin; empty
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")  # optional LLM extractor
 LLM_MODEL = os.getenv("LLM_MODEL", "claude-haiku-5-5")
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
+ADMIN_CHAT_ID = os.getenv("ADMIN_CHAT_ID", "")         # your Telegram chat id: daily note when sources break (optional)
 TG_API_ID = int(os.getenv("TG_API_ID") or 0)
 TG_API_HASH = os.getenv("TG_API_HASH", "")
 TG_STRING_SESSION = os.getenv("TG_STRING_SESSION", "")

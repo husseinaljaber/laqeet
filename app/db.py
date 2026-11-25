@@ -248,7 +248,7 @@ def _bootstrap_seed_if_empty(con: sqlite3.Connection, path) -> None:
         return
     try:
         if seed_path == jsonl_path:
-            jobs_buf, fts_buf, src_buf, key_buf, meta_buf = [], [], [], [], []
+            jobs_buf, fts_buf, src_buf, key_buf, meta_buf, tr_buf = [], [], [], [], [], []
             jobs_sql = ""
             has_fts = False
 
@@ -281,6 +281,7 @@ def _bootstrap_seed_if_empty(con: sqlite3.Connection, path) -> None:
             with gzip.open(seed_path, "rt", encoding="utf-8") as f:
                 header = json.loads(f.readline())
                 cols = header["jobs_cols"]
+                tr_cols = header.get("trainings_cols")
                 has_fts = bool(header.get("fts"))
                 jobs_sql = f"INSERT OR IGNORE INTO jobs ({','.join(cols)}) VALUES ({','.join('?' * len(cols))})"
                 for line in f:
@@ -304,12 +305,18 @@ def _bootstrap_seed_if_empty(con: sqlite3.Connection, path) -> None:
                             _flush_keys()
                     elif tag == "m":
                         meta_buf.append(val)
+                    elif tag == "t":
+                        tr_buf.append(val)
             _flush_jobs()
             _flush_fts()
             _flush_src()
             _flush_keys()
             if meta_buf:
                 con.executemany("INSERT OR REPLACE INTO meta (key, value) VALUES (?,?)", meta_buf)
+            if tr_buf and tr_cols:
+                from . import trainings as _tr
+                _tr.ensure_schema(con)
+                con.executemany(f"INSERT OR IGNORE INTO trainings ({','.join(tr_cols)}) VALUES ({','.join('?' * len(tr_cols))})", tr_buf)
             if not has_fts:
                 rebuild_fts(con)
             expire_past(con)

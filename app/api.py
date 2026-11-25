@@ -21,13 +21,14 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from . import config, db, direct_apply as da, search as sq, seo, spam
+from . import config, db, direct_apply as da, search as sq, seo, spam, trainings
 from . import taxonomy as tx
 from .arabic import soft_fold
 from .classify import CATEGORIES
 
 log = logging.getLogger("api")
 con = db.connect()
+trainings.ensure_schema(con)
 
 
 def _auto_collect_loop(stop: threading.Event) -> None:
@@ -629,7 +630,7 @@ def admin_decide(job_id: int, body: dict = Body(...), x_admin_token: str | None 
 
 
 # ------------------------------------------------------------------ anonymous usage counters
-_EVENT_PAGES = {"landing", "board", "job", "cv", "pulse", "scam", "employer", "sources"}
+_EVENT_PAGES = {"landing", "board", "job", "cv", "pulse", "scam", "employer", "sources", "trainings"}
 _EVENT_APPLY = {"whatsapp", "call", "site", "form", "email", "portal"}
 _event_limit = _RateLimit(300, 600)
 _BOT_UA = ("bot", "crawl", "spider", "slurp", "preview", "facebookexternalhit", "whatsapp", "telegram")
@@ -673,6 +674,15 @@ def admin_stats(days: int = Query(30, ge=1, le=365), x_admin_token: str | None =
     out = db.event_stats(con, days)
     out["source_labels"] = {k: config.SOURCE_LABEL.get(k, k) for k in
                             set(out["totals"].get("source", {})) | set(out["totals"].get("apply_src", {}))}
+    return out
+
+
+@app.get("/api/trainings")
+def list_trainings(q: str = "", kind: str = "", city: str = "", free: bool = False, online: bool = False,
+                   limit: int = Query(60, le=200)):
+    """«تدريبات ومنح»: courses, internships, scholarships and volunteering from the same channels as the jobs."""
+    out = trainings.search(con, q=q[:80], kind=kind, city=city, free=free, online=online, limit=limit)
+    out["kinds"] = [{"code": c, "label": l} for c, l in trainings.KINDS]
     return out
 
 
@@ -977,6 +987,7 @@ def job_page(job_id: int, request: Request):
     <div class="site-nav-links">
       <a class="site-nav-link is-active" href="/?view=jobs"><i data-ico="briefcase" data-ico-cls="ico-sm"></i><span>الوظائف</span></a>
       <a class="site-nav-link" href="/cv.html"><i data-ico="file-text" data-ico-cls="ico-sm"></i><span>سيرتي الذاتية</span></a>
+      <a class="site-nav-link" href="/trainings.html"><i data-ico="award" data-ico-cls="ico-sm"></i><span>تدريبات ومنح</span></a>
       <a class="site-nav-link" href="/pulse.html"><i data-ico="bar-chart" data-ico-cls="ico-sm"></i><span>نبض السوق</span></a>
       <a class="site-nav-link" href="/scam.html"><i data-ico="shield-check" data-ico-cls="ico-sm"></i><span>رادار النصب</span></a>
       <a class="site-nav-link" href="/employer.html"><i data-ico="megaphone" data-ico-cls="ico-sm"></i><span>انشر وظيفة</span></a>

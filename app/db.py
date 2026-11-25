@@ -1135,8 +1135,15 @@ def record_health(con: sqlite3.Connection, source: str, kind: str, count: int, e
         "VALUES (?,?,?,?,?,?,?) ON CONFLICT(source) DO UPDATE SET kind=excluded.kind, last_run=excluded.last_run, "
         "last_count=excluded.last_count, last_items_at=COALESCE(excluded.last_items_at, source_health.last_items_at), "
         "last_error=excluded.last_error, fail_streak=CASE WHEN excluded.last_error IS NULL THEN 0 ELSE source_health.fail_streak + 1 END",
-        (source, kind, ts, count, ts if count > 0 else None, (error or None) and str(error)[:300], 1 if error else 0),
+        # First sighting counts as the start of the quiet clock, so a source is only called stale after a full
+        # STALE_DAYS of tracking (not on day one just because nothing was new since the snapshot).
+        (source, kind, ts, count, ts if (count > 0 or not _health_known(con, source)) else None,
+         (error or None) and str(error)[:300], 1 if error else 0),
     )
+
+
+def _health_known(con: sqlite3.Connection, source: str) -> bool:
+    return con.execute("SELECT 1 FROM source_health WHERE source=?", (source,)).fetchone() is not None
 
 
 def record_batch_health(con: sqlite3.Connection, kind: str, jobs: list, error: str | None = None) -> None:

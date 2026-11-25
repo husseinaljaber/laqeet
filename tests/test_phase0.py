@@ -160,7 +160,8 @@ def test_admin_health_endpoint_needs_token():
 def test_health_alert_sends_once_a_day(monkeypatch):
     from app import config, run
     con = db.connect(":memory:")
-    db.record_health(con, "SyMOAD", "telegram", 0, "boom")
+    for _ in range(3):  # three failed runs in a row
+        db.record_health(con, "SyMOAD", "telegram", 0, "boom")
     sent = []
 
     class TG:
@@ -230,3 +231,9 @@ def test_llm_schema_builds_for_structured_output():
     from app import llm
     schema = llm.LlmPost.model_json_schema()
     assert "jobs" in schema["properties"] and "is_job_ad" in schema["required"]
+
+
+def test_new_source_is_not_stale_on_its_first_quiet_run():
+    con = db.connect(":memory:")
+    db.record_health(con, "HIAST_Syria", "telegram", 0)
+    assert db.health_report(con)[0]["status"] == "ok"

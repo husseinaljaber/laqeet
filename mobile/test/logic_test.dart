@@ -187,6 +187,19 @@ void main() {
       expect(c.jobs, isEmpty);
     });
 
+    test('search sends smart=1 and keeps what was understood', () async {
+      final c = JobsController(session.repo);
+      await c.setQuery('محاسب بدمشق دوام جزئي');
+      expect(server.lastJobsQuery['smart'], '1');
+      expect(c.understood.map((u) => u.label), ['دمشق', 'دوام جزئي']);
+      expect(c.withoutSpan('بدمشق'), 'محاسب دوام جزئي');
+      await c.setQuery('محسب');
+      expect(c.corrected, 'محاسب');
+      await c.setQuery('');
+      expect(server.lastJobsQuery.containsKey('smart'), isFalse);
+      expect(c.understood, isEmpty);
+    });
+
     test('no network gives a clear Arabic message', () async {
       final broken = ApiClient(tokens: tokens, baseUrl: 'http://127.0.0.1:1');
       await expectLater(broken.get('/api/v1/config'),

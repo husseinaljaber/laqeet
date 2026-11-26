@@ -21,7 +21,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from . import config, db, direct_apply as da, search as sq, seo, spam
+from . import config, db, direct_apply as da, nlsearch as nls, search as sq, seo, spam
 from . import taxonomy as tx
 from .arabic import soft_fold
 from .classify import CATEGORIES
@@ -121,9 +121,21 @@ _LIGHT_COLS = (
 )
 
 
+# «دوام جزئي»، «من البيت»… from the plain-language search (app/nlsearch.py).
+_SHIFT_SQL = {
+    "part": "AND json_extract(data, '$.shift') LIKE '%جزئي%'",
+    "full": "AND json_extract(data, '$.shift') LIKE '%كامل%'",
+    "evening": "AND json_extract(data, '$.shift') LIKE '%مسائي%'",
+    "morning": "AND json_extract(data, '$.shift') LIKE '%صباحي%'",
+    "night": "AND json_extract(data, '$.shift') LIKE '%ليلي%'",
+    "remote": "AND json_extract(data, '$.tags') LIKE '%عن بعد%'",
+}
+
+
 def _query(edu=None, lower=False, field=None, sub=None, city=None, kind=None, q=None, official=None,
            expired=False, status="live", since_days=None, gender=None, country=None, sector=None, apply=None,
-           edu_group=None, source=None, exp=None, instant: bool = False, sort: str = "relevance", light: bool = False):
+           edu_group=None, source=None, exp=None, instant: bool = False, sort: str = "relevance", light: bool = False,
+           shift: str | None = None):
     has_q = bool(q and q.strip())
     cols = "*" if (has_q or not light) else _LIGHT_COLS
     if expired and status == "live":
@@ -186,6 +198,8 @@ def _query(edu=None, lower=False, field=None, sub=None, city=None, kind=None, q=
         sql.append("AND (cities LIKE ? OR " + " OR ".join(["cities LIKE ?"] * len(cs)) + ")")
         args.append(multi_city)
         args += [f"%|{c}|%" for c in cs]
+    if shift in _SHIFT_SQL:
+        sql.append(_SHIFT_SQL[shift])
     if gender in ("male", "female"):  # hide ads that are only for the other gender
         sql.append("AND (json_extract(data, '$.gender') IS NULL OR json_extract(data, '$.gender')=?)")
         args.append(gender)
@@ -266,12 +280,39 @@ def jobs(edu: str | None = None, lower: bool = False, field: str | None = None, 
          city: str | None = None, kind: str | None = None, q: str | None = None, official: bool | None = None,
          new: bool = False, expired: bool = False, gender: str | None = None, country: str | None = None,
          sector: str | None = None, apply: str | None = None, edu_group: str | None = None, source: str | None = None,
-         exp: str | None = None, instant: bool = False, sort: str = "relevance", limit: int = Query(40, le=200), offset: int = 0):
+         exp: str | None = None, instant: bool = False, sort: str = "relevance", limit: int = Query(40, le=200), offset: int = 0,
+         smart: bool = False, shift: str | None = None):
+    """Job search. With smart=1 the query is read like speech («محاسب بدمشق دوام جزئي»): places, degree, shift,
+    experience… become filters (returned as `understood` chips) and only the rest is searched as words. A query
+    that finds nothing because of a typo is retried with the suggested spelling (`corrected`)."""
+    understood: list[dict] = []
+    if smart and q and q.strip():
+        p = nls.parse(q)
+        understood = [c.as_dict() for c in p.chips]
+        q = p.text or None
+        if c := p.first("country"):
+            country = c
+        if cities := p.get("city"):
+            city = ",".join(cities)
+        elif p.first("country"):
+            city = None  # a country without a city: don't keep cities from the other country
+        if e := p.first("edu"):
+            edu, lower = e, True
+        if v := p.first("sector"):
+            sector = v
+        if v := p.first("gender"):
+            gender = v
+        if v := p.first("shift"):
+            shift = v
+        if (v := p.first("exp")) is not None:
+            exp = nls.exp_codes(v)
+        if p.first("new"):
+            new = True
     q_clean = (q or "").strip() or None
     sort_mode = "recent" if sort == "recent" else "relevance"
     base = _query(edu, lower, None, None, city, kind, q_clean, official, expired, since_days=1 if new else None,
                   gender=gender, country=country, sector=None, apply=apply, edu_group=edu_group, source=source,
-                  exp=exp, instant=instant, sort=sort_mode, light=(q_clean is None))
+                  exp=exp, instant=instant, sort=sort_mode, light=(q_clean is None), shift=shift)
     hl_terms: list[str] = []
     if q_clean:
         for g in sq.expand_query_groups(q_clean):
@@ -300,7 +341,16 @@ def jobs(edu: str | None = None, lower: bool = False, field: str | None = None, 
             ).fetchall()
         }
         page_rows = [full_map[jid] for jid in ids if jid in full_map]
+    if smart and suggestion and not rows:
+        retry = jobs(edu=edu, lower=lower, field=field, sub=sub, city=city, kind=kind, q=suggestion, official=official,
+                     new=new, expired=expired, gender=gender, country=country, sector=sector, apply=apply,
+                     edu_group=edu_group, source=source, exp=exp, instant=instant, sort=sort, limit=limit,
+                     offset=offset, smart=False, shift=shift)
+        if retry["total"]:
+            retry["understood"], retry["corrected"] = understood, suggestion
+            return retry
     return {"total": len(rows), "jobs": [db.row_to_dict(con, r) for r in page_rows],
+            "understood": understood, "corrected": None,
             "terms": hl_terms,
             "suggestion": suggestion,
             "facets": {"field": [{"code": f, "label": tx.FIELD_LABEL.get(f, f), "count": n} for f, n in fields.most_common()],
@@ -965,8 +1015,8 @@ def job_page(job_id: int, request: Request):
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Alexandria:wght@700;800&family=IBM+Plex+Sans+Arabic:wght@400;700&display=swap">
-<link rel="stylesheet" href="/app.css?v=42"><link rel="stylesheet" href="/page.css?v=42">
-<script src="/ui.js?v=42"></script>
+<link rel="stylesheet" href="/app.css?v=43"><link rel="stylesheet" href="/page.css?v=43">
+<script src="/ui.js?v=43"></script>
 </head><body>
 <nav class="site-nav" aria-label="التنقل الرئيسي">
   <div class="inner site-nav-inner">

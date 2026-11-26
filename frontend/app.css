@@ -348,6 +348,9 @@ select[hidden]{display:none!important}
 .suggest-meta{font-size:.75rem;color:var(--muted);white-space:nowrap}
 .typo-banner{background:var(--accent-soft);border:1px solid var(--accent);border-radius:12px;padding:10px 14px;display:flex;align-items:center;flex-wrap:wrap;gap:8px;font-size:.92rem}
 .typo-banner[hidden]{display:none}
+.nl-chip{display:inline-flex;align-items:center;gap:4px;background:var(--surface);border:1px solid var(--line-strong);border-radius:999px;padding:2px 4px 2px 10px;font-weight:700}
+.nl-chip-x{all:unset;cursor:pointer;width:22px;height:22px;display:inline-grid;place-items:center;border-radius:50%;color:var(--muted);font-size:1.05rem}
+.nl-chip-x:hover,.nl-chip-x:focus-visible{background:var(--accent-soft);color:var(--accent);outline:2px solid var(--accent)}
 .typo-btn{all:unset;cursor:pointer;color:var(--accent);font-weight:700;text-decoration:underline}
 mark.hl{background:rgba(45,184,138,.26);color:inherit;padding:0 3px;border-radius:4px}
 

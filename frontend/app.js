@@ -1682,7 +1682,7 @@
     if (state.city) p.set('city', state.city);
     if (state.field) p.set('field', state.field);
     if (state.sub) p.set('sub', state.sub);
-    if (state.q) p.set('q', state.q);
+    if (state.q) { p.set('q', state.q); p.set('smart', '1'); } // «محاسب بدمشق دوام جزئي» → words + filters
     if (state.sort && state.sort !== 'relevance' && state.sort !== 'fit') p.set('sort', state.sort);
     if (state.fresh) p.set('new', 'true');
     if (state.instant) p.set('instant', 'true');
@@ -2100,7 +2100,32 @@
 
     const banner = $('typoBanner');
     if (banner) {
-      if (data.suggestion && !append) {
+      const understood = data.understood || [];
+      if (!append && (understood.length || data.corrected)) {
+        // What the search understood from the words, each removable (drops those words from the query).
+        banner.hidden = false;
+        const parts = [];
+        if (data.corrected) {
+          parts.push(el('span', null, 'ما لقينا شي بهالكتابة، فرجيناك نتائج '), el('b', null, `«${data.corrected}»`));
+        }
+        if (understood.length) {
+          parts.push(el('span', null, data.corrected ? ' · فهمنا: ' : 'فهمنا من بحثك: '));
+          for (const u of understood) {
+            parts.push(el('span', { class: 'nl-chip' }, u.label,
+              u.span ? el('button', {
+                type: 'button',
+                class: 'nl-chip-x',
+                'aria-label': `شيل «${u.label}» من البحث`,
+                onclick: () => {
+                  state.q = state.q.replace(u.span, ' ').replace(/\s+/g, ' ').trim();
+                  syncFilterUI();
+                  refresh();
+                }
+              }, '×') : null));
+          }
+        }
+        banner.replaceChildren(...parts);
+      } else if (data.suggestion && !append) {
         banner.hidden = false;
         banner.replaceChildren(
           el('span', null, 'هل تقصد: '),
@@ -2147,8 +2172,10 @@
     }
 
     const shown = Math.min(renderedIds.size, data.total);
-    const selCities = splitCsv(state.city);
-    const countryDefaultLabel = state.country === 'tr' ? 'في كل تركيا' : 'في كل سوريا';
+    const nlCities = (data.understood || []).filter((u) => u.kind === 'city').map((u) => u.label);
+    const selCities = nlCities.length ? nlCities : splitCsv(state.city);
+    const nlCountry = ((data.understood || []).find((u) => u.kind === 'country') || {}).value;
+    const countryDefaultLabel = (nlCountry || state.country) === 'tr' ? 'في كل تركيا' : 'في كل سوريا';
     const whereLabel = selCities.length ? `في ${selCities.join(' و ')}` : countryDefaultLabel;
     $('count').textContent = `${data.total} فرصة عمل مفتوحة ${whereLabel}` + (data.total > shown ? ` · معروض ${shown}` : '');
     if ($('boardOpenLabel')) {

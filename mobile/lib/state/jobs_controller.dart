@@ -63,6 +63,8 @@ class JobsController extends ChangeNotifier {
   bool loading = false;
   bool loadingMore = false;
   String? error;
+  List<Understood> understood = const [];
+  String? corrected;
   int _generation = 0;
 
   JobFilters get filters => _filters;
@@ -73,6 +75,9 @@ class JobsController extends ChangeNotifier {
     _filters = f;
     return reload();
   }
+
+  /// Drop one understood piece («بدمشق») from the query and search again.
+  String withoutSpan(String span) => _query.replaceFirst(span, ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
 
   Future<void> setQuery(String q) {
     if (q.trim() == _query) return Future.value();
@@ -105,6 +110,8 @@ class JobsController extends ChangeNotifier {
         ..clear()
         ..addAll(page.jobs);
       total = page.total;
+      understood = page.understood;
+      corrected = page.corrected;
     } on ApiException catch (e) {
       if (gen != _generation) return;
       error = e.message;

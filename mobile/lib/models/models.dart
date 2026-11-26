@@ -192,15 +192,31 @@ class Job {
   }
 }
 
+/// One thing the search understood from the typed words («بدمشق» → city دمشق). [span] is the words it came from.
+class Understood {
+  const Understood({required this.kind, required this.label, required this.span});
+
+  final String kind;
+  final String label;
+  final String span;
+}
+
 class JobPage {
-  const JobPage({required this.total, required this.jobs});
+  const JobPage({required this.total, required this.jobs, this.understood = const [], this.corrected});
 
   final int total;
   final List<Job> jobs;
+  final List<Understood> understood;
+  final String? corrected; // the query had a typo; these are the results for this spelling
 
   factory JobPage.fromJson(Map<String, dynamic> j) => JobPage(
         total: _int(j['total']) ?? 0,
         jobs: (j['jobs'] as List? ?? const []).whereType<Map<String, dynamic>>().map(Job.fromJson).toList(),
+        understood: (j['understood'] as List? ?? const [])
+            .whereType<Map>()
+            .map((c) => Understood(kind: '${c['kind']}', label: '${c['label']}', span: '${c['span'] ?? ''}'))
+            .toList(),
+        corrected: j['corrected'] as String?,
       );
 }
 

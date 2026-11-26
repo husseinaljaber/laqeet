@@ -12,6 +12,7 @@ class FakeServer {
   int refreshCalls = 0;
   bool expireNextAccess = false;
   final requests = <String>[];
+  Map<String, String> lastJobsQuery = const {};
 
   static Map<String, dynamic> job(int id, {String edu = 'secondary', String title = 'محاسب'}) => {
         'id': id,
@@ -125,11 +126,19 @@ class FakeServer {
         });
       case ('GET', '/api/jobs'):
         final offset = int.parse(req.url.queryParameters['offset'] ?? '0');
-        final total = req.url.queryParameters['q'] == 'لاشي' ? 0 : 45;
+        final q = req.url.queryParameters['q'];
+        lastJobsQuery = req.url.queryParameters;
+        final total = q == 'لاشي' ? 0 : 45;
         final n = (total - offset).clamp(0, 20);
         return _json({
           'total': total,
           'jobs': [for (var i = 0; i < n; i++) job(offset + i + 1)],
+          // a tiny stand-in for the server's parser
+          'understood': [
+            if (q != null && q.contains('بدمشق')) {'kind': 'city', 'value': 'دمشق', 'label': 'دمشق', 'span': 'بدمشق'},
+            if (q != null && q.contains('دوام جزئي')) {'kind': 'shift', 'value': 'part', 'label': 'دوام جزئي', 'span': 'دوام جزئي'},
+          ],
+          'corrected': q == 'محسب' ? 'محاسب' : null,
         });
     }
     if (req.method == 'GET' && path.startsWith('/api/jobs/')) return _json(job(int.parse(path.split('/').last)));

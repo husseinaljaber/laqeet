@@ -105,6 +105,18 @@ void main() {
     await tapText(tester, 'تصفّح الوظائف بلا حساب');
     expect(find.text('محاسب 1'), findsOneWidget);
     expect(find.text('مناسبة إلك'), findsNothing);
+    // Plain-language search shows what it understood, and a chip can be removed.
+    await tester.enterText(find.byType(TextField).first, 'محاسب بدمشق دوام جزئي');
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.pumpAndSettle();
+    expect(find.text('دمشق'), findsOneWidget);
+    expect(find.text('دوام جزئي'), findsOneWidget);
+    await tester.tap(find.byTooltip('شيل «دمشق»'));
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.pumpAndSettle();
+    expect(server.lastJobsQuery['q'], 'محاسب دوام جزئي');
+    expect(find.text('دمشق'), findsNothing);
+
     await tester.tap(find.byTooltip('احفظ').first);
     await tester.pumpAndSettle();
     expect(find.text('عندي حساب'), findsOneWidget);

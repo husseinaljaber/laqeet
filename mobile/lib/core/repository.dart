@@ -79,6 +79,7 @@ class Repository {
         'sector': sector,
         'field': field,
         'sort': recent ? 'recent' : null,
+        'smart': query != null ? '1' : null, // read the words like speech: «محاسب بدمشق دوام جزئي»
         'offset': '$offset',
         'limit': '$limit',
       }) as Map<String, dynamic>);

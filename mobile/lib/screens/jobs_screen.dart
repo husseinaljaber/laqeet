@@ -110,7 +110,7 @@ class _JobsScreenState extends State<JobsScreen> {
                       onSubmitted: _c.setQuery,
                       textInputAction: TextInputAction.search,
                       decoration: InputDecoration(
-                        hintText: 'دوّر: محاسب، ممرضة، سائق…',
+                        hintText: 'احكي متل ما بدك: محاسب بدمشق دوام جزئي',
                         prefixIcon: const Icon(Icons.search),
                         suffixIcon: _search.text.isEmpty
                             ? null
@@ -146,6 +146,36 @@ class _JobsScreenState extends State<JobsScreen> {
                         ),
                       ]),
                     ),
+                    if (_c.understood.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      Semantics(
+                        container: true,
+                        label: 'فهمنا من بحثك',
+                        child: Wrap(spacing: 6, runSpacing: 6, children: [
+                          for (final u in _c.understood)
+                            InputChip(
+                              avatar: Icon(_kindIcon(u.kind), size: 16),
+                              label: Text(u.label),
+                              visualDensity: VisualDensity.compact,
+                              deleteButtonTooltipMessage: 'شيل «${u.label}»',
+                              onDeleted: u.span.isEmpty
+                                  ? null
+                                  : () {
+                                      final q = _c.withoutSpan(u.span);
+                                      _search.text = q;
+                                      _c.setQuery(q);
+                                    },
+                            ),
+                        ]),
+                      ),
+                    ],
+                    if (_c.corrected != null && !_c.loading) ...[
+                      const SizedBox(height: 8),
+                      Text.rich(TextSpan(children: [
+                        const TextSpan(text: 'ما لقينا شي بالكتابة هي، فرجيناك نتائج '),
+                        TextSpan(text: '«${_c.corrected}»', style: const TextStyle(fontWeight: FontWeight.w700)),
+                      ]), style: t.textTheme.bodySmall),
+                    ],
                     const SizedBox(height: 8),
                     if (!_c.loading && _c.error == null)
                       Text(
@@ -226,6 +256,17 @@ class _JobsScreenState extends State<JobsScreen> {
     ];
   }
 }
+
+IconData _kindIcon(String kind) => switch (kind) {
+      'city' || 'country' => Icons.place_outlined,
+      'edu' => Icons.school_outlined,
+      'shift' => Icons.schedule,
+      'exp' => Icons.timeline,
+      'sector' => Icons.apartment_outlined,
+      'gender' => Icons.person_outline,
+      'new' => Icons.fiber_new_outlined,
+      _ => Icons.label_outline,
+    };
 
 class _SkeletonCard extends StatelessWidget {
   const _SkeletonCard();

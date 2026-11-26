@@ -4,6 +4,7 @@ import 'package:material_ui/material_ui.dart';
 import 'models/models.dart';
 import 'screens/account/account_screen.dart';
 import 'screens/account/account_forms.dart';
+import 'screens/account/alerts_screen.dart';
 import 'screens/auth/forgot_screen.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/auth/register_screen.dart';
@@ -82,6 +83,7 @@ GoRouter buildRouter(Session session) {
         ),
         GoRoute(path: '/account/profile', builder: (_, _) => const ProfileSetupScreen(editing: true)),
         GoRoute(path: '/account/edit', builder: (_, _) => const EditNameScreen()),
+        GoRoute(path: '/account/alerts', builder: (_, _) => const AlertsScreen()),
         GoRoute(path: '/account/password', builder: (_, _) => const ChangePasswordScreen()),
         GoRoute(path: '/account/delete', builder: (_, _) => const DeleteAccountScreen()),
         StatefulShellRoute.indexedStack(

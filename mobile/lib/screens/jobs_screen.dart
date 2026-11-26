@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:go_router/go_router.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/format.dart';
 import '../models/models.dart';
@@ -26,6 +27,8 @@ class _JobsScreenState extends State<JobsScreen> {
   Timer? _debounce;
   bool _forMe = true;
   Profile? _profile;
+  bool _alertsPrompt = false;
+  static const _promptKey = 'laqeet.alertsPromptDismissed';
 
   bool get _canPersonalize => _session.user?.profile.complete ?? false;
 
@@ -38,6 +41,25 @@ class _JobsScreenState extends State<JobsScreen> {
     _session.addListener(_onSession);
     _profile = _session.user?.profile;
     _c.setFilters(_baseFilters());
+    _checkAlertsPrompt();
+  }
+
+  /// Logged in, nothing set up to reach them yet, and they haven't said «لا هلق»: offer alerts once.
+  Future<void> _checkAlertsPrompt() async {
+    if (!_session.loggedIn) return;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (prefs.getBool(_promptKey) ?? false) return;
+      final a = await _session.repo.alerts();
+      if (mounted && a.mode != 'off' && a.pushDevices == 0 && !a.telegramLinked) setState(() => _alertsPrompt = true);
+    } catch (_) {}
+  }
+
+  Future<void> _dismissPrompt() async {
+    setState(() => _alertsPrompt = false);
+    try {
+      await (await SharedPreferences.getInstance()).setBool(_promptKey, true);
+    } catch (_) {}
   }
 
   JobFilters _baseFilters() {
@@ -187,6 +209,37 @@ class _JobsScreenState extends State<JobsScreen> {
                   ]),
                 ),
               ),
+              if (_alertsPrompt)
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+                    child: Card(
+                      color: Theme.of(context).colorScheme.primaryContainer,
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
+                        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                          Row(children: [
+                            const Icon(Icons.notifications_active_outlined),
+                            const SizedBox(width: 10),
+                            Expanded(child: Text('بدك نخبرك أول ما تنزل وظيفة على قد شهادتك؟', style: t.textTheme.titleSmall)),
+                          ]),
+                          Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+                            TextButton(onPressed: _dismissPrompt, child: const Text('لا هلق')),
+                            const SizedBox(width: 4),
+                            FilledButton.tonal(
+                              style: FilledButton.styleFrom(minimumSize: const Size(0, 40)),
+                              onPressed: () {
+                                setState(() => _alertsPrompt = false);
+                                context.push('/account/alerts');
+                              },
+                              child: const Text('شغّل التنبيهات'),
+                            ),
+                          ]),
+                        ]),
+                      ),
+                    ),
+                  ),
+                ),
               ..._body(context),
             ],
           ),

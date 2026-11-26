@@ -99,6 +99,23 @@ class Repository {
 
   Future<void> unsave(int jobId) => api.delete('/api/v1/me/jobs/$jobId');
 
+  // ------------------------------------------------------------ alerts
+  Future<AlertSettings> alerts() async =>
+      AlertSettings.fromJson(await api.get('/api/v1/me/alerts', auth: true) as Map<String, dynamic>);
+
+  Future<AlertSettings> saveAlerts({String? mode, int? dailyHour}) async => AlertSettings.fromJson(
+      await api.put('/api/v1/me/alerts', body: {'mode': ?mode, 'daily_hour': ?dailyHour}) as Map<String, dynamic>);
+
+  Future<void> addDevice(String token, String platform) =>
+      api.post('/api/v1/me/devices', body: {'token': token, 'platform': platform}, auth: true);
+
+  Future<void> removeDevice(String token) => api.post('/api/v1/me/devices/remove', body: {'token': token}, auth: true);
+
+  Future<String> telegramLink() async =>
+      ((await api.post('/api/v1/me/telegram/link', auth: true)) as Map<String, dynamic>)['url'] as String;
+
+  Future<void> unlinkTelegram() => api.delete('/api/v1/me/telegram');
+
   /// Anonymous counter (no account data): «قدّم» pressed, by method and source.
   Future<void> countApply(String method, String? source) async {
     try {

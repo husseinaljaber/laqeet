@@ -38,7 +38,12 @@ jobs:
       - name: Build APK
         env:
           APP_LINK_HOST: ${{ vars.APP_LINK_HOST }}  # the site's domain, so shared /j/ links open the app
-        run: flutter build apk --release --dart-define=API_BASE=${{ vars.API_BASE }} --dart-define=APP_VERSION=1.0.0
+        # Phone notifications: the Firebase app's public settings (Firebase console → Project settings → Your apps).
+        # Leave the variables empty and the app builds without notifications (alerts still work on Telegram).
+        run: >-
+          flutter build apk --release --dart-define=API_BASE=${{ vars.API_BASE }} --dart-define=APP_VERSION=1.0.0
+          --dart-define=FIREBASE_API_KEY=${{ vars.FIREBASE_API_KEY }} --dart-define=FIREBASE_APP_ID=${{ vars.FIREBASE_APP_ID }}
+          --dart-define=FIREBASE_SENDER_ID=${{ vars.FIREBASE_SENDER_ID }} --dart-define=FIREBASE_PROJECT_ID=${{ vars.FIREBASE_PROJECT_ID }}
       - name: Build web (served by the site at /app)
         run: flutter build web --release --base-href /app/ --no-web-resources-cdn
       - uses: actions/upload-artifact@v4

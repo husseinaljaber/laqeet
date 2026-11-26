@@ -64,6 +64,13 @@ class AccountScreen extends StatelessWidget {
             onTap: () => context.push('/account/profile'),
           ),
           ListTile(
+            leading: const Icon(Icons.notifications_outlined),
+            title: const Text('التنبيهات'),
+            subtitle: const Text('خبّرني بالوظائف الجديدة'),
+            trailing: const Icon(Icons.chevron_left),
+            onTap: () => context.push('/account/alerts'),
+          ),
+          ListTile(
             leading: const Icon(Icons.badge_outlined),
             title: const Text('الاسم والجنس'),
             trailing: const Icon(Icons.chevron_left),

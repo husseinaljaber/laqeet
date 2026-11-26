@@ -13,6 +13,9 @@ class FakeServer {
   bool expireNextAccess = false;
   final requests = <String>[];
   Map<String, String> lastJobsQuery = const {};
+  Map<String, dynamic> alerts = {'mode': 'daily', 'daily_hour': 19, 'hours': [8, 12, 16, 19, 21],
+      'telegram_linked': false, 'telegram_available': true, 'push_devices': 0};
+  final devices = <String>{};
 
   static Map<String, dynamic> job(int id, {String edu = 'secondary', String title = 'محاسب'}) => {
         'id': id,
@@ -118,6 +121,18 @@ class FakeServer {
           if (body[k] != null) u[k] = body[k];
         }
         return _json(u);
+      case ('GET', '/api/v1/me/alerts'):
+        return _json({...alerts, 'push_devices': devices.length});
+      case ('PUT', '/api/v1/me/alerts'):
+        if (body['mode'] != null) alerts['mode'] = body['mode'];
+        if (body['daily_hour'] != null) alerts['daily_hour'] = body['daily_hour'];
+        return _json({...alerts, 'push_devices': devices.length});
+      case ('POST', '/api/v1/me/devices'):
+        devices.add(body['token'] as String);
+        return _json({'ok': true});
+      case ('POST', '/api/v1/me/devices/remove'):
+        devices.remove(body['token']);
+        return _json({'ok': true});
       case ('GET', '/api/v1/me/jobs'):
         return _json({
           'items': [

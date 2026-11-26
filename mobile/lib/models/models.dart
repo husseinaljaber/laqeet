@@ -283,3 +283,31 @@ class AppConfig {
     );
   }
 }
+
+/// How and when job alerts arrive.
+class AlertSettings {
+  const AlertSettings({
+    required this.mode,
+    required this.dailyHour,
+    required this.hours,
+    required this.telegramLinked,
+    required this.telegramAvailable,
+    required this.pushDevices,
+  });
+
+  final String mode; // daily | instant | off
+  final int dailyHour;
+  final List<int> hours;
+  final bool telegramLinked;
+  final bool telegramAvailable;
+  final int pushDevices;
+
+  factory AlertSettings.fromJson(Map<String, dynamic> j) => AlertSettings(
+        mode: j['mode'] as String? ?? 'daily',
+        dailyHour: _int(j['daily_hour']) ?? 19,
+        hours: (j['hours'] as List? ?? const [8, 12, 16, 19, 21]).map(_int).whereType<int>().toList(),
+        telegramLinked: j['telegram_linked'] == true,
+        telegramAvailable: j['telegram_available'] == true,
+        pushDevices: _int(j['push_devices']) ?? 0,
+      );
+}

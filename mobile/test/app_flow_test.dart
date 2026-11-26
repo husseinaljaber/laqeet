@@ -7,18 +7,20 @@ import 'package:laqeet/state/session.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'fake_push.dart';
 import 'fake_server.dart';
 
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
-  Future<(FakeServer, Session)> boot(WidgetTester tester) async {
+  Future<(FakeServer, Session)> boot(WidgetTester tester, {FakePush? push}) async {
     tester.view.physicalSize = const Size(1080, 2400);
     tester.view.devicePixelRatio = 2.5;
     addTearDown(tester.view.reset);
     final server = FakeServer();
     final tokens = MemoryTokenStore();
-    final session = Session(repo: Repository(ApiClient(tokens: tokens, httpClient: server.client, baseUrl: 'http://x')), tokens: tokens);
+    final session = Session(
+        repo: Repository(ApiClient(tokens: tokens, httpClient: server.client, baseUrl: 'http://x')), tokens: tokens, push: push);
     await tester.pumpWidget(LaqeetApp(session: session, theme: ThemeController()));
     await session.start();
     await tester.pumpAndSettle();
@@ -26,6 +28,10 @@ void main() {
   }
 
   Future<void> tapText(WidgetTester tester, String text) async {
+    if (find.text(text).evaluate().isEmpty) {
+      // further down a long list: scroll until it is built
+      await tester.scrollUntilVisible(find.text(text), 200, scrollable: find.byType(Scrollable).last);
+    }
     final f = find.text(text).last;
     await tester.ensureVisible(f);
     await tester.pumpAndSettle();
@@ -132,6 +138,52 @@ void main() {
     expect(find.text('محاسب 7'), findsOneWidget);
     expect(find.text('قدّم عالواتساب (الرسالة جاهزة)'), findsOneWidget);
     expect(server.requests, contains('GET /api/jobs/7'));
+  });
+
+  testWidgets('alerts: prompt on the jobs list, turn on notifications, a tapped notification opens the job', (tester) async {
+    final push = FakePush();
+    final (server, session) = await boot(tester, push: push);
+    server.users['a@b.co'] = {
+      'password': 'Right-pass1',
+      'public': {'id': 1, 'email': 'a@b.co', 'first_name': 'a', 'last_name': 'b', 'gender': 'male', 'email_verified': true, 'profile': {'education': 'bachelor'}},
+    };
+    await session.login('a@b.co', 'Right-pass1');
+    await tester.pumpAndSettle();
+    expect(find.text('بدك نخبرك أول ما تنزل وظيفة على قد شهادتك؟'), findsOneWidget);
+    await tapText(tester, 'شغّل التنبيهات');
+    expect(find.text('كيف بدك نخبرك؟'), findsOneWidget);
+    await tapText(tester, '٨ الصبح');
+    expect(server.alerts['daily_hour'], 8);
+    await tapText(tester, 'شغّل الإشعارات');
+    expect(server.devices, {push.token});
+    expect(find.text('شغّالة على هالجهاز.'), findsOneWidget);
+    await tapText(tester, 'فوراً');
+    expect(server.alerts['mode'], 'instant');
+
+    push.opened.add('/job/12');
+    await tester.pumpAndSettle();
+    expect(find.text('محاسب 12'), findsOneWidget);
+
+    await session.logout(); // this phone stops getting the account's alerts
+    expect(server.devices, isEmpty);
+  });
+
+  testWidgets('alerts: refused permission explains how to turn it on', (tester) async {
+    final push = FakePush(allow: false);
+    final (server, session) = await boot(tester, push: push);
+    server.users['a@b.co'] = {
+      'password': 'Right-pass1',
+      'public': {'id': 1, 'email': 'a@b.co', 'first_name': 'a', 'last_name': 'b', 'gender': 'male', 'email_verified': true, 'profile': {'education': 'bachelor'}},
+    };
+    await session.login('a@b.co', 'Right-pass1');
+    await tester.pumpAndSettle();
+    await tapText(tester, 'لا هلق');
+    expect(find.text('بدك نخبرك أول ما تنزل وظيفة على قد شهادتك؟'), findsNothing);
+    await tapText(tester, 'حسابي');
+    await tapText(tester, 'التنبيهات');
+    await tapText(tester, 'شغّل الإشعارات');
+    expect(find.textContaining('الإشعارات مسكّرة'), findsOneWidget);
+    expect(server.devices, isEmpty);
   });
 
   testWidgets('wrong password shows the server message', (tester) async {

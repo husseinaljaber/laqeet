@@ -2,6 +2,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/api_client.dart';
+import '../core/push.dart';
 import '../core/repository.dart';
 import '../core/token_store.dart';
 import '../models/models.dart';
@@ -10,12 +11,17 @@ enum SessionStatus { loading, guest, needsVerification, needsProfile, ready }
 
 /// Who is using the app and where they are in sign-up. Screens listen to this; the router redirects from it.
 class Session extends ChangeNotifier {
-  Session({required this.repo, required this.tokens}) {
+  Session({required this.repo, required this.tokens, PushService? push}) : push = push ?? NoPush() {
     repo.api.onSessionExpired = _expired;
+    this.push.tokenRefresh.listen((t) {
+      if (user != null) _sendDevice(t);
+    });
   }
 
   final Repository repo;
   final TokenStore tokens;
+  final PushService push;
+  String? _deviceToken;
 
   SessionStatus status = SessionStatus.loading;
   User? user;
@@ -41,6 +47,7 @@ class Session extends ChangeNotifier {
       try {
         user = await repo.me();
         await _loadSaved();
+        _syncDevice();
       } on ApiException catch (e) {
         if (e.isUnauthorized) {
           await tokens.clear();
@@ -60,6 +67,7 @@ class Session extends ChangeNotifier {
     user = User.fromJson(s['user'] as Map<String, dynamic>);
     await _loadSaved();
     _setStatus();
+    _syncDevice();
   }
 
   Future<void> login(String email, String password) async => _applySession(await repo.login(email, password));
@@ -102,7 +110,37 @@ class Session extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Turn on phone notifications: asks permission and tells the server this phone's token. False if refused.
+  Future<bool> enablePush() async {
+    final t = await push.enable();
+    if (t == null) return false;
+    await _sendDevice(t);
+    return true;
+  }
+
+  /// Permission was given before (on this phone): make sure the server knows the token for the current account.
+  Future<void> _syncDevice() async {
+    if (user == null || !push.available) return;
+    try {
+      final t = await push.currentToken();
+      if (t != null) await _sendDevice(t);
+    } catch (_) {}
+  }
+
+  Future<void> _sendDevice(String token) async {
+    _deviceToken = token;
+    try {
+      await repo.addDevice(token, push.platform);
+    } catch (_) {}
+  }
+
   Future<void> logout() async {
+    if (_deviceToken != null) {
+      try {
+        await repo.removeDevice(_deviceToken!); // this phone stops getting this account's alerts
+      } catch (_) {}
+      _deviceToken = null;
+    }
     final refresh = await tokens.refreshToken();
     if (refresh != null) {
       try {

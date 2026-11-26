@@ -299,3 +299,26 @@ def test_legal_pages_linked_from_the_app_exist():
         assert r.status_code == 200
         for text in must:
             assert text in r.text
+
+
+def test_brevo_api_is_used_when_configured(monkeypatch):
+    """Free Render blocks SMTP ports; codes go through Brevo's HTTPS API instead."""
+    import httpx
+    from app import config
+    sent = {}
+
+    def fake_post(url, json=None, timeout=None, headers=None):
+        sent.update(url=url, body=json, headers=headers)
+        return httpx.Response(201, json={"messageId": "x"})
+
+    monkeypatch.setattr(config, "BREVO_API_KEY", "k-123")
+    monkeypatch.setattr(config, "MAIL_FROM", "codes@example.com")
+    monkeypatch.setattr(httpx, "post", fake_post)
+    subject, text, html = mailer.code_email("<b>سارة</b>", "123456", "verify")
+    assert mailer.send("a@b.co", subject, text, html) is True
+    assert sent["url"] == mailer.BREVO_URL and sent["headers"]["api-key"] == "k-123"
+    assert sent["body"]["to"] == [{"email": "a@b.co"}] and sent["body"]["sender"]["email"] == "codes@example.com"
+    assert "123456" in sent["body"]["textContent"]
+    assert "<b>سارة</b>" not in sent["body"]["htmlContent"]  # the name is escaped in the HTML
+    monkeypatch.setattr(httpx, "post", lambda *a, **k: httpx.Response(401, text="bad key"))
+    assert mailer.send("a@b.co", subject, text, html) is False

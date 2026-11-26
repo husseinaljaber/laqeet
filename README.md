@@ -104,7 +104,10 @@ docker compose -f deploy/docker-compose.yml up -d --build
 
 **لازم قبل ما تفتح الحسابات للناس:**
 1. `SECRET_KEY` بـ `.env` (سطر طويل عشوائي: `python -c "import secrets;print(secrets.token_urlsafe(48))"`). إذا تغيّر، كل الناس بيطلعوا من حساباتهن.
-2. إعدادات الإيميل `SMTP_HOST/SMTP_PORT/SMTP_USER/SMTP_PASSWORD/MAIL_FROM`. بلاها الأكواد بتنكتب بسجل السيرفر بس (وضع التطوير).
+2. **الإيميل:**
+   - **على Render المجاني** حط `BREVO_API_KEY` و`MAIL_FROM`، من حساب Brevo مجاني (٣٠٠ إيميل باليوم). Render المجاني بيسكّر منافذ SMTP، فـ Gmail ما بيشتغل عليه.
+   - **على أي سيرفر تاني** بيشتغل كمان `SMTP_HOST/SMTP_PORT/SMTP_USER/SMTP_PASSWORD/MAIL_FROM`.
+   - بلا إعدادات الإيميل، الأكواد بتنكتب بسجل السيرفر بس.
 3. **تخزين دائم.** الحسابات ما بتعيش على Render المجاني (القرص بينمسح). لازم VPS مع volume أو قرص مدفوع.
 4. حط إيميل تواصل بصفحة `frontend/privacy.html`.
 

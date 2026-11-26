@@ -26,13 +26,8 @@ services:
         sync: false
       - key: FCM_SERVICE_ACCOUNT       # Firebase service-account JSON on one line (phone notifications)
         sync: false
-      - key: SMTP_HOST                 # e.g. smtp-relay.brevo.com or smtp.gmail.com (sign-up codes)
+      # Sign-up codes by email. Free Render blocks SMTP ports, so use Brevo's API (free 300/day):
+      - key: BREVO_API_KEY             # Brevo → SMTP & API → API keys
         sync: false
-      - key: SMTP_PORT
-        sync: false
-      - key: SMTP_USER
-        sync: false
-      - key: SMTP_PASSWORD
-        sync: false
-      - key: MAIL_FROM
+      - key: MAIL_FROM                 # a sender address verified in Brevo
         sync: false

@@ -137,6 +137,9 @@ SMTP_PORT = int(os.getenv("SMTP_PORT", 587))
 SMTP_USER = os.getenv("SMTP_USER", "")
 SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
 MAIL_FROM = os.getenv("MAIL_FROM", "")
+# Brevo's HTTPS email API (free: 300 emails a day). Use this on hosts that block SMTP ports, like free Render.
+# MAIL_FROM must be a sender verified in Brevo. When set, it is used instead of SMTP.
+BREVO_API_KEY = os.getenv("BREVO_API_KEY", "")
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")  # optional LLM extractor
 LLM_MODEL = os.getenv("LLM_MODEL", "claude-haiku-5-5")
 LLM_DAILY_LIMIT = int(os.getenv("LLM_DAILY_LIMIT", 300))  # most AI requests per day (only for posts the rules can't read)

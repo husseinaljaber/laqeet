@@ -16,3 +16,23 @@ services:
         value: "20"
       - key: AUTO_COLLECT
         value: "1"
+      # Signs logins. Render makes a random one once and keeps it (don't change it: everyone would be logged out).
+      - key: SECRET_KEY
+        generateValue: true
+      # Filled in the Render dashboard (Environment), never in git:
+      - key: TELEGRAM_BOT_TOKEN        # from @BotFather
+        sync: false
+      - key: TELEGRAM_BOT_USERNAME     # the bot's name without @
+        sync: false
+      - key: FCM_SERVICE_ACCOUNT       # Firebase service-account JSON on one line (phone notifications)
+        sync: false
+      - key: SMTP_HOST                 # e.g. smtp-relay.brevo.com or smtp.gmail.com (sign-up codes)
+        sync: false
+      - key: SMTP_PORT
+        sync: false
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASSWORD
+        sync: false
+      - key: MAIL_FROM
+        sync: false

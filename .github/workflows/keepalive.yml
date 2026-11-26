@@ -1,0 +1,19 @@
+name: Keep the site awake
+
+# Free Render services sleep after 15 minutes without visitors; while asleep, job alerts aren't sent and the
+# Telegram bot doesn't answer. A light request every 10 minutes keeps it up (free hours cover one service all month).
+# GitHub may run scheduled jobs a few minutes late; that's fine.
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Ping
+        run: curl -fsS --max-time 90 "${{ vars.SITE_URL || 'https://laqeet.onrender.com' }}/api/health" -o /dev/null || echo "site didn't answer (waking up or down)"

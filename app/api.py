@@ -44,6 +44,9 @@ def _send_alerts() -> None:
             res = alerts.run(c, tg=tg)
             if res["users"]:
                 log.info("alerts: %s", res)
+            if tg:  # people who set up alerts in the bot itself (no app account)
+                if sent := bot.notify(c, tg):
+                    log.info("bot alerts: %d", sent)
         finally:
             c.close()
     except Exception:
@@ -94,6 +97,13 @@ async def _lifespan(app: FastAPI):
     stop = threading.Event()
     if not os.getenv("PYTEST_CURRENT_TEST") and os.getenv("AUTO_COLLECT", "1") == "1":
         threading.Thread(target=_auto_collect_loop, args=(stop,), daemon=True, name="auto-collect").start()
+    # The Telegram bot answers people from the web process too, so one free server is enough. Turn off with
+    # BOT_IN_WEB=0 when `python -m app.run` (which starts its own) runs alongside: two pollers would clash.
+    if (not os.getenv("PYTEST_CURRENT_TEST") and config.TELEGRAM_BOT_TOKEN
+            and os.getenv("BOT_IN_WEB", "1") == "1"):
+        from . import bot
+        threading.Thread(target=bot.poll, args=(db.connect(), bot.Telegram(config.TELEGRAM_BOT_TOKEN)),
+                         daemon=True, name="telegram-bot").start()
     try:
         yield
     finally:

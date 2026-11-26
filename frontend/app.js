@@ -1669,6 +1669,8 @@
   }
 
   // ---------------------------------------------------------------- query params
+  const nlCountryOf = (data) => ((data.understood || []).find((u) => u.kind === 'country') || {}).value;
+
   function buildParams(limitOverride, offsetOverride) {
     const p = new URLSearchParams();
     p.set('country', state.country || 'sy');
@@ -2171,10 +2173,11 @@
       );
     }
 
+    if ($('trGuide')) $('trGuide').hidden = (nlCountryOf(data) || state.country) !== 'tr';
     const shown = Math.min(renderedIds.size, data.total);
     const nlCities = (data.understood || []).filter((u) => u.kind === 'city').map((u) => u.label);
     const selCities = nlCities.length ? nlCities : splitCsv(state.city);
-    const nlCountry = ((data.understood || []).find((u) => u.kind === 'country') || {}).value;
+    const nlCountry = nlCountryOf(data);
     const countryDefaultLabel = (nlCountry || state.country) === 'tr' ? 'في كل تركيا' : 'في كل سوريا';
     const whereLabel = selCities.length ? `في ${selCities.join(' و ')}` : countryDefaultLabel;
     $('count').textContent = `${data.total} فرصة عمل مفتوحة ${whereLabel}` + (data.total > shown ? ` · معروض ${shown}` : '');

@@ -199,6 +199,18 @@ class _Details extends StatelessWidget {
               Expanded(child: Text('انتبه: الشغل الحقيقي ما بيطلب منك مصاري لتتوظف. إذا حدا طلب رسوم أو تحويل، لا تدفع وبلّغ عن الإعلان.')),
             ]),
           ),
+          if (job.country == 'tr') ...[
+            const SizedBox(height: 12),
+            Card(
+              child: ListTile(
+                leading: const Icon(Icons.gavel_outlined),
+                title: const Text('سوري وبدك تشتغل بتركيا؟'),
+                subtitle: const Text('شو تغيّر بقواعد إذن العمل، وكيف تحمي حقك (التأمين SGK)'),
+                trailing: const Icon(Icons.open_in_new, size: 18),
+                onTap: () => launchUrl(Uri.parse('${s.repo.api.webBase}/turkey-work.html'), mode: LaunchMode.externalApplication),
+              ),
+            ),
+          ],
           if (job.sources.isNotEmpty) ...[
             const SizedBox(height: 20),
             Text('المصدر', style: t.textTheme.titleSmall),

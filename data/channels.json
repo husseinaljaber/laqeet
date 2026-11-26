@@ -492,5 +492,13 @@
     "kind": "formal",
     "official": false,
     "country": "sy"
+  },
+  "OnsurAds": {
+    "source": "onsur",
+    "label": "مؤسسة أنصر",
+    "kind": "formal",
+    "official": false,
+    "country": "sy",
+    "sector": "ngo"
   }
 }

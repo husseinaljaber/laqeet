@@ -122,7 +122,7 @@ def sitemap_xml(con, base: str) -> str:
     ).fetchall()
     urls = [(f"{base}/", today), (f"{base}/?view=jobs", today), (f"{base}/pulse.html", today),
             (f"{base}/scam.html", None), (f"{base}/cv.html", None), (f"{base}/employer.html", None),
-            (f"{base}/sources.html", today)]
+            (f"{base}/sources.html", today), (f"{base}/turkey-work.html", today)]
     urls += [(f"{base}/j/{r['id']}", (r["updated_at"] or "")[:10] or None) for r in rows]
     items = "".join(
         f"<url><loc>{xml_escape(u)}</loc>" + (f"<lastmod>{m}</lastmod>" if m else "") + "</url>" for u, m in urls

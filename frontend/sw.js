@@ -1,7 +1,7 @@
 /* Offline support: the app shell is cached; job lists come from the network, with the last copy as a fallback
    (useful on slow or cut connections). */
-const SHELL = 'laqeet-shell-v44', DATA = 'laqeet-data-v44';
-const FILES = ['./', 'index.html', 'app.css', 'ui.js', 'app.js', 'cv.html', 'page.css', 'pulse.html', 'employer.html', 'scam.html', 'sources.html', 'offline.html', 'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-192.png'];
+const SHELL = 'laqeet-shell-v45', DATA = 'laqeet-data-v45';
+const FILES = ['./', 'index.html', 'app.css', 'ui.js', 'app.js', 'cv.html', 'page.css', 'pulse.html', 'employer.html', 'scam.html', 'sources.html', 'turkey-work.html', 'offline.html', 'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-192.png'];
 
 // Keep only the newest API answers so the phone's storage doesn't fill up with every filter ever tried.
 const DATA_MAX = 40;

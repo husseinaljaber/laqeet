@@ -33,6 +33,23 @@ from . import accounts as _accounts  # noqa: E402
 _accounts.ensure_schema(con)
 
 
+def _send_alerts() -> None:
+    """App notifications (and Telegram digests for linked accounts). Runs after each round, and also between rounds so
+    daily summaries go out on time."""
+    from . import alerts, bot
+    try:
+        c = db.connect()
+        try:
+            tg = bot.Telegram(config.TELEGRAM_BOT_TOKEN) if config.TELEGRAM_BOT_TOKEN else None
+            res = alerts.run(c, tg=tg)
+            if res["users"]:
+                log.info("alerts: %s", res)
+        finally:
+            c.close()
+    except Exception:
+        log.exception("alerts failed")
+
+
 def _auto_collect_loop(stop: threading.Event) -> None:
     """Keep the database fresh even when `uvicorn app.api:app` is run on its own without `app.run`."""
     from .collect import collect
@@ -68,6 +85,7 @@ def _auto_collect_loop(stop: threading.Event) -> None:
                 wait = gap
         except Exception:
             log.exception("auto-collect failed")
+        _send_alerts()
         stop.wait(wait)
 
 

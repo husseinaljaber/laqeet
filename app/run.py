@@ -6,7 +6,7 @@ import logging
 import threading
 import time
 
-from . import bot, city_channels, config, db
+from . import alerts, bot, city_channels, config, db
 from .collect import collect
 
 log = logging.getLogger("run")
@@ -44,6 +44,7 @@ def main() -> None:
         t0 = time.time()
         try:
             log.info("collected: %s", collect())
+            log.info("app alerts: %s", alerts.run(con, tg=tg))
             if tg:
                 log.info("alerts sent: %d", bot.notify(con, tg))
                 if posted := city_channels.publish(con, tg):

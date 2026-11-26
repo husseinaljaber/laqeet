@@ -52,6 +52,8 @@ def export_data(con) -> dict:
         "meta": _rows(con, "SELECT * FROM meta"),
         "users": _rows(con, "SELECT * FROM users") if _has_table(con, "users") else [],
         "user_profiles": _rows(con, "SELECT * FROM user_profiles") if _has_table(con, "user_profiles") else [],
+        "user_alerts": _rows(con, "SELECT user_id, mode, daily_hour, created_at, updated_at FROM user_alerts")
+        if _has_table(con, "user_alerts") else [],
         "user_jobs": [dict(r, fp=fp_of.get(r["job_id"])) for r in _rows(con, "SELECT * FROM user_jobs")]
         if _has_table(con, "user_jobs") else [],
     }
@@ -140,6 +142,10 @@ def import_data(con, data: dict) -> dict:
                 cols = list(p)
                 con.execute(f"INSERT OR REPLACE INTO user_profiles ({','.join(cols)}) VALUES ({','.join('?' * len(cols))})",
                             [user_id_map[p["user_id"]] if c == "user_id" else p[c] for c in cols])
+        for a in data.get("user_alerts", []):
+            if a["user_id"] in user_id_map:
+                con.execute("INSERT OR REPLACE INTO user_alerts (user_id, mode, daily_hour, created_at, updated_at) VALUES (?,?,?,?,?)",
+                            (user_id_map[a["user_id"]], a["mode"], a["daily_hour"], a["created_at"], a["updated_at"]))
         for uj in data.get("user_jobs", []):
             jid = id_by_fp.get(uj.get("fp"))
             if jid is not None and uj["user_id"] in user_id_map:

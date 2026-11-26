@@ -113,7 +113,9 @@ class AccountError(Exception):
 
 # ---------------------------------------------------------------- storage helpers
 def ensure_schema(con: sqlite3.Connection) -> None:
+    from . import alerts
     con.executescript(SCHEMA)
+    alerts.ensure_schema(con)
     _load_secret(con)
 
 
@@ -543,7 +545,8 @@ def delete_account(con, user: sqlite3.Row, password: str) -> None:
     """Required by Google Play and the App Store: everything about the person goes, now."""
     if not verify_password(str(password or ""), user["password_hash"]):
         raise AccountError("كلمة السر غلط", status=401, field="password", code="bad_password")
-    for table in ("user_jobs", "user_profiles", "refresh_tokens", "email_codes"):
+    for table in ("user_jobs", "user_profiles", "refresh_tokens", "email_codes", "user_alerts", "push_devices",
+                  "alert_sent", "telegram_links", "telegram_link_codes"):
         con.execute(f"DELETE FROM {table} WHERE user_id=?", (user["id"],))
     con.execute("DELETE FROM users WHERE id=?", (user["id"],))
     con.commit()

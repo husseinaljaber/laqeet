@@ -67,7 +67,18 @@ def handle(con, tg: Telegram, update: dict) -> None:
     """One update from Telegram: a command or a button press."""
     if msg := update.get("message"):
         chat, text = msg["chat"]["id"], (msg.get("text") or "").strip()
+        if text.startswith("/start link_"):
+            from . import alerts
+            name = alerts.link_telegram(con, text.split("link_", 1)[1].strip(), chat)
+            tg.call("sendMessage", chat_id=chat, text=(
+                f"أهلين {name} 👋 ربطنا حسابك بلقيت.\nرح يوصلك هون نفس تنبيهات التطبيق، حسب شهادتك ومدنك.\n"
+                "لتغيّر الوقت أو توقفها: من التطبيق ← حسابي ← التنبيهات. أو ابعت /stop"
+                if name is not None else "هالرابط انتهى. افتح التطبيق ← حسابي ← التنبيهات واكبس «اربط التلغرام» من جديد."))
+            con.commit()
+            return
         if text.startswith("/stop"):
+            from . import alerts
+            alerts.unlink_telegram(con, chat_id=chat)
             con.execute("UPDATE bot_users SET active=0 WHERE chat_id=?", (chat,))
             tg.call("sendMessage", chat_id=chat, text="وقّفنا التنبيهات. إذا بدك ترجع ابعت /start")
         elif text.startswith(("/start", "/settings")):

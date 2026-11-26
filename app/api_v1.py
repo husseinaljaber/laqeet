@@ -43,7 +43,7 @@ def _limits():
     from .api import _RateLimit
     return {
         "register": _RateLimit(5, 3600), "login": _RateLimit(10, 600), "login_email": _RateLimit(8, 600),
-        "forgot": _RateLimit(5, 3600), "code": _RateLimit(20, 600),
+        "forgot": _RateLimit(5, 3600), "code": _RateLimit(20, 600), "tg_link": _RateLimit(10, 3600),
     }
 
 
@@ -162,6 +162,51 @@ def my_feed(limit: int = Query(30, le=100), offset: int = 0, user=Depends(curren
     prof = acc.profile_dict(con.execute("SELECT * FROM user_profiles WHERE user_id=?", (user["id"],)).fetchone())
     return list_jobs(edu=prof["education"], city=",".join(prof["cities"]) or None, country=prof["country"],
                      field=prof["field"] or None, limit=limit, offset=offset)
+
+
+# ---------------------------------------------------------------- alerts
+@router.get("/me/alerts")
+def my_alerts(user=Depends(current_user), con=Depends(get_con)):
+    from . import alerts
+    return alerts.get_settings(con, user["id"])
+
+
+@router.put("/me/alerts")
+def set_my_alerts(body: dict = Body(...), user=Depends(current_user), con=Depends(get_con)):
+    from . import alerts
+    hour = body.get("daily_hour")
+    return alerts.save_settings(con, user["id"], mode=body.get("mode"),
+                                daily_hour=int(hour) if str(hour or "").isdigit() else None)
+
+
+@router.post("/me/devices")
+def add_my_device(body: dict = Body(...), user=Depends(current_user), con=Depends(get_con)):
+    """The phone's notification token (Firebase). Sent after login and whenever Firebase renews it."""
+    from . import alerts
+    alerts.register_device(con, user["id"], body.get("token", ""), body.get("platform", ""))
+    return {"ok": True}
+
+
+@router.post("/me/devices/remove")
+def remove_my_device(body: dict = Body(...), user=Depends(current_user), con=Depends(get_con)):
+    """On logout: this phone stops getting this account's notifications."""
+    from . import alerts
+    alerts.remove_device(con, user["id"], body.get("token", ""))
+    return {"ok": True}
+
+
+@router.post("/me/telegram/link")
+def link_my_telegram(user=Depends(current_user), con=Depends(get_con)):
+    from . import alerts
+    _limit("tg_link", str(user["id"]))
+    return alerts.telegram_link_url(con, user["id"])
+
+
+@router.delete("/me/telegram")
+def unlink_my_telegram(user=Depends(current_user), con=Depends(get_con)):
+    from . import alerts
+    alerts.unlink_telegram(con, user_id=user["id"])
+    return {"ok": True}
 
 
 @router.get("/config")

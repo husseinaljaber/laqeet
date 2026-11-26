@@ -260,6 +260,8 @@ def test_backup_keeps_accounts_profiles_and_saved_jobs(tmp_path):
                      password="Heba-Pass-2026", accepted_terms=True)
     acc.save_profile(src, s["user"]["id"], {"education": "bachelor", "cities": ["دمشق"]})
     acc.set_job_stage(src, s["user"]["id"], jid, "applied")
+    from app import alerts
+    alerts.save_settings(src, s["user"]["id"], mode="instant", daily_hour=8)
     src.commit()
     path = tmp_path / "b.json.gz"
     backup.write_file(backup.export_data(src), path)
@@ -273,6 +275,7 @@ def test_backup_keeps_accounts_profiles_and_saved_jobs(tmp_path):
     assert dst.execute("SELECT education FROM user_profiles WHERE user_id=?", (u["id"],)).fetchone()[0] == "bachelor"
     saved = dst.execute("SELECT j.title FROM user_jobs uj JOIN jobs j ON j.id=uj.job_id WHERE uj.user_id=?", (u["id"],)).fetchone()
     assert saved[0] == "محاسب"
+    assert tuple(dst.execute("SELECT mode, daily_hour FROM user_alerts WHERE user_id=?", (u["id"],)).fetchone()) == ("instant", 8)
     backup.import_data(dst, backup.read_file(path))  # twice: no duplicates
     assert dst.execute("SELECT COUNT(*) FROM users").fetchone()[0] == 1
 

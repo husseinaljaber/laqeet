@@ -107,3 +107,31 @@ def test_typo_is_corrected_when_nothing_matches():
 def test_plain_search_unchanged_without_smart():
     d = client.get("/api/jobs", params={"q": "مترجم بدمشق"}).json()
     assert d["understood"] == []
+
+
+# ---------------------------------------------------------------- sharing (preview picture + app links)
+def test_shared_job_page_has_a_preview_picture():
+    jid = _IDS[0]
+    page = client.get(f"/j/{jid}").text
+    assert f'/j/{jid}/card.png"' in page and "summary_large_image" in page
+    r = client.get(f"/j/{jid}/card.png", follow_redirects=False)
+    if r.status_code == 200:
+        assert r.headers["content-type"] == "image/png" and r.content[:8] == b"\x89PNG\r\n\x1a\n"
+    else:  # no Arabic shaping on this machine: falls back to the logo
+        assert r.status_code == 302 and r.headers["location"].endswith("icon-512.png")
+    assert client.get("/j/999999999/card.png").status_code == 404
+
+
+def test_app_link_files_only_when_configured(monkeypatch):
+    from app import config
+    monkeypatch.setattr(config, "APP_SHA256", [])
+    monkeypatch.setattr(config, "TWA_PACKAGE", "")
+    monkeypatch.setattr(config, "APP_IOS_TEAM_ID", "")
+    assert client.get("/.well-known/assetlinks.json").status_code == 404
+    assert client.get("/.well-known/apple-app-site-association").status_code == 404
+    monkeypatch.setattr(config, "APP_SHA256", ["AA:BB"])
+    monkeypatch.setattr(config, "APP_IOS_TEAM_ID", "TEAM123")
+    links = client.get("/.well-known/assetlinks.json").json()
+    assert links[0]["target"] == {"namespace": "android_app", "package_name": "com.laqeet.app", "sha256_cert_fingerprints": ["AA:BB"]}
+    aasa = client.get("/.well-known/apple-app-site-association").json()
+    assert aasa["applinks"]["details"][0]["appIDs"] == ["TEAM123.com.laqeet.app"]

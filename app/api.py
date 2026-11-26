@@ -17,7 +17,7 @@ from datetime import date, datetime, timedelta, timezone
 from urllib.parse import quote
 
 from fastapi import Body, FastAPI, Header, HTTPException, Query, Request
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
 
@@ -872,12 +872,43 @@ def sitemap(request: Request):
 
 @app.get("/.well-known/assetlinks.json")
 def assetlinks():
-    """Digital Asset Links for the Play Store app (TWA). 404 until TWA_PACKAGE and TWA_SHA256 are set."""
-    if not (config.TWA_PACKAGE and config.TWA_SHA256):
+    """Android App Links: proves the app is ours so /j/<id> links open it directly. 404 until a key is configured."""
+    out = []
+    if config.APP_SHA256:
+        out.append({"relation": ["delegate_permission/common.handle_all_urls"],
+                    "target": {"namespace": "android_app", "package_name": config.APP_ANDROID_PACKAGE,
+                               "sha256_cert_fingerprints": config.APP_SHA256}})
+    if config.TWA_PACKAGE and config.TWA_SHA256:
+        out.append({"relation": ["delegate_permission/common.handle_all_urls"],
+                    "target": {"namespace": "android_app", "package_name": config.TWA_PACKAGE,
+                               "sha256_cert_fingerprints": config.TWA_SHA256}})
+    if not out:
         raise HTTPException(404)
-    return [{"relation": ["delegate_permission/common.handle_all_urls"],
-             "target": {"namespace": "android_app", "package_name": config.TWA_PACKAGE,
-                        "sha256_cert_fingerprints": config.TWA_SHA256}}]
+    return out
+
+
+@app.get("/.well-known/apple-app-site-association")
+@app.get("/apple-app-site-association")
+def apple_app_site_association():
+    """iOS Universal Links for /j/<id>. 404 until APP_IOS_TEAM_ID is set."""
+    if not config.APP_IOS_TEAM_ID:
+        raise HTTPException(404)
+    app_id = f"{config.APP_IOS_TEAM_ID}.{config.APP_IOS_BUNDLE}"
+    return JSONResponse({"applinks": {"details": [{"appIDs": [app_id], "components": [{"/": "/j/*"}]}]}})
+
+
+@app.get("/j/{job_id}/card.png")
+def job_card_image(job_id: int, request: Request):
+    """The preview picture for a shared job (WhatsApp, Telegram, Facebook)."""
+    from . import share_card
+    row = con.execute("SELECT * FROM jobs WHERE id=?", (job_id,)).fetchone()
+    if not _is_public(row):
+        raise HTTPException(404)
+    host = seo.public_base(str(request.base_url)).split("://", 1)[-1]
+    png = share_card.render(db.row_to_dict(con, row), host)
+    if png is None:  # no Arabic text shaping on this machine: the plain logo is better than broken letters
+        return RedirectResponse("/icons/icon-512.png", status_code=302)
+    return Response(png, media_type="image/png", headers={"Cache-Control": "public, max-age=86400"})
 
 
 @app.get("/robots.txt")
@@ -998,6 +1029,11 @@ def job_page(job_id: int, request: Request):
     }
     trust_badge_html = trust_map.get(j.get("trust_tier") or "", "")
     pitch_default = email_body_ar if j.get("email") else wa_pitch_raw
+    # Once the app is on Google Play, phones without it are invited to install it (phones with it never see this
+    # page: the link opens the app directly).
+    app_banner = (f'<a class="app-banner" href="{e(config.APP_PLAY_URL)}" rel="noopener">'
+                  '<b>تطبيق لقيت</b><span>تنبيهات بالوظائف الجديدة على قد شهادتك · نزّله مجاناً</span></a>'
+                  if config.APP_PLAY_URL else "")
     return HTMLResponse(f"""<!doctype html>
 <html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>{e(j['title'])} · {e(config.SITE_NAME)}</title>
@@ -1007,9 +1043,13 @@ def job_page(job_id: int, request: Request):
 <meta property="og:title" content="{e(j['title'])} — {e(cities)}">
 <meta property="og:description" content="{e(og_desc)}">
 <meta property="og:url" content="{e(share_url)}">
+<meta property="og:image" content="{e(share_url)}/card.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="{e(j['title'])}">
 <link rel="canonical" href="{e(share_url)}">
 {robots_meta}
-<meta name="twitter:card" content="summary">
+<meta name="twitter:card" content="summary_large_image">
 {job_ld}
 <link rel="icon" href="/icons/icon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -1017,7 +1057,9 @@ def job_page(job_id: int, request: Request):
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Alexandria:wght@700;800&family=IBM+Plex+Sans+Arabic:wght@400;700&display=swap">
 <link rel="stylesheet" href="/app.css?v=43"><link rel="stylesheet" href="/page.css?v=43">
 <script src="/ui.js?v=43"></script>
+<style>.app-banner{{display:flex;flex-direction:column;gap:2px;padding:10px 16px;background:var(--accent-soft);border-bottom:1px solid var(--line);color:var(--ink);text-decoration:none;font-size:.9rem}}.app-banner b{{color:var(--accent)}}</style>
 </head><body>
+{app_banner}
 <nav class="site-nav" aria-label="التنقل الرئيسي">
   <div class="inner site-nav-inner">
     <a class="site-brand" href="/">

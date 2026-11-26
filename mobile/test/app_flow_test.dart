@@ -125,6 +125,15 @@ void main() {
     expect(find.text('أهلين فيك من جديد 👋'), findsOneWidget);
   });
 
+  testWidgets('a shared job link opened at startup lands on that job, not lost to the splash screen', (tester) async {
+    tester.binding.platformDispatcher.defaultRouteNameTestValue = '/j/7';
+    addTearDown(tester.binding.platformDispatcher.clearDefaultRouteNameTestValue);
+    final (server, _) = await boot(tester);
+    expect(find.text('محاسب 7'), findsOneWidget);
+    expect(find.text('قدّم عالواتساب (الرسالة جاهزة)'), findsOneWidget);
+    expect(server.requests, contains('GET /api/jobs/7'));
+  });
+
   testWidgets('wrong password shows the server message', (tester) async {
     final (server, _) = await boot(tester);
     server.users['a@b.co'] = {

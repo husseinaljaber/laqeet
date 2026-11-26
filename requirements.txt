@@ -6,3 +6,4 @@ pymupdf>=1.24
 telethon>=1.36
 pytest>=8
 anthropic>=2.14   # optional: only used when ANTHROPIC_API_KEY is set (app/llm.py)
+Pillow>=10       # share-card images for WhatsApp/Telegram previews (/j/<id>/card.png)

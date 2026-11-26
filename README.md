@@ -116,6 +116,8 @@ flutter run --dart-define=API_BASE=http://IP-جهازك:8000
 
 **نسخة الويب:** `cd mobile && flutter build web --release --base-href /app/ --no-web-resources-cdn` والسيرفر بيقدّمها على `/app` لحاله. (`--no-web-resources-cdn` مهم: بلاه المتصفح بيحمّل محرك الرسم من جوجل، وهاد ممكن يكون محجوب أو بطيء بسوريا.)
 
+**روابط المشاركة:** رابط أي وظيفة (`/j/123`) بيطلع معه صورة معاينة فيها العنوان والمدينة والشهادة (`/j/123/card.png`). وإذا التطبيق منزّل على الجهاز، الرابط بيفتحه مباشرة. لتشتغل هالشغلة: حط `APP_SHA256` بـ `.env` (بصمة مفتاح Google Play)، وحط متغير المستودع `APP_LINK_HOST` بالدومين قبل بناء الـ APK. للآيفون بدك `APP_IOS_TEAM_ID` وتفعيل Associated Domains من Xcode.
+
 **APK:** كل تعديل على `mobile/` بيبني APK على GitHub Actions (ملف `.github/workflows/mobile.yml`)، وبتلاقيه بـ «Artifacts» تبع التشغيل. حط متغير المستودع `API_BASE` بعنوان السيرفر الحقيقي. للنشر على Google Play لازم مفتاح توقيع خاص (upload keystore) بدل مفتاح التجربة. معرّف التطبيق `com.laqeet.app` وما بيتغيّر بعد أول نشر.
 
 ## الملفات

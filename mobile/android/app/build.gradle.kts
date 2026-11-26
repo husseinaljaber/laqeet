@@ -15,7 +15,6 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
         // The store identity: never change it after the first release.
         applicationId = "com.laqeet.app"
         // You can update the following values to match your application needs.
@@ -28,6 +27,9 @@ android {
         // flag during build.
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        // The site's domain: links to https://<domain>/j/<id> open the app. Set APP_LINK_HOST when building
+        // (the CI workflow passes the repository variable). Placeholder until the domain exists.
+        manifestPlaceholders["appLinkHost"] = System.getenv("APP_LINK_HOST") ?: "laqeet.invalid"
     }
 
     buildTypes {

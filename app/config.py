@@ -150,4 +150,11 @@ PUBLIC_URL = os.getenv("PUBLIC_URL", "http://localhost:8000")
 # Play Store app (Trusted Web Activity): the Android package name and its signing-key SHA-256 fingerprint(s),
 # comma-separated. Both set = /.well-known/assetlinks.json is served so the app opens the site full screen.
 TWA_PACKAGE = os.getenv("TWA_PACKAGE", "")
+# The Flutter app. Links to /j/<id> open it directly once these are set (Android: the SHA-256 of the Play signing key,
+# from Play Console → App integrity; iOS: the Apple Developer Team ID). Empty = the verification files return 404.
+APP_ANDROID_PACKAGE = os.getenv("APP_ANDROID_PACKAGE", "com.laqeet.app")
+APP_SHA256 = [x.strip() for x in os.getenv("APP_SHA256", "").split(",") if x.strip()]
+APP_IOS_TEAM_ID = os.getenv("APP_IOS_TEAM_ID", "")
+APP_IOS_BUNDLE = os.getenv("APP_IOS_BUNDLE", "com.laqeet.app")
+APP_PLAY_URL = os.getenv("APP_PLAY_URL", "")  # shown as «نزّل التطبيق» on shared job pages once published
 TWA_SHA256 = [x.strip() for x in os.getenv("TWA_SHA256", "").split(",") if x.strip()]

@@ -26,7 +26,7 @@ String? redirectFor(SessionStatus status, {required bool loggedIn, required Stri
     case SessionStatus.loading:
       return location == '/splash' ? null : '/splash';
     case SessionStatus.guest:
-      return _authRoutes.contains(location) || location.startsWith('/job/') ? null : '/welcome';
+      return _authRoutes.contains(location) || location.startsWith('/job/') || location.startsWith('/j/') ? null : '/welcome';
     case SessionStatus.needsVerification:
       return location == '/verify' ? null : '/verify';
     case SessionStatus.needsProfile:
@@ -39,12 +39,33 @@ String? redirectFor(SessionStatus status, {required bool loggedIn, required Stri
   }
 }
 
-GoRouter buildRouter(Session session) => GoRouter(
+/// A job link opened while the app was still starting: keep it and go there once ready, instead of losing it to
+/// the splash screen.
+class _PendingLink {
+  String? location;
+}
+
+GoRouter buildRouter(Session session) {
+  final pending = _PendingLink();
+  return GoRouter(
       initialLocation: '/splash',
       refreshListenable: session,
-      redirect: (context, state) =>
-          redirectFor(session.status, loggedIn: session.loggedIn, location: state.matchedLocation),
+      redirect: (context, state) {
+        final loc = state.matchedLocation;
+        final isJobLink = loc.startsWith('/j/') || loc.startsWith('/job/');
+        if (session.status == SessionStatus.loading && isJobLink) pending.location = loc;
+        if (loc == '/splash' &&
+            pending.location != null &&
+            (session.status == SessionStatus.ready || session.status == SessionStatus.guest)) {
+          final go = pending.location;
+          pending.location = null;
+          return go;
+        }
+        return redirectFor(session.status, loggedIn: session.loggedIn, location: loc);
+      },
       routes: [
+        // The website's share links (/j/123) land on the job screen.
+        GoRoute(path: '/j/:id', redirect: (_, s) => '/job/${s.pathParameters['id']}'),
         GoRoute(path: '/splash', builder: (_, _) => const SplashScreen()),
         GoRoute(path: '/welcome', builder: (_, _) => const WelcomeScreen()),
         GoRoute(path: '/login', builder: (_, _) => const LoginScreen()),
@@ -74,3 +95,4 @@ GoRouter buildRouter(Session session) => GoRouter(
       ],
       errorBuilder: (_, _) => const Scaffold(body: Center(child: Text('هالصفحة مو موجودة'))),
     );
+}

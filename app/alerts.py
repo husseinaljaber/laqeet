@@ -166,12 +166,28 @@ def unlink_telegram(con, user_id: int | None = None, chat_id: int | None = None)
 
 # ---------------------------------------------------------------- matching
 def matches(profile: sqlite3.Row | dict, job: dict) -> bool:
-    """The bot's rules (your level; your field if you chose one; your cities), plus the country."""
+    """Country, then degrees, fields and cities, each only if the person chose some (several allowed).
+    One degree follows the bot's rule (that level and the levels it usually covers); several = any of them."""
     from .bot import matches as bot_matches
     if (job.get("country") or "sy") != (profile["country"] or "sy"):
         return False
-    return bot_matches({"education": profile["education"], "field": profile["field"],
-                        "cities": (profile["cities"] or "").strip("|")}, job)
+    split = lambda v: [x for x in (v or "").split("|") if x]
+    keys = profile.keys() if hasattr(profile, "keys") else []
+    educations = split(profile["educations"]) if "educations" in keys else []
+    educations = educations or ([profile["education"]] if profile["education"] else [])
+    fields = split(profile["fields"]) if "fields" in keys else []
+    fields = fields or ([profile["field"]] if profile["field"] else [])
+    if len(educations) == 1:
+        if not bot_matches({"education": educations[0], "field": None, "cities": ""}, job):
+            return False
+    elif educations and job.get("education") and job["education"] not in educations:
+        return False
+    if fields and job.get("field") not in fields:
+        return False
+    cities = split(profile["cities"])
+    if cities and job.get("cities") and not set(cities) & set(job["cities"]):
+        return False
+    return True
 
 
 # ---------------------------------------------------------------- sending
@@ -254,10 +270,10 @@ def run(con, pusher: Pusher | None = None, tg=None, now: datetime | None = None)
     stats = {"users": 0, "push": 0, "telegram": 0, "jobs": 0}
     users = con.execute(
         """SELECT u.id AS user_id, u.created_at, a.mode, a.daily_hour, a.last_daily,
-                  p.education, p.field, p.country, p.cities
+                  p.education, p.field, p.country, p.cities, p.educations, p.fields
            FROM users u JOIN user_profiles p ON p.user_id=u.id
            LEFT JOIN user_alerts a ON a.user_id=u.id
-           WHERE u.email_verified_at IS NOT NULL AND p.education IS NOT NULL""").fetchall()
+           WHERE u.email_verified_at IS NOT NULL""").fetchall()
     for u in users:
         mode = u["mode"] or "daily"
         if mode == "off":

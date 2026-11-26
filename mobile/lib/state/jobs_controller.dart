@@ -17,11 +17,13 @@ class JobFilters {
   final bool recent;
 
   /// Filters taken from the person's profile: their level and below, their cities and field.
+  /// One degree: that level and below; several: any of them. Several fields and cities: any of them.
   factory JobFilters.fromProfile(Profile p) => JobFilters(
         country: p.country,
         city: p.cities.isEmpty ? null : p.cities.join(','),
-        education: p.education,
-        field: p.field,
+        education: p.educations.isEmpty ? null : p.educations.join(','),
+        lower: p.educations.length == 1,
+        field: p.fields.isEmpty ? null : p.fields.join(','),
       );
 
   int get activeCount => [city, education, sector, field].where((x) => x != null).length + (recent ? 1 : 0);
@@ -42,7 +44,7 @@ class JobFilters {
         country: country ?? this.country,
         city: clearCity ? null : (city ?? this.city),
         education: clearEducation ? null : (education ?? this.education),
-        lower: lower,
+        lower: education != null ? true : lower,
         sector: clearSector ? null : (sector ?? this.sector),
         field: clearField ? null : (field ?? this.field),
         recent: recent ?? this.recent,

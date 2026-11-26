@@ -70,11 +70,17 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('أهلين سارة!'), findsOneWidget);
-    await tapText(tester, 'فرجيني الوظائف');
-    expect(find.text('اختار شهادتك'), findsOneWidget);
+    // Several degrees and cities, nothing required.
     await tapText(tester, 'بكالوريا');
+    await tapText(tester, 'جامعة');
     await tapText(tester, 'دمشق');
+    await tapText(tester, 'حلب');
     await tapText(tester, 'فرجيني الوظائف');
+    final prof = server.users['sara@example.com']!['public']['profile'] as Map;
+    expect(prof['educations'], ['secondary', 'bachelor']);
+    expect(prof['cities'], ['دمشق', 'حلب']);
+    expect(server.lastJobsQuery['edu'], 'secondary,bachelor');
+    expect(server.lastJobsQuery['city'], 'دمشق,حلب');
 
     expect(session.status, SessionStatus.ready);
     expect(find.text('مناسبة إلك'), findsOneWidget);
@@ -115,13 +121,13 @@ void main() {
     await tester.enterText(find.byType(TextField).first, 'محاسب بدمشق دوام جزئي');
     await tester.pump(const Duration(milliseconds: 500));
     await tester.pumpAndSettle();
-    expect(find.text('دمشق'), findsOneWidget);
-    expect(find.text('دوام جزئي'), findsOneWidget);
+    expect(find.widgetWithText(InputChip, 'دمشق'), findsOneWidget);
+    expect(find.widgetWithText(InputChip, 'دوام جزئي'), findsOneWidget);
     await tester.tap(find.byTooltip('شيل «دمشق»'));
     await tester.pump(const Duration(milliseconds: 500));
     await tester.pumpAndSettle();
     expect(server.lastJobsQuery['q'], 'محاسب دوام جزئي');
-    expect(find.text('دمشق'), findsNothing);
+    expect(find.widgetWithText(InputChip, 'دمشق'), findsNothing);
 
     await tester.tap(find.byTooltip('احفظ').first);
     await tester.pumpAndSettle();
@@ -145,7 +151,7 @@ void main() {
     final (server, session) = await boot(tester, push: push);
     server.users['a@b.co'] = {
       'password': 'Right-pass1',
-      'public': {'id': 1, 'email': 'a@b.co', 'first_name': 'a', 'last_name': 'b', 'gender': 'male', 'email_verified': true, 'profile': {'education': 'bachelor'}},
+      'public': {'id': 1, 'email': 'a@b.co', 'first_name': 'a', 'last_name': 'b', 'gender': 'male', 'email_verified': true, 'profile': {'educations': ['bachelor'], 'complete': true}},
     };
     await session.login('a@b.co', 'Right-pass1');
     await tester.pumpAndSettle();
@@ -173,7 +179,7 @@ void main() {
     final (server, session) = await boot(tester, push: push);
     server.users['a@b.co'] = {
       'password': 'Right-pass1',
-      'public': {'id': 1, 'email': 'a@b.co', 'first_name': 'a', 'last_name': 'b', 'gender': 'male', 'email_verified': true, 'profile': {'education': 'bachelor'}},
+      'public': {'id': 1, 'email': 'a@b.co', 'first_name': 'a', 'last_name': 'b', 'gender': 'male', 'email_verified': true, 'profile': {'educations': ['bachelor'], 'complete': true}},
     };
     await session.login('a@b.co', 'Right-pass1');
     await tester.pumpAndSettle();
@@ -186,11 +192,36 @@ void main() {
     expect(server.devices, isEmpty);
   });
 
+  testWidgets('the questions can be skipped, and the app opens in light mode', (tester) async {
+    final (server, session) = await boot(tester);
+    final ctx = tester.element(find.byType(Scaffold).first);
+    expect(Theme.of(ctx).brightness, Brightness.light);
+    server.users['new@b.co'] = {
+      'password': 'Right-pass1',
+      'public': {'id': 2, 'email': 'new@b.co', 'first_name': 'هبة', 'last_name': 'b', 'gender': 'female', 'email_verified': true, 'profile': null},
+    };
+    await session.login('new@b.co', 'Right-pass1');
+    await tester.pumpAndSettle();
+    expect(find.text('أهلين هبة!'), findsOneWidget);
+    await tapText(tester, 'تخطّي');
+    expect(session.status, SessionStatus.ready);
+    expect(find.text('مناسبة إلك'), findsOneWidget);
+    expect(server.lastJobsQuery.containsKey('edu'), isFalse); // nothing picked: every degree
+  });
+
+  testWidgets('a job card shows when it was posted and the deadline', (tester) async {
+    await boot(tester);
+    await tapText(tester, 'تصفّح الوظائف بلا حساب');
+    expect(find.textContaining('نُشر'), findsWidgets);
+    expect(find.textContaining('آخر موعد'), findsWidgets);
+    expect(find.text('شركة الأمل'), findsWidgets);
+  });
+
   testWidgets('wrong password shows the server message', (tester) async {
     final (server, _) = await boot(tester);
     server.users['a@b.co'] = {
       'password': 'Right-pass1',
-      'public': {'id': 1, 'email': 'a@b.co', 'first_name': 'a', 'last_name': 'b', 'gender': 'male', 'email_verified': true, 'profile': {'education': 'bachelor'}},
+      'public': {'id': 1, 'email': 'a@b.co', 'first_name': 'a', 'last_name': 'b', 'gender': 'male', 'email_verified': true, 'profile': {'educations': ['bachelor'], 'complete': true}},
     };
     await tapText(tester, 'عندي حساب، سجّل دخول');
     await tester.enterText(find.byType(TextFormField).at(0), 'a@b.co');

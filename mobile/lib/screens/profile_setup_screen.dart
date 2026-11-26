@@ -7,7 +7,8 @@ import '../models/models.dart';
 import '../state/session.dart';
 import '../widgets/common.dart';
 
-/// Three questions that decide which jobs fit: education, field, where. Also used to edit them later.
+/// What decides «مناسبة إلك»: degrees, fields, where, experience. Everything optional, several of each allowed,
+/// and the whole thing can be skipped. Also used to edit them later from حسابي.
 class ProfileSetupScreen extends StatefulWidget {
   const ProfileSetupScreen({super.key, this.editing = false});
 
@@ -20,19 +21,20 @@ class ProfileSetupScreen extends StatefulWidget {
 class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
   late Profile _p = context.read<Session>().user?.profile ?? const Profile();
   bool _busy = false;
-  bool _tried = false;
   String? _error;
-  static const maxCities = 5;
+  static const maxCities = 10;
+  static const maxFields = 8;
 
-  Future<void> _save() async {
+  List<String> _toggle(List<String> list, String v, bool on) =>
+      on ? [...list, v] : list.where((x) => x != v).toList();
+
+  Future<void> _save({bool skip = false}) async {
     setState(() {
-      _tried = true;
+      _busy = true;
       _error = null;
     });
-    if (_p.education == null) return;
-    setState(() => _busy = true);
     try {
-      await context.read<Session>().saveProfile(_p);
+      await context.read<Session>().saveProfile(skip ? Profile(country: _p.country) : _p);
       if (!mounted) return;
       if (widget.editing) {
         toast(context, 'انحفظ ✓');
@@ -51,52 +53,57 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
     final cfg = s.config;
     final t = Theme.of(context);
     if (cfg == null) return const Scaffold(body: Center(child: CircularProgressIndicator()));
-    final cities = cfg.citiesByCountry[_p.country] ?? const [];
+    final cities = cfg.citiesByCountry[_p.country] ?? const <String>[];
+    final muted = TextStyle(color: t.colorScheme.onSurfaceVariant);
     return FormPage(
-      title: widget.editing ? 'شهادتي ومدينتي' : null,
+      title: widget.editing ? 'شهاداتي ومجالاتي ومدني' : null,
       children: [
         if (!widget.editing) ...[
-          Text('أهلين ${s.user?.firstName ?? ''}!', style: t.textTheme.headlineSmall),
+          Row(children: [
+            Expanded(child: Text('أهلين ${s.user?.firstName ?? ''}!', style: t.textTheme.headlineSmall)),
+            TextButton(onPressed: _busy ? null : () => _save(skip: true), child: const Text('تخطّي')),
+          ]),
           const SizedBox(height: 6),
-          Text('٣ أسئلة لنفرزلك الوظائف اللي بتناسبك. فيك تغيّرهن بأي وقت.',
-              style: TextStyle(color: t.colorScheme.onSurfaceVariant)),
+          Text('اختار شو بيناسبك لنفرزلك الوظائف. فيك تختار أكتر من وحدة بكل سؤال، أو تتركه فاضي، وفيك تغيّر بأي وقت.',
+              style: muted.copyWith(height: 1.6)),
           const SizedBox(height: 20),
         ],
         _Section(
           number: '١',
-          title: 'شو أعلى شهادة معك؟',
-          error: _tried && _p.education == null ? 'اختار شهادتك' : null,
+          title: 'شو الشهادات يلي معك؟',
+          hint: _p.educations.isEmpty ? 'ما اخترت شي: منفرجيك وظائف كل الشهادات.' : 'اخترت ${_p.educations.length}.',
           child: Wrap(spacing: 8, runSpacing: 8, children: [
             for (final o in cfg.education)
-              ChoiceChip(
+              FilterChip(
                 label: Text(o.label),
-                selected: _p.education == o.code,
-                onSelected: (_) => setState(() => _p = _p.copyWith(education: o.code)),
+                selected: _p.educations.contains(o.code),
+                onSelected: (on) => setState(() => _p = _p.copyWith(educations: _toggle(_p.educations, o.code, on))),
               ),
           ]),
         ),
         _Section(
           number: '٢',
-          title: 'بأي مجال؟',
-          hint: 'اختياري. إذا ما اخترت، منفرجيك كل المجالات.',
+          title: 'بأي مجالات بدك تشتغل؟',
+          hint: _p.fields.isEmpty ? 'ما اخترت شي: منفرجيك كل المجالات.' : 'لحد $maxFields مجالات.',
           child: Wrap(spacing: 8, runSpacing: 8, children: [
-            ChoiceChip(
-              label: const Text('كل المجالات'),
-              selected: _p.field == null,
-              onSelected: (_) => setState(() => _p = _p.copyWith(clearField: true)),
-            ),
             for (final o in cfg.fields)
-              ChoiceChip(
+              FilterChip(
                 label: Text(o.label),
-                selected: _p.field == o.code,
-                onSelected: (_) => setState(() => _p = _p.copyWith(field: o.code)),
+                selected: _p.fields.contains(o.code),
+                onSelected: (on) {
+                  if (on && _p.fields.length >= maxFields) {
+                    toast(context, 'لحد $maxFields مجالات بس');
+                    return;
+                  }
+                  setState(() => _p = _p.copyWith(fields: _toggle(_p.fields, o.code, on)));
+                },
               ),
           ]),
         ),
         _Section(
           number: '٣',
           title: 'وين بدك تشتغل؟',
-          hint: 'اختار لحد $maxCities مدن، أو اتركها فاضية لتشوف كل المدن.',
+          hint: _p.cities.isEmpty ? 'ما اخترت مدينة: منفرجيك كل المدن.' : 'لحد $maxCities مدن.',
           child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
             SegmentedButton<String>(
               segments: [for (final c in cfg.countries) ButtonSegment(value: c.code, label: Text(c.label))],
@@ -114,8 +121,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                       toast(context, 'لحد $maxCities مدن بس');
                       return;
                     }
-                    setState(() => _p = _p.copyWith(
-                        cities: on ? [..._p.cities, c] : _p.cities.where((x) => x != c).toList()));
+                    setState(() => _p = _p.copyWith(cities: _toggle(_p.cities, c, on)));
                   },
                 ),
             ]),
@@ -130,9 +136,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
               ChoiceChip(
                 label: Text(label),
                 selected: _p.experienceYears == years,
-                onSelected: (on) => setState(() => _p = on
-                    ? _p.copyWith(experienceYears: years)
-                    : _p.copyWith(clearExperience: true)),
+                onSelected: (on) => setState(() => _p = on ? _p.copyWith(experienceYears: years) : _p.copyWith(clearExperience: true)),
               ),
           ]),
         ),
@@ -145,12 +149,11 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
 }
 
 class _Section extends StatelessWidget {
-  const _Section({required this.number, required this.title, required this.child, this.hint, this.error});
+  const _Section({required this.number, required this.title, required this.child, this.hint});
 
   final String number;
   final String title;
   final String? hint;
-  final String? error;
   final Widget child;
 
   @override
@@ -175,11 +178,6 @@ class _Section extends StatelessWidget {
           ),
         const SizedBox(height: 12),
         child,
-        if (error != null)
-          Padding(
-            padding: const EdgeInsets.only(top: 8),
-            child: Text(error!, style: TextStyle(color: t.colorScheme.error, fontSize: 12)),
-          ),
       ]),
     );
   }

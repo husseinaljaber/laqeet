@@ -322,3 +322,37 @@ def test_brevo_api_is_used_when_configured(monkeypatch):
     assert "<b>سارة</b>" not in sent["body"]["htmlContent"]  # the name is escaped in the HTML
     monkeypatch.setattr(httpx, "post", lambda *a, **k: httpx.Response(401, text="bad key"))
     assert mailer.send("a@b.co", subject, text, html) is False
+
+
+def test_profile_takes_several_degrees_fields_and_cities_and_nothing_is_required():
+    email = "multi@example.com"
+    _cleanup(email)
+    s = _register(email).json()
+    h = _auth(s["access_token"])
+    assert s["user"]["profile"]["complete"] is False
+    skipped = client.patch("/api/v1/me", json={"profile": {}}, headers=h).json()["profile"]
+    assert skipped["complete"] is True and skipped["educations"] == [] and skipped["education"] is None  # «تخطّي»
+    many = client.patch("/api/v1/me", headers=h, json={"profile": {
+        "educations": ["bachelor", "secondary", "bachelor"], "fields": ["computer", "business"],
+        "cities": ["دمشق", "حلب", "حمص", "حماة", "طرطوس", "اللاذقية", "درعا"]}}).json()["profile"]
+    assert many["educations"] == ["secondary", "bachelor"] and many["education"] == "bachelor"  # highest
+    assert many["fields"] == ["computer", "business"] and many["field"] == "computer"
+    assert len(many["cities"]) == 7
+    bad = client.patch("/api/v1/me", headers=h, json={"profile": {"educations": ["bachelor", "x"]}})
+    assert bad.status_code == 400 and bad.json()["field"] == "education"
+    _cleanup(email)
+
+
+def test_alerts_match_any_of_several_choices():
+    from app import alerts
+    prof = {"country": "sy", "education": "bachelor", "field": "computer", "cities": "|دمشق|حلب|",
+            "educations": "|secondary|bachelor|", "fields": "|computer|business|"}
+    job = lambda **k: {"country": "sy", "education": "secondary", "field": "business", "cities": ["حلب"], **k}
+    assert alerts.matches(prof, job())
+    assert alerts.matches(prof, job(education=None, field="computer"))
+    assert not alerts.matches(prof, job(education="master"))
+    assert not alerts.matches(prof, job(field="health"))
+    assert not alerts.matches(prof, job(cities=["حمص"]))
+    assert not alerts.matches(prof, job(country="tr"))
+    nothing = {"country": "sy", "education": None, "field": None, "cities": "", "educations": "", "fields": ""}
+    assert alerts.matches(nothing, job(education="phd", field="health", cities=["درعا"]))  # skipped = everything

@@ -117,7 +117,7 @@ class FakeServer {
         return _json(_user(currentEmail!));
       case ('PATCH', '/api/v1/me'):
         final u = _user(currentEmail!);
-        if (body['profile'] != null) u['profile'] = body['profile'];
+        if (body['profile'] != null) u['profile'] = {...body['profile'] as Map<String, dynamic>, 'complete': true};
         for (final k in ['first_name', 'last_name', 'gender']) {
           if (body[k] != null) u[k] = body[k];
         }

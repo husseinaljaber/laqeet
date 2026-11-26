@@ -247,13 +247,13 @@ class Session extends ChangeNotifier {
 
 /// Light / dark / follow the phone, remembered on this device.
 class ThemeController extends ChangeNotifier {
-  ThemeMode mode = ThemeMode.system;
+  ThemeMode mode = ThemeMode.light; // the app opens light; people can switch to dark or follow the phone
   static const _key = 'laqeet.theme';
 
   Future<void> load() async {
     try {
       final v = (await SharedPreferences.getInstance()).getString(_key);
-      mode = ThemeMode.values.firstWhere((m) => m.name == v, orElse: () => ThemeMode.system);
+      mode = ThemeMode.values.firstWhere((m) => m.name == v, orElse: () => ThemeMode.light);
       notifyListeners();
     } catch (_) {}
   }

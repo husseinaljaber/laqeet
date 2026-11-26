@@ -72,3 +72,14 @@ bool isMobile(String phone) {
   return RegExp(r'^09\d{8}$').hasMatch(p) || RegExp(r'^\+?(963)?9\d{8}$').hasMatch(p) ||
       RegExp(r'^\+?905\d{9}$').hasMatch(p) || RegExp(r'^05\d{9}$').hasMatch(p);
 }
+
+const _monthsAr = ['كانون الثاني', 'شباط', 'آذار', 'نيسان', 'أيار', 'حزيران', 'تموز', 'آب', 'أيلول', 'تشرين الأول', 'تشرين الثاني', 'كانون الأول'];
+
+/// «2026-11-24…» → «24 تشرين الثاني» (the year only when it isn't this year).
+String dateAr(String? iso, {DateTime? now}) {
+  final t = iso == null ? null : DateTime.tryParse(iso);
+  if (t == null) return '';
+  final local = t.isUtc ? t.toLocal() : t;
+  final year = (now ?? DateTime.now()).year;
+  return '${local.day} ${_monthsAr[local.month - 1]}${local.year == year ? '' : ' ${local.year}'}';
+}

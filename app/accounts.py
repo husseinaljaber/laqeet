@@ -53,7 +53,9 @@ CREATE TABLE IF NOT EXISTS user_profiles (
     cities TEXT NOT NULL DEFAULT '',     -- |دمشق|حلب|
     experience_years INTEGER,
     birth_year INTEGER,
-    updated_at TEXT NOT NULL
+    updated_at TEXT NOT NULL,
+    educations TEXT NOT NULL DEFAULT '', -- |secondary|institute| every degree the person picked (education = highest)
+    fields TEXT NOT NULL DEFAULT ''      -- |business|computer| every field picked (field = first)
 );
 CREATE TABLE IF NOT EXISTS user_jobs (    -- saved jobs and where the application stands
     user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -115,6 +117,10 @@ class AccountError(Exception):
 def ensure_schema(con: sqlite3.Connection) -> None:
     from . import alerts
     con.executescript(SCHEMA)
+    have = {r[1] for r in con.execute("PRAGMA table_info(user_profiles)")}
+    for col in ("educations", "fields"):  # databases made before people could pick several
+        if col not in have:
+            con.execute(f"ALTER TABLE user_profiles ADD COLUMN {col} TEXT NOT NULL DEFAULT ''")
     alerts.ensure_schema(con)
     _load_secret(con)
 
@@ -295,14 +301,28 @@ def public_user(con, user: sqlite3.Row) -> dict:
     }
 
 
+MAX_CITIES = 10
+MAX_FIELDS = 8
+
+
+def _split(v: str | None) -> list[str]:
+    return [x for x in (v or "").split("|") if x]
+
+
 def profile_dict(prof: sqlite3.Row | None) -> dict:
+    """The profile as the app sees it. Every answer is optional: «complete» means the person went through the
+    questions (even skipping them), so they aren't asked again."""
     if not prof:
-        return {"education": None, "field": None, "country": "sy", "cities": [], "experience_years": None,
-                "birth_year": None, "complete": False}
-    return {"education": prof["education"], "field": prof["field"], "country": prof["country"],
-            "cities": [c for c in (prof["cities"] or "").split("|") if c],
+        return {"education": None, "educations": [], "field": None, "fields": [], "country": "sy", "cities": [],
+                "experience_years": None, "birth_year": None, "complete": False}
+    keys = prof.keys()
+    educations = _split(prof["educations"]) if "educations" in keys else []
+    fields = _split(prof["fields"]) if "fields" in keys else []
+    return {"education": prof["education"], "educations": educations or ([prof["education"]] if prof["education"] else []),
+            "field": prof["field"], "fields": fields or ([prof["field"]] if prof["field"] else []),
+            "country": prof["country"], "cities": _split(prof["cities"]),
             "experience_years": prof["experience_years"], "birth_year": prof["birth_year"],
-            "complete": bool(prof["education"])}
+            "complete": True}
 
 
 # ---------------------------------------------------------------- email codes
@@ -506,18 +526,29 @@ def update_user(con, user: sqlite3.Row, data: dict) -> dict:
 
 
 def save_profile(con, user_id: int, p: dict) -> None:
-    edu = p.get("education") or None
-    if edu is not None and edu not in tx.EDU_RANK:
+    """Degrees, fields and cities are lists (several allowed, all optional). The old single `education` / `field`
+    keys are still accepted from older app versions."""
+    def as_list(many, one):
+        v = p.get(many)
+        if v is None:
+            v = [p.get(one)] if p.get(one) else []
+        if not isinstance(v, list):
+            raise AccountError("قيمة غير صحيحة", field=many)
+        return list(dict.fromkeys(str(x) for x in v if x))
+    educations = as_list("educations", "education")
+    if any(e not in tx.EDU_RANK for e in educations):
         raise AccountError("اختار الشهادة من القائمة", field="education")
-    field = p.get("field") or None
-    if field is not None and field not in tx.FIELD_LABEL:
+    educations.sort(key=lambda e: tx.EDU_RANK[e])
+    fields = as_list("fields", "field")
+    if any(f not in tx.FIELD_LABEL for f in fields):
         raise AccountError("اختار المجال من القائمة", field="field")
+    fields = fields[:MAX_FIELDS]
     country = "tr" if p.get("country") == "tr" else "sy"
     allowed = tx.TR_CITIES if country == "tr" else tx.CITIES
     cities = [c for c in (p.get("cities") or []) if isinstance(c, str)]
     if any(c not in allowed for c in cities):
         raise AccountError("اختار المدينة من القائمة", field="cities")
-    cities = list(dict.fromkeys(cities))[:5]
+    cities = list(dict.fromkeys(cities))[:MAX_CITIES]
     exp = p.get("experience_years")
     if exp not in (None, ""):
         if not str(exp).isdigit() or not 0 <= int(exp) <= 50:
@@ -533,12 +564,16 @@ def save_profile(con, user_id: int, p: dict) -> None:
         born = int(born)
     else:
         born = None
+    pipe = lambda xs: "|" + "|".join(xs) + "|" if xs else ""
+    edu = educations[-1] if educations else None   # the highest
+    field = fields[0] if fields else None
     con.execute(
-        "INSERT INTO user_profiles (user_id, education, field, country, cities, experience_years, birth_year, updated_at) "
-        "VALUES (?,?,?,?,?,?,?,?) ON CONFLICT(user_id) DO UPDATE SET education=excluded.education, field=excluded.field, "
-        "country=excluded.country, cities=excluded.cities, experience_years=excluded.experience_years, "
-        "birth_year=excluded.birth_year, updated_at=excluded.updated_at",
-        (user_id, edu, field, country, "|" + "|".join(cities) + "|" if cities else "", exp, born, db.now()))
+        "INSERT INTO user_profiles (user_id, education, field, country, cities, experience_years, birth_year, updated_at, "
+        "educations, fields) VALUES (?,?,?,?,?,?,?,?,?,?) ON CONFLICT(user_id) DO UPDATE SET education=excluded.education, "
+        "field=excluded.field, country=excluded.country, cities=excluded.cities, experience_years=excluded.experience_years, "
+        "birth_year=excluded.birth_year, updated_at=excluded.updated_at, educations=excluded.educations, "
+        "fields=excluded.fields",
+        (user_id, edu, field, country, pipe(cities), exp, born, db.now(), pipe(educations), pipe(fields)))
 
 
 def delete_account(con, user: sqlite3.Row, password: str) -> None:

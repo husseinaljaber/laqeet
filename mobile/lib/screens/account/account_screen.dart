@@ -56,8 +56,8 @@ class AccountScreen extends StatelessWidget {
             leading: const Icon(Icons.school_outlined),
             title: const Text('شهادتي ومجالي ومدني'),
             subtitle: Text([
-              cfg?.educationLabel(u.profile.education),
-              if (u.profile.field != null) cfg?.fieldLabel(u.profile.field),
+              u.profile.educations.isEmpty ? 'كل الشهادات' : u.profile.educations.map((e) => cfg?.educationLabel(e) ?? e).join('، '),
+              if (u.profile.fields.isNotEmpty) u.profile.fields.map((f) => cfg?.fieldLabel(f) ?? f).join('، '),
               u.profile.cities.isEmpty ? 'كل المدن' : u.profile.cities.join('، '),
             ].whereType<String>().join(' · '), maxLines: 2, overflow: TextOverflow.ellipsis),
             trailing: const Icon(Icons.chevron_left),

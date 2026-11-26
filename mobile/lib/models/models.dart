@@ -6,52 +6,63 @@ int? _int(dynamic v) => v is int ? v : (v is num ? v.toInt() : int.tryParse('${v
 
 class Profile {
   const Profile({
-    this.education,
-    this.field,
+    this.educations = const [],
+    this.fields = const [],
     this.country = 'sy',
     this.cities = const [],
     this.experienceYears,
     this.birthYear,
+    this.complete = false,
   });
 
-  final String? education;
-  final String? field;
+  /// Every degree the person picked (several allowed, none required), lowest first.
+  final List<String> educations;
+  final List<String> fields;
   final String country;
   final List<String> cities;
   final int? experienceYears;
   final int? birthYear;
 
-  bool get complete => education != null;
+  /// They went through the questions (even skipping them), so the app doesn't ask again.
+  final bool complete;
 
-  factory Profile.fromJson(Map<String, dynamic>? j) => j == null
-      ? const Profile()
-      : Profile(
-          education: j['education'] as String?,
-          field: j['field'] as String?,
-          country: (j['country'] as String?) ?? 'sy',
-          cities: _strings(j['cities']),
-          experienceYears: _int(j['experience_years']),
-          birthYear: _int(j['birth_year']),
-        );
+  /// The highest degree picked, if any.
+  String? get education => educations.isEmpty ? null : educations.last;
+
+  factory Profile.fromJson(Map<String, dynamic>? j) {
+    if (j == null) return const Profile();
+    final edus = _strings(j['educations']);
+    final fields = _strings(j['fields']);
+    return Profile(
+      educations: edus.isNotEmpty ? edus : [if (j['education'] is String) j['education'] as String],
+      fields: fields.isNotEmpty ? fields : [if (j['field'] is String) j['field'] as String],
+      country: (j['country'] as String?) ?? 'sy',
+      cities: _strings(j['cities']),
+      experienceYears: _int(j['experience_years']),
+      birthYear: _int(j['birth_year']),
+      complete: j['complete'] == true,
+    );
+  }
 
   Map<String, dynamic> toJson() => {
-        'education': education,
-        'field': field,
+        'educations': educations,
+        'fields': fields,
         'country': country,
         'cities': cities,
         'experience_years': experienceYears,
         'birth_year': birthYear,
       };
 
-  Profile copyWith({String? education, String? field, bool clearField = false, String? country, List<String>? cities,
+  Profile copyWith({List<String>? educations, List<String>? fields, String? country, List<String>? cities,
           int? experienceYears, bool clearExperience = false, int? birthYear, bool clearBirthYear = false}) =>
       Profile(
-        education: education ?? this.education,
-        field: clearField ? null : (field ?? this.field),
+        educations: educations ?? this.educations,
+        fields: fields ?? this.fields,
         country: country ?? this.country,
         cities: cities ?? this.cities,
         experienceYears: clearExperience ? null : (experienceYears ?? this.experienceYears),
         birthYear: clearBirthYear ? null : (birthYear ?? this.birthYear),
+        complete: complete,
       );
 }
 
@@ -123,6 +134,7 @@ class Job {
     this.official = false,
     this.sources = const [],
     this.requiresAccount = false,
+    this.expiresOn,
   });
 
   final int id;
@@ -152,6 +164,7 @@ class Job {
   final bool official;
   final List<JobSource> sources;
   final bool requiresAccount;
+  final String? expiresOn; // when the ad leaves Laqeet if no deadline is given
 
   bool get hasWhatsApp => phones.isNotEmpty && (whatsapp || kind == 'quick');
 
@@ -188,6 +201,7 @@ class Job {
           .map((s) => JobSource(label: '${s['label'] ?? ''}', url: '${s['post_url'] ?? ''}'))
           .toList(),
       requiresAccount: j['requires_account'] == true,
+      expiresOn: j['expires_on'] as String?,
     );
   }
 }

@@ -98,7 +98,7 @@ void main() {
   test('apply message uses the person and the job', () {
     final job = Job.fromJson(FakeServer.job(1)..['email'] = 'hr@x.sy');
     const user = User(id: 1, email: 'a@b.co', firstName: 'سارة', lastName: 'علي', gender: 'female', emailVerified: true,
-        profile: Profile(education: 'bachelor', experienceYears: 2));
+        profile: Profile(educations: ['bachelor'], experienceYears: 2));
     final m = ApplyMessages(job, user, educationLabel: 'جامعة');
     expect(m.whatsapp, contains('اسمي سارة علي'));
     expect(m.whatsapp, contains('محاسب 1'));
@@ -127,7 +127,7 @@ void main() {
       await expectLater(session.verify('000000'), throwsA(isA<ApiException>().having((e) => e.message, 'message', 'الكود غلط')));
       await session.verify('123456');
       expect(session.status, SessionStatus.needsProfile);
-      await session.saveProfile(const Profile(education: 'secondary', cities: ['دمشق']));
+      await session.saveProfile(const Profile(educations: ['secondary'], cities: ['دمشق']));
       expect(session.status, SessionStatus.ready);
       expect(session.user!.profile.cities, ['دمشق']);
     });

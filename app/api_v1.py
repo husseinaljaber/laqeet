@@ -160,8 +160,8 @@ def my_feed(limit: int = Query(30, le=100), offset: int = 0, user=Depends(curren
     """Open jobs for this person's education, cities and country, newest first; ads that don't name a degree included."""
     from .api import jobs as list_jobs
     prof = acc.profile_dict(con.execute("SELECT * FROM user_profiles WHERE user_id=?", (user["id"],)).fetchone())
-    return list_jobs(edu=prof["education"], city=",".join(prof["cities"]) or None, country=prof["country"],
-                     field=prof["field"] or None, limit=limit, offset=offset)
+    return list_jobs(edu=",".join(prof["educations"]) or None, city=",".join(prof["cities"]) or None,
+                     country=prof["country"], field=",".join(prof["fields"]) or None, limit=limit, offset=offset)
 
 
 # ---------------------------------------------------------------- alerts

@@ -12,11 +12,13 @@ import 'common.dart';
 enum Fit { match, above, unknown }
 
 Fit fitFor(Job job, User? user, AppConfig? config) {
-  if (user == null || config == null || user.profile.education == null) return Fit.unknown;
-  if (job.education == null) return Fit.match;
-  return config.educationRank(job.education) <= config.educationRank(user.profile.education) ? Fit.match : Fit.above;
+  final mine = user?.profile.education; // the highest degree they picked
+  if (user == null || config == null || mine == null) return Fit.unknown;
+  if (job.education == null || user.profile.educations.contains(job.education)) return Fit.match;
+  return config.educationRank(job.education) <= config.educationRank(mine) ? Fit.match : Fit.above;
 }
 
+/// One job in a list: big enough to decide from without opening it.
 class JobCard extends StatelessWidget {
   const JobCard({super.key, required this.job, required this.onTap});
 
@@ -29,63 +31,137 @@ class JobCard extends StatelessWidget {
     final s = context.watch<Session>();
     final saved = s.isSaved(job.id);
     final fit = fitFor(job, s.user, s.config);
+    final muted = t.textTheme.bodyMedium?.copyWith(color: t.colorScheme.onSurfaceVariant);
+    final edu = job.education == null ? 'الشهادة مو مذكورة' : (s.config?.educationLabel(job.education) ?? '');
+    final where = job.cities.isNotEmpty ? job.cities.take(3).join('، ') : (job.country == 'tr' ? 'تركيا' : 'سوريا');
+    final summary = (job.summary ?? '').trim();
+    final showSummary = summary.isNotEmpty && summary != job.title;
     final deadline = deadlineText(job.deadline);
-    final muted = t.textTheme.bodySmall?.copyWith(color: t.colorScheme.onSurfaceVariant);
     return Card(
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 14, 8, 14),
+          padding: const EdgeInsets.fromLTRB(18, 16, 10, 14),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Expanded(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(job.title, style: t.textTheme.titleMedium, maxLines: 2, overflow: TextOverflow.ellipsis),
-                  const SizedBox(height: 4),
-                  Text(
-                    [job.employer ?? _sectorName(job.sector), if (job.cities.isNotEmpty) job.cities.take(2).join('، ')]
-                        .join(' · '),
-                    style: muted,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
+                  if (job.official || job.sector != 'private')
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 6),
+                      child: Wrap(spacing: 6, children: [
+                        if (job.official) const Tag('رسمية', icon: Icons.verified_outlined, color: AppColors.green),
+                        if (job.sector == 'gov' && !job.official) const Tag('حكومي', icon: Icons.account_balance_outlined),
+                        if (job.sector == 'ngo') const Tag('منظمة', icon: Icons.public),
+                      ]),
+                    ),
+                  Text(job.title, style: t.textTheme.titleLarge?.copyWith(height: 1.35), maxLines: 3, overflow: TextOverflow.ellipsis),
                 ]),
               ),
               IconButton(
                 tooltip: saved ? 'شيل من المحفوظات' : 'احفظ',
+                iconSize: 28,
                 icon: Icon(saved ? Icons.bookmark : Icons.bookmark_border, color: saved ? t.colorScheme.primary : null),
                 onPressed: () => toggleSave(context, job.id),
               ),
             ]),
             const SizedBox(height: 10),
-            Wrap(spacing: 6, runSpacing: 6, children: [
-              if (job.official) const Tag('رسمية', icon: Icons.verified_outlined, color: AppColors.green),
-              if (job.sector == 'ngo') const Tag('منظمة', icon: Icons.public),
-              Tag(job.education == null ? 'شهادة غير مذكورة' : (s.config?.educationLabel(job.education) ?? ''), icon: Icons.school_outlined),
-              if (job.experience != null && job.experience! > 0) Tag('خبرة ${job.experience}+ سنين', icon: Icons.timeline),
-              if (job.hasWhatsApp) const Tag('واتساب', icon: Icons.chat_outlined, color: AppColors.whatsapp),
-              if (deadline != null)
-                Tag(deadline, icon: Icons.event_outlined, color: deadlineSoon(job.deadline) ? AppColors.warn : null),
-            ]),
-            const SizedBox(height: 8),
-            Row(children: [
-              if (fit != Fit.unknown) ...[
-                Icon(fit == Fit.match ? Icons.check_circle : Icons.info_outline,
-                    size: 16, color: fit == Fit.match ? AppColors.good : AppColors.warn),
-                const SizedBox(width: 4),
-                Text(fit == Fit.match ? 'على قد شهادتك' : 'بدها شهادة أعلى',
-                    style: muted?.copyWith(color: fit == Fit.match ? AppColors.good : AppColors.warn)),
-                const Spacer(),
-              ] else
-                const Spacer(),
-              Text(ago(job.postedAt), style: muted),
-              const SizedBox(width: 8),
-            ]),
+            _Line(Icons.apartment_outlined, job.employer ?? _sectorName(job.sector), style: t.textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w600)),
+            _Line(Icons.place_outlined, where, style: muted),
+            _Line(Icons.school_outlined,
+                [edu, if (job.experience != null && job.experience! > 0) 'خبرة ${job.experience}+ سنين' else if (job.experience == 0) 'بلا خبرة'].join(' · '),
+                style: muted),
+            if (job.salary != null && job.salary!.trim().isNotEmpty) _Line(Icons.payments_outlined, job.salary!, style: muted),
+            if (job.shift != null && job.shift!.trim().isNotEmpty) _Line(Icons.schedule, job.shift!, style: muted),
+            if (showSummary)
+              Padding(
+                padding: const EdgeInsets.only(top: 8, left: 8),
+                child: Text(summary, maxLines: 2, overflow: TextOverflow.ellipsis, style: muted?.copyWith(height: 1.6)),
+              ),
+            const SizedBox(height: 12),
+            Container(
+              margin: const EdgeInsets.only(left: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: t.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                _DateRow(
+                  icon: Icons.event_available_outlined,
+                  label: 'نُشر',
+                  value: [dateAr(job.postedAt), if (ago(job.postedAt).isNotEmpty) '(${ago(job.postedAt)})'].join(' '),
+                ),
+                const SizedBox(height: 6),
+                _DateRow(
+                  icon: Icons.event_busy_outlined,
+                  label: 'آخر موعد',
+                  value: job.deadline == null ? 'ما في موعد محدد' : '${dateAr(job.deadline)} · $deadline',
+                  color: deadlineSoon(job.deadline) ? AppColors.warn : null,
+                ),
+              ]),
+            ),
+            const SizedBox(height: 12),
+            Padding(
+              padding: const EdgeInsets.only(left: 8),
+              child: Wrap(spacing: 6, runSpacing: 6, crossAxisAlignment: WrapCrossAlignment.center, children: [
+                if (fit != Fit.unknown)
+                  Tag(fit == Fit.match ? 'على قد شهادتك' : 'بدها شهادة أعلى',
+                      icon: fit == Fit.match ? Icons.check_circle : Icons.info_outline,
+                      color: fit == Fit.match ? AppColors.good : AppColors.warn),
+                if (job.hasWhatsApp) const Tag('واتساب', icon: Icons.chat_outlined, color: AppColors.whatsapp),
+                if (job.phones.isNotEmpty && !job.hasWhatsApp) const Tag('اتصال', icon: Icons.call_outlined),
+                if (job.email != null) const Tag('إيميل', icon: Icons.email_outlined),
+                if (job.applyUrl != null) const Tag('رابط تقديم', icon: Icons.link),
+              ]),
+            ),
           ]),
         ),
       ),
     );
+  }
+}
+
+class _Line extends StatelessWidget {
+  const _Line(this.icon, this.text, {this.style});
+
+  final IconData icon;
+  final String text;
+  final TextStyle? style;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.only(bottom: 6, left: 8),
+        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Padding(
+            padding: const EdgeInsets.only(top: 2),
+            child: Icon(icon, size: 20, color: Theme.of(context).colorScheme.primary),
+          ),
+          const SizedBox(width: 8),
+          Expanded(child: Text(text, style: style, maxLines: 2, overflow: TextOverflow.ellipsis)),
+        ]),
+      );
+}
+
+class _DateRow extends StatelessWidget {
+  const _DateRow({required this.icon, required this.label, required this.value, this.color});
+
+  final IconData icon;
+  final String label;
+  final String value;
+  final Color? color;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context);
+    final c = color ?? t.colorScheme.onSurface;
+    return Row(children: [
+      Icon(icon, size: 18, color: color ?? t.colorScheme.onSurfaceVariant),
+      const SizedBox(width: 8),
+      Text('$label: ', style: t.textTheme.bodyMedium?.copyWith(color: t.colorScheme.onSurfaceVariant)),
+      Expanded(child: Text(value, style: t.textTheme.bodyMedium?.copyWith(color: c, fontWeight: FontWeight.w600))),
+    ]);
   }
 }
 

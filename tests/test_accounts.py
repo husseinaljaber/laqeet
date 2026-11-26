@@ -287,3 +287,12 @@ def test_seed_snapshot_never_contains_the_signing_key(tmp_path):
     seed.export_seed(src, tmp_path / "s.jsonl.gz")
     body = gzip.open(tmp_path / "s.jsonl.gz", "rt", encoding="utf-8").read()
     assert "SUPER-SECRET-VALUE" not in body and "dev_secret_key" not in body
+
+
+def test_legal_pages_linked_from_the_app_exist():
+    """The app's sign-up screen and the stores link to these; they must describe what is actually stored."""
+    for page, must in (("/privacy.html", ["احذف حسابي", "ما منبيع"]), ("/terms.html", ["مجانية", "ما بيطلب مصاري"])):
+        r = client.get(page)
+        assert r.status_code == 200
+        for text in must:
+            assert text in r.text

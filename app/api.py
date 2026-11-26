@@ -1076,4 +1076,6 @@ def admin_users(x_admin_token: str | None = Header(None)):
     return _accounts.aggregate_stats(con)
 
 
+if config.APP_WEB_DIR.is_dir():
+    app.mount("/app", StaticFiles(directory=config.APP_WEB_DIR, html=True), name="app_web")
 app.mount("/", StaticFiles(directory=config.FRONTEND_DIR, html=True), name="site")

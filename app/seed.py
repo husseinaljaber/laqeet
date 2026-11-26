@@ -27,7 +27,8 @@ def export_seed(con=None, path=SEED_PATH) -> int:
             ("f", "SELECT job_id, title_text, employer_text, specs_text, body_text, aux_text FROM jobs_fts ORDER BY job_id"),
             ("s", "SELECT job_id, source, post_url, posted_at FROM job_sources ORDER BY job_id"),
             ("k", "SELECT k, job_id FROM job_keys"),
-            ("m", "SELECT key, value FROM meta"),
+            # never ship secrets in the public snapshot (the dev token-signing key lives in meta)
+            ("m", "SELECT key, value FROM meta WHERE key NOT LIKE '%secret%' AND key NOT LIKE '%token%'"),
         )
         tmp = path.with_suffix(".gz.tmp")
         with gzip.open(tmp, "wt", encoding="utf-8") as gz:

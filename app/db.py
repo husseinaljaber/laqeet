@@ -399,6 +399,16 @@ def repair_education(con: sqlite3.Connection) -> int:
     return changed
 
 
+def raw_connect(path=None) -> sqlite3.Connection:
+    """A light connection for one request (accounts, app API): no schema work, no seed bootstrap."""
+    con = sqlite3.connect(path or config.DB_PATH, timeout=30.0, check_same_thread=False)
+    con.row_factory = sqlite3.Row
+    con.execute("PRAGMA journal_mode=WAL")
+    con.execute("PRAGMA busy_timeout=15000")
+    con.execute("PRAGMA foreign_keys=ON")
+    return con
+
+
 def connect(path=None) -> sqlite3.Connection:
     path = path or config.DB_PATH
     if str(path) != ":memory:":

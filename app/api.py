@@ -28,6 +28,9 @@ from .classify import CATEGORIES
 
 log = logging.getLogger("api")
 con = db.connect()
+from . import accounts as _accounts  # noqa: E402
+
+_accounts.ensure_schema(con)
 
 
 def _auto_collect_loop(stop: threading.Event) -> None:
@@ -1057,6 +1060,20 @@ async def _cache_headers(request, call_next):
     elif p == "/" or p.endswith((".html", ".js", ".css", ".webmanifest")):
         resp.headers["Cache-Control"] = "no-cache, must-revalidate"
     return resp
+
+
+# ------------------------------------------------------------------ mobile app API (/api/v1)
+from . import api_v1  # noqa: E402
+
+app.include_router(api_v1.router)
+app.add_exception_handler(_accounts.AccountError, api_v1.account_error_handler)
+
+
+@app.get("/api/admin/users")
+def admin_users(x_admin_token: str | None = Header(None)):
+    """App accounts in numbers only (no names, no emails): how many, verified, by education, city and gender."""
+    _admin(x_admin_token)
+    return _accounts.aggregate_stats(con)
 
 
 app.mount("/", StaticFiles(directory=config.FRONTEND_DIR, html=True), name="site")

@@ -125,6 +125,16 @@ REPORTS_TO_HIDE = int(os.getenv("REPORTS_TO_HIDE", 3))  # «بلّغ عن إعل
 REVIEW_BELOW = float(os.getenv("REVIEW_BELOW", 0.5))    # confidence under this goes to the review queue
 
 ADMIN_TOKEN = os.getenv("ADMIN_TOKEN", "")              # protects /admin; empty = admin disabled
+
+# ---------------------------------------------------------------- accounts (mobile app and site)
+SECRET_KEY = os.getenv("SECRET_KEY", "")                 # signs login tokens; set a long random value in production
+ACCESS_TOKEN_MINUTES = int(os.getenv("ACCESS_TOKEN_MINUTES", 15))
+REFRESH_TOKEN_DAYS = int(os.getenv("REFRESH_TOKEN_DAYS", 30))
+SMTP_HOST = os.getenv("SMTP_HOST", "")                   # email for verification / reset codes (see app/mailer.py)
+SMTP_PORT = int(os.getenv("SMTP_PORT", 587))
+SMTP_USER = os.getenv("SMTP_USER", "")
+SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
+MAIL_FROM = os.getenv("MAIL_FROM", "")
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")  # optional LLM extractor
 LLM_MODEL = os.getenv("LLM_MODEL", "claude-haiku-5-5")
 LLM_DAILY_LIMIT = int(os.getenv("LLM_DAILY_LIMIT", 300))  # most AI requests per day (only for posts the rules can't read)

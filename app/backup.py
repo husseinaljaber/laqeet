@@ -3,8 +3,10 @@
     python -m app.backup export backup.json.gz
     python -m app.backup import backup.json.gz
 
-What goes in: employer posts with their management codes, reports, moderation decisions on collected ads,
+What goes in: app accounts (with password hashes, never clear passwords), their profiles and saved jobs,
+employer posts with their management codes, reports, moderation decisions on collected ads,
 Telegram bot subscribers and what they were already sent, anonymous usage counters, source health, meta.
+Login sessions are not kept: people simply log in again after a restore.
 Jobs are matched by fingerprint, not by id, so a backup restores into a database rebuilt from the seed.
 The file holds employers' phone numbers and bot chat ids: keep it private (never commit it).
 """
@@ -22,6 +24,10 @@ VERSION = 1
 
 def _rows(con, sql, args=()):
     return [dict(r) for r in con.execute(sql, args).fetchall()]
+
+
+def _has_table(con, name: str) -> bool:
+    return con.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (name,)).fetchone() is not None
 
 
 def export_data(con) -> dict:
@@ -44,6 +50,10 @@ def export_data(con) -> dict:
         "events_daily": _rows(con, "SELECT * FROM events_daily"),
         "source_health": _rows(con, "SELECT * FROM source_health"),
         "meta": _rows(con, "SELECT * FROM meta"),
+        "users": _rows(con, "SELECT * FROM users") if _has_table(con, "users") else [],
+        "user_profiles": _rows(con, "SELECT * FROM user_profiles") if _has_table(con, "user_profiles") else [],
+        "user_jobs": [dict(r, fp=fp_of.get(r["job_id"])) for r in _rows(con, "SELECT * FROM user_jobs")]
+        if _has_table(con, "user_jobs") else [],
     }
 
 
@@ -112,6 +122,29 @@ def import_data(con, data: dict) -> dict:
         con.execute("INSERT OR IGNORE INTO source_health (source, kind, last_run, last_count, last_items_at, last_error, "
                     "fail_streak) VALUES (?,?,?,?,?,?,?)",
                     (h["source"], h["kind"], h["last_run"], h["last_count"], h["last_items_at"], h["last_error"], h["fail_streak"]))
+    if data.get("users"):
+        from . import accounts
+        accounts.ensure_schema(con)
+        user_id_map: dict[int, int] = {}
+        for u in data["users"]:
+            row = con.execute("SELECT id FROM users WHERE email=?", (u["email"],)).fetchone()
+            if row:
+                user_id_map[u["id"]] = row["id"]
+                continue
+            cols = [c for c in u if c != "id"]
+            cur = con.execute(f"INSERT INTO users ({','.join(cols)}) VALUES ({','.join('?' * len(cols))})", [u[c] for c in cols])
+            user_id_map[u["id"]] = cur.lastrowid
+            stats["users"] = stats.get("users", 0) + 1
+        for p in data.get("user_profiles", []):
+            if p["user_id"] in user_id_map:
+                cols = list(p)
+                con.execute(f"INSERT OR REPLACE INTO user_profiles ({','.join(cols)}) VALUES ({','.join('?' * len(cols))})",
+                            [user_id_map[p["user_id"]] if c == "user_id" else p[c] for c in cols])
+        for uj in data.get("user_jobs", []):
+            jid = id_by_fp.get(uj.get("fp"))
+            if jid is not None and uj["user_id"] in user_id_map:
+                con.execute("INSERT OR IGNORE INTO user_jobs (user_id, job_id, stage, note, created_at, updated_at) VALUES (?,?,?,?,?,?)",
+                            (user_id_map[uj["user_id"]], jid, uj["stage"], uj["note"], uj["created_at"], uj["updated_at"]))
     for m in data.get("meta", []):
         if m["key"].startswith(("bot_offset", "llm_calls:", "health_alert_day")):
             con.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?,?)", (m["key"], m["value"]))

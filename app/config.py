@@ -12,7 +12,8 @@ PDF_DIR = Path(os.getenv("PDF_DIR", ROOT / "data" / "pdfs"))
 CHANNELS_PATH = Path(os.getenv("CHANNELS_PATH", ROOT / "data" / "channels.json"))
 FRONTEND_DIR = ROOT / "frontend"
 # The Flutter app's web build (cd mobile && flutter build web --base-href /app/), served at /app when present.
-APP_WEB_DIR = Path(os.environ.get("APP_WEB_DIR") or ROOT / "mobile" / "build" / "web")
+APP_WEB_DIR = Path(os.environ.get("APP_WEB_DIR") or (
+    ROOT / "mobile" / "build" / "web" if (ROOT / "mobile" / "build" / "web").is_dir() else ROOT / "webapp"))
 
 # Public Telegram channels we read, loaded from data/channels.json so scaling to 300-400 sources needs no code edits.
 _DEFAULT_CHANNELS = {

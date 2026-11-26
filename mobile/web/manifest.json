@@ -1,10 +1,10 @@
 {
-    "name": "laqeet",
-    "short_name": "laqeet",
+    "name": "لقيت",
+    "short_name": "لقيت",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
+    "background_color": "#0B1C16",
+    "theme_color": "#0B6B53",
     "description": "لقيت: شغل بسوريا وتركيا على قد شهادتك",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
@@ -31,5 +31,7 @@
             "type": "image/png",
             "purpose": "maskable"
         }
-    ]
+    ],
+    "lang": "ar",
+    "dir": "rtl"
 }

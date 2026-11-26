@@ -117,7 +117,13 @@ cd mobile && flutter pub get && flutter test
 flutter run --dart-define=API_BASE=http://IP-جهازك:8000
 ```
 
-**نسخة الويب:** `cd mobile && flutter build web --release --base-href /app/ --no-web-resources-cdn` والسيرفر بيقدّمها على `/app` لحاله. (`--no-web-resources-cdn` مهم: بلاه المتصفح بيحمّل محرك الرسم من جوجل، وهاد ممكن يكون محجوب أو بطيء بسوريا.)
+**نسخة الويب (للآيفون وأي متصفح):** موجودة بمجلد `webapp/`، والموقع بيقدّمها على `/app`. عالآيفون: افتح `/app` بـ Safari ← زر المشاركة ← «إضافة إلى الشاشة الرئيسية».
+بعد أي تعديل عالتطبيق، حدّثها هيك:
+```bash
+cd mobile && flutter build web --release --base-href /app/ --no-web-resources-cdn
+rm -rf ../webapp && cp -r build/web ../webapp
+cd ../webapp && find . -name "*.symbols" -delete && rm -rf canvaskit/skwasm* canvaskit/wimp* canvaskit/webparagraph flutter.js.map
+``` (`--no-web-resources-cdn` مهم: بلاه المتصفح بيحمّل محرك الرسم من جوجل، وهاد ممكن يكون محجوب أو بطيء بسوريا.)
 
 **التنبيهات:** كل حساب بيختار: ملخص يومي (الافتراضي، الساعة ٧ المسا) أو فوراً (بس مو بالليل، ولحد ٦ مرات باليوم) أو موقّفة. التنبيه بيوصل إشعار عالموبايل، وعالتلغرام إذا ربط حسابه بالبوت. كل وظيفة بتوصل مرة وحدة.
 - **إشعارات الموبايل:** اعمل مشروع Firebase (مجاني)، وضيف تطبيق أندرويد باسم `com.laqeet.app`. بعدين:

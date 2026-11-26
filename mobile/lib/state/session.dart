@@ -27,6 +27,34 @@ class Session extends ChangeNotifier {
   User? user;
   AppConfig? config;
   String? startupError;
+  bool serverMissing = false; // phone build without a fixed address: ask for it
+
+  static const _serverKey = 'laqeet.server';
+
+  /// The address saved on this phone (first launch), if the build didn't fix one.
+  Future<void> loadSavedServer() async {
+    if (repo.api.hasServer) return;
+    try {
+      final saved = (await SharedPreferences.getInstance()).getString(_serverKey);
+      if (saved != null && saved.isNotEmpty) repo.api.baseUrl = saved;
+    } catch (_) {}
+  }
+
+  /// Try an address; keep it only if a Laqeet server answers there.
+  Future<void> useServer(String address) async {
+    final old = repo.api.webBase;
+    repo.api.baseUrl = address;
+    try {
+      await repo.config();
+    } catch (e) {
+      repo.api.baseUrl = old;
+      rethrow;
+    }
+    try {
+      await (await SharedPreferences.getInstance()).setString(_serverKey, address);
+    } catch (_) {}
+    await start();
+  }
   final Set<int> savedIds = {};
 
   bool get loggedIn => user != null;
@@ -35,10 +63,13 @@ class Session extends ChangeNotifier {
   Future<void> start() async {
     status = SessionStatus.loading;
     startupError = null;
+    serverMissing = false;
     notifyListeners();
+    await loadSavedServer();
     try {
       config = await repo.config();
     } on ApiException catch (e) {
+      serverMissing = e.code == 'no_server';
       startupError = e.message;
       notifyListeners();
       return;

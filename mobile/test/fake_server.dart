@@ -65,6 +65,7 @@ class FakeServer {
       http.Response.bytes(utf8.encode(jsonEncode(body)), status, headers: {'content-type': 'application/json'});
 
   late final client = MockClient((req) async {
+    if (req.url.host != 'x') throw http.ClientException('nothing at ${req.url.host}'); // only «http://x» exists
     requests.add('${req.method} ${req.url.path}');
     final body = req.body.isEmpty ? <String, dynamic>{} : jsonDecode(req.body) as Map<String, dynamic>;
     final path = req.url.path;

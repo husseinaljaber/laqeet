@@ -31,7 +31,12 @@ class ApiClient {
 
   final TokenStore tokens;
   final http.Client _http;
-  final String _base;
+  String _base;
+
+  /// Point the app at another server (the address typed on first launch).
+  set baseUrl(String v) => _base = v;
+
+  bool get hasServer => _base.isNotEmpty;
 
   /// Called when the session can't be renewed (logged out elsewhere, password changed, expired).
   void Function()? onSessionExpired;
@@ -62,6 +67,7 @@ class ApiClient {
 
   Future<dynamic> _send(String method, String path,
       {Map<String, String?>? query, Object? body, bool auth = false, bool retried = false}) async {
+    if (_base.isEmpty) throw ApiException('اكتب عنوان موقع لقيت', code: 'no_server');
     final headers = <String, String>{'Accept': 'application/json', 'X-Device': 'laqeet-app/$appVersion'};
     if (body != null) headers['Content-Type'] = 'application/json';
     if (auth) {

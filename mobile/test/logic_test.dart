@@ -1,6 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:laqeet/core/api_client.dart';
 import 'package:laqeet/core/apply.dart';
+import 'package:laqeet/core/env.dart';
 import 'package:laqeet/core/format.dart';
 import 'package:laqeet/core/repository.dart';
 import 'package:laqeet/core/token_store.dart';
@@ -45,6 +47,15 @@ void main() {
       expect(jobsCount(5), '5 وظائف');
       expect(jobsCount(40), '40 وظيفة');
     });
+  });
+
+  test('server addresses typed on the phone', () {
+    expect(normalizeServer('laqeet.onrender.com/'), 'https://laqeet.onrender.com');
+    expect(normalizeServer(' https://laqeet.example/jobs '), 'https://laqeet.example');
+    expect(normalizeServer('http://laqeet.example'), isNull); // plain http only for local test servers
+    expect(normalizeServer('http://192.168.1.20:8000'), 'http://192.168.1.20:8000');
+    expect(normalizeServer(''), isNull);
+    expect(normalizeServer('ftp://x.y'), isNull);
   });
 
   group('router redirects', () {
@@ -198,6 +209,23 @@ void main() {
       await c.setQuery('');
       expect(server.lastJobsQuery.containsKey('smart'), isFalse);
       expect(c.understood, isEmpty);
+    });
+
+    test('a phone build without a server asks for one, and keeps only an address that answers', () async {
+      SharedPreferences.setMockInitialValues({});
+      final noServer = Session(repo: Repository(ApiClient(tokens: tokens, httpClient: server.client, baseUrl: '')), tokens: tokens);
+      await noServer.start();
+      expect(noServer.serverMissing, isTrue);
+      await expectLater(noServer.useServer('http://127.0.0.1:1'), throwsA(isA<ApiException>()));
+      expect(noServer.repo.api.hasServer, isFalse);
+      await noServer.useServer('http://x');
+      expect(noServer.serverMissing, isFalse);
+      expect(noServer.status, SessionStatus.guest);
+      // remembered on the phone for the next launch
+      final again = Session(repo: Repository(ApiClient(tokens: tokens, httpClient: server.client, baseUrl: '')), tokens: tokens);
+      await again.start();
+      expect(again.repo.api.webBase, 'http://x');
+      expect(again.status, SessionStatus.guest);
     });
 
     test('no network gives a clear Arabic message', () async {
